@@ -1,0 +1,1 @@
+cmd_/usr/ela/home/vogelpi/MemorySharing/WorkSpace/SW/zynq_pmm/zynq_pmm1.o := arm-xilinx-linux-gnueabi-ld -EL    -r -o /usr/ela/home/vogelpi/MemorySharing/WorkSpace/SW/zynq_pmm/zynq_pmm1.o /usr/ela/home/vogelpi/MemorySharing/WorkSpace/SW/zynq_pmm/zynq_pmm.o /usr/ela/home/vogelpi/MemorySharing/WorkSpace/SW/zynq_pmm/v7_pmu.o 
