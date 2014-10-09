@@ -7,7 +7,7 @@ NAME=testing
 vivado-2014.1 make all
 
 # Copy
-scp ${NAME} pirmin@iis-ubuntu2.ee.ethz.ch:~/PULPonFPGA/share/programs/.
-scp value.txt pirmin@iis-ubuntu2.ee.ethz.ch:~/PULPonFPGA/share/programs/.
-scp *.c pirmin@iis-ubuntu2.ee.ethz.ch:~/PULPonFPGA/share/programs/.
-scp *.h pirmin@iis-ubuntu2.ee.ethz.ch:~/PULPonFPGA/share/programs/.
+scp ${NAME} pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/programs/.
+scp value.txt pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/programs/.
+scp *.c pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/programs/.
+scp *.h pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/programs/.
