@@ -6,7 +6,7 @@ echo "------------------------------------------------"
 
 # Fetching DTS file
 echo "Fetching DTS file xilinx.dts from SDK project folder"
-cp ../sdk/device-tree_bsp_0/ps7_cortexa9_0/libsrc/device-tree_v0_00_x/xilinx.dts arch/arm/boot/dts/.
+cp ../sdk/device-tree_bsp_0/ps7_cortexa9_0/libsrc/device-tree_v1_01_b/xilinx.dts arch/arm/boot/dts/.
 
 # Converting DTS file to DTB file
 echo "Converting DTS file to DTB file and copying to ../sd_image/"
