@@ -9,7 +9,7 @@
 
 //#define BOARD ZC706
 #ifndef BOARD
-#define BOARD ZEDBOARD
+#define BOARD ZC706
 #endif // BOARD
 
 /*
@@ -23,7 +23,7 @@
 
 #elif BOARD == ZC706
 
-#define ARM_CLK_FREQ_MHZ 800
+#define ARM_CLK_FREQ_MHZ 667
 #define DRAM_SIZE_MB 1024
  
 #endif // BOARD

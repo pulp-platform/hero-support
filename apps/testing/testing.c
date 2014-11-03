@@ -2,7 +2,7 @@
 #include <stdlib.h> // for system
 
 #include "../../lib/inc/zynq.h"
-#include "../../lib/inc/pulp.h"
+#include "../../lib/inc/pulp_host.h"
 #include "../../lib/inc/pulp_func.h"
 
 int main(){
@@ -40,7 +40,10 @@ int main(){
 
   pulp_init(pulp);
   
-  pulp_offload_kernel(pulp, true);
+  pulp_write32(pulp->clusters.v_addr,0x0,'b',0xFF);
+  printf("Value at L2 start address = %#x \n", pulp_read32(pulp->clusters.v_addr,0x0,'b'));
+
+  //pulp_offload_kernel(pulp, true);
 
   pulp_check_results(pulp);
   

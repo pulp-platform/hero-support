@@ -10,7 +10,7 @@
 #include <unistd.h> // for sleep
 
 #include "zynq.h"
-#include "pulp.h"
+#include "pulp_host.h"
 
 // type definitions
 typedef struct {
@@ -22,10 +22,10 @@ typedef struct {
   int fd; // file descriptor
   PulpSubDev l3_mem; 
   PulpSubDev clusters;
-  PulpSubDev peripherals;
+  PulpSubDev soc_periph;
   PulpSubDev l2_mem;
-  PulpSubDev demux_config;
   PulpSubDev rab_config;
+  PulpSubDev gpio;
   PulpSubDev slcr;
   PulpSubDev reserved_v_addr;
 } PulpDev;

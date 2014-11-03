@@ -1,5 +1,5 @@
 #include "pulp_func.h"
-#include "pulp.h"
+#include "pulp_host.h"
 
 //#include <errno.h>
 //printf("ERRNO = %i\n",errno);
@@ -13,7 +13,7 @@
 int pulp_reserve_v_addr(PulpDev *pulp) {
 
   pulp->reserved_v_addr.size = PULP_SIZE_B;
-  pulp->reserved_v_addr.v_addr = mmap((int *)PULP_P_BASE_ADDR,pulp->reserved_v_addr.size,PROT_NONE,MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,-1,0);
+  pulp->reserved_v_addr.v_addr = mmap((int *)PULP_BASE_ADDR,pulp->reserved_v_addr.size,PROT_NONE,MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,-1,0);
   if (pulp->reserved_v_addr.v_addr == MAP_FAILED) {
     printf("MMAP failed to reserve virtual addresses overlapping with physical address map of PULP.\n");
     return EIO;
@@ -93,46 +93,46 @@ void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned val
  */
 int pulp_dma_transfer(PulpDev *pulp, unsigned source_addr, unsigned dest_addr, unsigned length_b, unsigned dma) {
  
-  unsigned *dma_addr;
-
-  /*
-   * Select the DMA engine based on source and destination addresses
-   */
-  dma_addr = pulp->clusters.v_addr + (CLUSTER_DMA_OFFSET_B >> 2);
-  //printf("DMA command FIFO @ %p.\n",dma_addr);
- 
-  int status,dma_status,n_trials;
-  status = 0;
-  n_trials = 10000;
-  while (!status && n_trials) {
-    //printf("DMA status: %#x.\n",pulp_read32(pulp->clusters.v_addr,CLUSTER_DMA_OFFSET_B+0xC,'b'));
-    dma_status = pulp_read32(dma_addr,0xC,'b');
-    if (dma_status == 0) {
-      status = 1;
-      printf("DMA engine ready, initialize transfer.\n");
-    }
-    else {
-      if (DEBUG_LEVEL > 3) {
-	printf("DMA status = %#x\n",dma_status);
-      }
-      n_trials--;
-      usleep(100);
-    }
-  }
-  if (!status) {
-    printf("Command FIFO of DMA engine full or DMA engine busy. Transfer dropped.\n");
-    return EBUSY;
-  } 
-
-  /*
-   * Init transfer
-   */
-  pulp_write32(dma_addr,0x4,'b',source_addr);
-  pulp_write32(dma_addr,0x4,'b',dest_addr);
-  pulp_write32(dma_addr,0x4,'b',length_b);
+  // unsigned *dma_addr;
+  // 
+  // /*
+  //  * Select the DMA engine based on source and destination addresses
+  //  */
+  // dma_addr = pulp->clusters.v_addr + (CLUSTER_DMA_OFFSET_B >> 2);
+  // //printf("DMA command FIFO @ %p.\n",dma_addr);
+  // 
+  // int status,dma_status,n_trials;
+  // status = 0;
+  // n_trials = 10000;
+  // while (!status && n_trials) {
+  //   //printf("DMA status: %#x.\n",pulp_read32(pulp->clusters.v_addr,CLUSTER_DMA_OFFSET_B+0xC,'b'));
+  //   dma_status = pulp_read32(dma_addr,0xC,'b');
+  //   if (dma_status == 0) {
+  //     status = 1;
+  //     printf("DMA engine ready, initialize transfer.\n");
+  //   }
+  //   else {
+  //     if (DEBUG_LEVEL > 3) {
+  // 	printf("DMA status = %#x\n",dma_status);
+  //     }
+  //     n_trials--;
+  //     usleep(100);
+  //   }
+  // }
+  // if (!status) {
+  //   printf("Command FIFO of DMA engine full or DMA engine busy. Transfer dropped.\n");
+  //   return EBUSY;
+  // } 
+  // 
+  // /*
+  //  * Init transfer
+  //  */
+  // pulp_write32(dma_addr,0x4,'b',source_addr);
+  // pulp_write32(dma_addr,0x4,'b',dest_addr);
+  // pulp_write32(dma_addr,0x4,'b',length_b);
 
  // unsigned *dma_base_addr;
- // dma_base_addr = pulp->peripherals.v_addr + (CDMA_SIZE_B*dma >> 2);
+ // dma_base_addr = pulp->soc_periph.v_addr + (CDMA_SIZE_B*dma >> 2);
  // 
  // /*
  //  * Check availability
@@ -181,7 +181,7 @@ int pulp_dma_transfer(PulpDev *pulp, unsigned source_addr, unsigned dest_addr, u
  */
 int pulp_dma_wait(PulpDev *pulp, unsigned dma) {
  // unsigned *dma_base_addr;
- // dma_base_addr = pulp->peripherals.v_addr + (CDMA_SIZE_B*dma >> 2);
+ // dma_base_addr = pulp->soc_periph.v_addr + (CDMA_SIZE_B*dma >> 2);
  // 
  // unsigned status, n_trials;
  // unsigned dma_status;
@@ -217,7 +217,7 @@ int pulp_dma_wait(PulpDev *pulp, unsigned dma) {
  */
 int pulp_dma_reset(PulpDev *pulp, unsigned dma) {
   // unsigned *dma_base_addr;
-  // dma_base_addr = pulp->peripherals.v_addr + (CDMA_SIZE_B*dma >> 2);
+  // dma_base_addr = pulp->soc_periph.v_addr + (CDMA_SIZE_B*dma >> 2);
   // 
   // // set the reset
   // pulp_write32(dma_base_addr,0,'b',0x4);
@@ -278,21 +278,21 @@ int pulp_mmap(PulpDev *pulp) {
      printf("Clusters mapped to virtual user space at %p.\n",pulp->clusters.v_addr);
   }
 
-  // PERIPHERALS
+  // SOC_PERIPHERALS
   offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B; // start of peripherals
-  pulp->peripherals.size = PERIPHERALS_SIZE_B;
+  pulp->soc_periph.size = SOC_PERIPHERALS_SIZE_B;
  
-  pulp->peripherals.v_addr = mmap(NULL,pulp->peripherals.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
-  if (pulp->peripherals.v_addr == MAP_FAILED) {
-    printf("MMAP failed for peripherals.\n");
+  pulp->soc_periph.v_addr = mmap(NULL,pulp->soc_periph.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
+  if (pulp->soc_periph.v_addr == MAP_FAILED) {
+    printf("MMAP failed for SoC peripherals.\n");
     return EIO;
   }
   else {
-    printf("Peripherals mapped to virtual user space at %p.\n",pulp->peripherals.v_addr);
+    printf("SoC peripherals mapped to virtual user space at %p.\n",pulp->soc_periph.v_addr);
   }
 
   // L2
-  offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B + PERIPHERALS_SIZE_B; // start of L2
+  offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B; // start of L2
   pulp->l2_mem.size = L2_MEM_SIZE_B;
  
   pulp->l2_mem.v_addr = mmap(NULL,pulp->l2_mem.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
@@ -305,23 +305,8 @@ int pulp_mmap(PulpDev *pulp) {
      printf("L2 memory mapped to virtual user space at %p.\n",pulp->l2_mem.v_addr);
   }
   
-  // Demux Config
-  offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B + PERIPHERALS_SIZE_B + L2_MEM_SIZE_B; // start of config
-  offset = offset + DEMUX_CONFIG_OFFSET_B;
-  pulp->demux_config.size = DEMUX_CONFIG_SIZE_B;
-  
-  pulp->demux_config.v_addr = mmap(NULL,pulp->demux_config.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
-  if (pulp->demux_config.v_addr == MAP_FAILED) {
-    printf("MMAP failed for Demux config.\n");
-    return EIO;
-  }
-  else {
-     printf("Demux config memory mapped to virtual user space at %p.\n",pulp->demux_config.v_addr);
-  }
-   
   // RAB
-  offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B + PERIPHERALS_SIZE_B + L2_MEM_SIZE_B; // start of config
-  offset = offset + RAB_CONFIG_OFFSET_B;
+  offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + L2_MEM_SIZE_B; // start of RAB config
   pulp->rab_config.size = RAB_CONFIG_SIZE_B;
  
   pulp->rab_config.v_addr = mmap(NULL,pulp->rab_config.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
@@ -333,8 +318,22 @@ int pulp_mmap(PulpDev *pulp) {
     printf("RAB config memory mapped to virtual user space at %p.\n",pulp->rab_config.v_addr);
   }
 
+  // GPIO
+  offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + L2_MEM_SIZE_B + RAB_CONFIG_SIZE_B; // start of GPIOroot
+
+  pulp->gpio.size = H_GPIO_SIZE_B;
+ 
+  pulp->gpio.v_addr = mmap(NULL,pulp->gpio.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  if (pulp->gpio.v_addr == MAP_FAILED) {
+    printf("MMAP failed for GPIO.\n");
+    return EIO;
+  }
+  else {
+    printf("GPIO memory mapped to virtual user space at %p.\n",pulp->gpio.v_addr);
+  }
+
   // SLCR
-  offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B + PERIPHERALS_SIZE_B + L2_MEM_SIZE_B + CONFIG_SIZE_B; // start of slcr
+  offset = L3_MEM_SIZE_B + CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + L2_MEM_SIZE_B + RAB_CONFIG_SIZE_B + H_GPIO_SIZE_B; // start of slcr
   pulp->slcr.size = SLCR_SIZE_B;
  
   pulp->slcr.v_addr = mmap(NULL,pulp->slcr.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
@@ -363,6 +362,10 @@ int pulp_munmap(PulpDev *pulp) {
   if (status) {
     printf("MUNMAP failed for SLCR.\n");
   } 
+  status = munmap(pulp->gpio.v_addr,pulp->gpio.size);
+  if (status) {
+    printf("MUNMAP failed for GPIO.\n");
+  } 
   status = munmap(pulp->rab_config.v_addr,pulp->rab_config.size);
   if (status) {
     printf("MUNMAP failed for RAB config.\n");
@@ -371,9 +374,9 @@ int pulp_munmap(PulpDev *pulp) {
   if (status) {
     printf("MUNMAP failed for L2 memory.\n");
   } 
-  status = munmap(pulp->peripherals.v_addr,pulp->peripherals.size);
+  status = munmap(pulp->soc_periph.v_addr,pulp->soc_periph.size);
   if (status) {
-    printf("MUNMAP failed for peripherals\n.");
+    printf("MUNMAP failed for SoC peripherals\n.");
   }
   status = munmap(pulp->clusters.v_addr,pulp->clusters.size);
   if (status) {
@@ -396,34 +399,48 @@ int pulp_munmap(PulpDev *pulp) {
  */
 int pulp_init(PulpDev *pulp) {
 
+  unsigned offset;
+
   // init sequence
-  // keep cores in reset, set fetch enable to 0
-  pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0xc,'b',0);
-  pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x4,'b',0);
+  // release PL reset
+  pulp_write32(pulp->gpio.v_addr,0x8,'b',0);
+  usleep(10);
+  pulp_write32(pulp->gpio.v_addr,0x8,'b',3);
+
+  // // keep cores in reset, set fetch enable to 0
+  // pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0xc,'b',0);
+  // pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x4,'b',0);
   
-  // initialize the demux (core id, cluster id and global cluster offset)
-  pulp_write32(pulp->demux_config.v_addr,0x0,'b',0);
-  pulp_write32(pulp->demux_config.v_addr,0x4,'b',0);
-  pulp_write32(pulp->demux_config.v_addr,0x8,'b',PULP_CLUSTER_OFFSET);
+  // // initialize the demux (core id, cluster id and global cluster offset)
+  // pulp_write32(pulp->demux_config.v_addr,0x0,'b',0);
+  // pulp_write32(pulp->demux_config.v_addr,0x4,'b',0);
+  // pulp_write32(pulp->demux_config.v_addr,0x8,'b',PULP_CLUSTER_OFFSET);
   
   // setup the cluster DMA
-  pulp_write32(pulp->clusters.v_addr,CLUSTER_DMA_OFFSET_B+0x10,'b',PULP_CLUSTER_OFFSET);
+  //pulp_write32(pulp->clusters.v_addr,CLUSTER_DMA_OFFSET_B+0x10,'b',PULP_CLUSTER_OFFSET);
 
   // setup the RAB
-  // setup RAB 0x1000_0000 -> 0x1000_0000
-  pulp_write32(pulp->rab_config.v_addr,0x10,'b',0x10000000);
-  pulp_write32(pulp->rab_config.v_addr,0x14,'b',0x20000000);
-  pulp_write32(pulp->rab_config.v_addr,0x18,'b',0x10000000);
-  pulp_write32(pulp->rab_config.v_addr,0x1c,'b',0xffffffff);
-  // setup RAB 0x5000_0000 -> 0x1000_0000
-  pulp_write32(pulp->rab_config.v_addr,0x20,'b',0x50000000);
-  pulp_write32(pulp->rab_config.v_addr,0x24,'b',0x60000000);
-  pulp_write32(pulp->rab_config.v_addr,0x28,'b',0x10000000);
-  pulp_write32(pulp->rab_config.v_addr,0x2c,'b',0xffffffff);
+  // port 0: Host -> PULP
+  // L2 memory
+  offset = 0x10*((RAB_N_PORTS-3)*RAB_N_SLICES+0);
+  printf("RAB config offset = %#x\n",offset);
+  pulp_write32(pulp->rab_config.v_addr,offset+0x10,'b',PULP_H_BASE_ADDR);
+  pulp_write32(pulp->rab_config.v_addr,offset+0x14,'b',PULP_H_BASE_ADDR+L2_MEM_SIZE_B);
+  pulp_write32(pulp->rab_config.v_addr,offset+0x18,'b',L2_MEM_BASE_ADDR);
+  pulp_write32(pulp->rab_config.v_addr,offset+0x1c,'b',0x7);
+  
+  // port 1: PULP -> Host
+  // L3 memory (contiguous)
+  offset = 0x10*((RAB_N_PORTS-2)*RAB_N_SLICES+0);
+  printf("RAB config offset = %#x\n",offset);
+  pulp_write32(pulp->rab_config.v_addr,offset+0x10,'b',L3_MEM_BASE_ADDR);
+  pulp_write32(pulp->rab_config.v_addr,offset+0x14,'b',L3_MEM_BASE_ADDR+L3_MEM_SIZE_B);
+  pulp_write32(pulp->rab_config.v_addr,offset+0x18,'b',L3_MEM_BASE_ADDR);
+  pulp_write32(pulp->rab_config.v_addr,offset+0x1c,'b',0x7);
 
-  // enable mailbox interrupts
-  pulp_write32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_IE_OFFSET_B,'b',0x6);
-  pulp_write32(pulp->clusters.v_addr,MAILBOX_INTERFACE1_OFFSET_B+MAILBOX_IE_OFFSET_B,'b',0x4);
+  // // enable mailbox interrupts
+  // pulp_write32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_IE_OFFSET_B,'b',0x6);
+  // pulp_write32(pulp->clusters.v_addr,MAILBOX_INTERFACE1_OFFSET_B+MAILBOX_IE_OFFSET_B,'b',0x4);
 
   return 0;
 }
@@ -451,26 +468,26 @@ int pulp_offload_kernel(PulpDev *pulp, bool sync) {
   }
   fclose(code_file);
  
-  // test_interrupts
-  // clear L2
-  pulp_write32(pulp->l2_mem.v_addr,0,'b',0);
-  pulp_write32(pulp->l2_mem.v_addr,0x4,'b',0);
-   
-  // read mailbox status
-  printf("Mailbox Interface0 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
-  printf("Mailbox Interface1 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE1_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
-  
-  // write to mailbox
-  pulp_write32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_WRDATA_OFFSET_B,'b',0xFF);
-  
-  // read mailbox status
-  printf("Mailbox Interface0 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
-  printf("Mailbox Interface1 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE1_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
-  
-  // start execution
-  pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x10,'b',BOOT_ADDR);
-  pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0xc,'b',1);
-  pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x4,'b',1);
+  // // test_interrupts
+  // // clear L2
+  // pulp_write32(pulp->l2_mem.v_addr,0,'b',0);
+  // pulp_write32(pulp->l2_mem.v_addr,0x4,'b',0);
+  //  
+  // // read mailbox status
+  // printf("Mailbox Interface0 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
+  // printf("Mailbox Interface1 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE1_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
+  // 
+  // // write to mailbox
+  // pulp_write32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_WRDATA_OFFSET_B,'b',0xFF);
+  // 
+  // // read mailbox status
+  // printf("Mailbox Interface0 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
+  // printf("Mailbox Interface1 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE1_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
+  // 
+  // // start execution
+  // pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x10,'b',BOOT_ADDR);
+  // pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0xc,'b',1);
+  // pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x4,'b',1);
   
   // wait for PULP
   sleep(1);
@@ -530,25 +547,25 @@ int pulp_check_results(PulpDev *pulp) {
 
   // check results
   int test;
-  test = pulp_read32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x4,'b');
+  //test = pulp_read32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x4,'b');
   printf("Fetch enable = %d.\n",test);
   if (test == 1) {
     sleep(1);
   }
 
-  // test_interrupts
-  // read mailbox status
-  printf("Mailbox Interface0 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
-  printf("Mailbox Interface1 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE1_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
-
-  // read from mailbox
-  printf("PULP should have written 0xFFFF to its write interface.\n");
-  printf("Read from mailbox Interface 0: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_RDDATA_OFFSET_B,'b'));
-
-  // read status variable in L2
-  printf("Read status variable in L2. Should be equal 2.\n");
-  printf("Status variable in L2: %#x \n", pulp_read32(pulp->l2_mem.v_addr,0,'b'));
-  printf("Data variable in L2: %#x \n", pulp_read32(pulp->l2_mem.v_addr,0x4,'b'));
+  // // test_interrupts
+  // // read mailbox status
+  // printf("Mailbox Interface0 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
+  // printf("Mailbox Interface1 status: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE1_OFFSET_B+MAILBOX_STATUS_OFFSET_B,'b'));
+  // 
+  // // read from mailbox
+  // printf("PULP should have written 0xFFFF to its write interface.\n");
+  // printf("Read from mailbox Interface 0: %#x \n", pulp_read32(pulp->clusters.v_addr,MAILBOX_INTERFACE0_OFFSET_B+MAILBOX_RDDATA_OFFSET_B,'b'));
+  // 
+  // // read status variable in L2
+  // printf("Read status variable in L2. Should be equal 2.\n");
+  // printf("Status variable in L2: %#x \n", pulp_read32(pulp->l2_mem.v_addr,0,'b'));
+  // printf("Data variable in L2: %#x \n", pulp_read32(pulp->l2_mem.v_addr,0x4,'b'));
 
   // // test_mailbox
   // // read mailbox status
