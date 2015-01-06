@@ -70,7 +70,7 @@ int zynq_pmm_parse(char *buffer, long long *counters, int accumulate){
     if (i < N_ARM_CORES)
       sprintf(identifier,"L1 Core %i",i);
     else
-      sprintf(identifier,"L2");
+      sprintf(identifier,"| L2");
     position = strstr(buffer,identifier);
     if (position == NULL) {
       printf("Error: Identifier '%s' not found.\n",identifier);

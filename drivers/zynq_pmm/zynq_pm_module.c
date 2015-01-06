@@ -99,6 +99,7 @@ static unsigned n_misses;
 static unsigned n_accesses;
 static unsigned delay = 500;
 static unsigned debug = 0;
+static unsigned l2_mode = 0; // 0: read, else: write
 
 static int i;
 
@@ -181,8 +182,14 @@ static int __init zynq_pmm_init(void) {
    * setup the L2 Cache Controller L2C-310
    */
   // configure the events to monitor
-  iowrite32( L2C_310_REG2_EV_COUNTER1_EV << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER1_CFG_OFFSET_B);
-  iowrite32( L2C_310_REG2_EV_COUNTER0_EV << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER0_CFG_OFFSET_B);
+  if (l2_mode == 0) {
+    iowrite32( L2C_310_REG2_EV_COUNTER1_EV_RH << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER1_CFG_OFFSET_B);
+    iowrite32( L2C_310_REG2_EV_COUNTER0_EV_RR << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER0_CFG_OFFSET_B);
+  }
+  else {
+    iowrite32( L2C_310_REG2_EV_COUNTER1_EV_WH << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER1_CFG_OFFSET_B);
+    iowrite32( L2C_310_REG2_EV_COUNTER0_EV_WR << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER0_CFG_OFFSET_B);
+  }
   // reset the counters
   iowrite32( L2C_310_REG2_EV_COUNTERS_RESET, my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
   // enable the counters
@@ -346,7 +353,10 @@ static void zynq_pmm_proc_update(void *data) {
    */
   // Info
   current_length = sprintf(proc_text,"Zynq Performance Monitoring Module \n");
-  current_length += sprintf(proc_text+current_length,"Monitoring cache miss rates - Read accesses only! \n");
+   if (l2_mode == 0) 
+    current_length += sprintf(proc_text+current_length, "Monitoring cache miss rates - L2: Read accesses only! \n");
+  else 
+    current_length += sprintf(proc_text+current_length, "Monitoring cache miss rates - L2: Write accesses only! \n");
   
   current_length += sprintf(proc_text+current_length,"------------------------------------------------------------------\n");
   current_length += sprintf(proc_text+current_length,"| Cache\t\t | # Misses\t | # Accesses\t | Miss Rate\t |\n");
@@ -513,6 +523,7 @@ static void arm_pmu_user_disable(void *data) {
 // module parameters 
 module_param(delay,int,500);
 module_param(debug,int,0);
+module_param(l2_mode,int,0);
 
 // info
 MODULE_LICENSE("GPL");

@@ -16,36 +16,43 @@ int main(){
   
   sleep(1);
   
-  ///////////////////////////////////////////////////////////////////////////
-  
-  // check the reservation
-  printf("\nMemory map of the process:\n");
-  printf("# cat /proc/getpid()/maps\n");
-  char cmd[20];
-  sprintf(cmd,"cat /proc/%i/maps",getpid());
-  system(cmd);
-  
-  // check wether the reservation contributes to the kernels overcommit accounting -> Committed_AS
-  printf("\nInformation about the system's memory:\n");
-  printf("# cat /proc/meminfo\n");
-  system("cat /proc/meminfo");
-  
-  ///////////////////////////////////////////////////////////////////////////
+  // ///////////////////////////////////////////////////////////////////////////
+  // 
+  // // check the reservation
+  // printf("\nMemory map of the process:\n");
+  // printf("# cat /proc/getpid()/maps\n");
+  // char cmd[20];
+  // sprintf(cmd,"cat /proc/%i/maps",getpid());
+  // system(cmd);
+  // 
+  // // check wether the reservation contributes to the kernels overcommit accounting -> Committed_AS
+  // printf("\nInformation about the system's memory:\n");
+  // printf("# cat /proc/meminfo\n");
+  // system("cat /proc/meminfo");
+  // 
+  // ///////////////////////////////////////////////////////////////////////////
   
   sleep(1);
 
   pulp_mmap(pulp);
   
+ // check the reservation
+  printf("\nMemory map of the process:\n");
+  printf("# cat /proc/getpid()/maps\n");
+  char cmd[20];
+  sprintf(cmd,"cat /proc/%i/maps",getpid());
+  system(cmd);
+
   pulp_reset(pulp);
 
   pulp_init(pulp);
   
-  pulp_write32(pulp->clusters.v_addr,0x0,'b',0xFF);
-  printf("Value at L2 start address = %#x \n", pulp_read32(pulp->clusters.v_addr,0x0,'b'));
+  //pulp_write32(pulp->clusters.v_addr,0x0,'b',0xFF);
+  //printf("Value at L2 start address = %#x \n", pulp_read32(pulp->clusters.v_addr,0x0,'b'));
 
   //pulp_offload_kernel(pulp, true);
 
-  pulp_check_results(pulp);
+  //pulp_check_results(pulp);
   
 //
   //// Reread from TCDM
@@ -78,9 +85,9 @@ int main(){
   //printf("TCDM_2 - 2: %#x \n",pulp_read32(pulp->clusters.v_addr,0x6004,'b'));
   //printf("TCDM_2 - 3: %#x \n",pulp_read32(pulp->clusters.v_addr,0x6008,'b'));
 
+  pulp_free_v_addr(pulp);
   sleep(1);
   pulp_munmap(pulp);
-  pulp_free_v_addr(pulp);
-
+  
   return 0;
 }
