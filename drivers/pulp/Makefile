@@ -3,7 +3,7 @@ obj-m := pulp.o
 ARCH := arm
 CROSS_COMPILE := arm-xilinx-linux-gnueabi-
 
-KERNELDIR := /scratch/vogelpi/zc706/workspace/linux-xlnx
+KERNELDIR := /scratch/vogelpi/mini-itx/workspace/linux-xlnx
 
 all: modules
 modules:

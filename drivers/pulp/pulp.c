@@ -20,7 +20,7 @@
 #include "../../lib/inc/zynq.h"
 #include "../../lib/inc/pulp_host.h"
 
-#define RAB_DEBUG_LEVEL 2
+#define RAB_DEBUG_LEVEL 1
 
 // VM_RESERVERD for mmap
 #ifndef VM_RESERVED
@@ -646,8 +646,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       len = size_b >> PAGE_SHIFT;
       if (BF_GET(size_b,0,PAGE_SHIFT) | BF_GET(addr_start,0,PAGE_SHIFT)) len++; // less than one page or not aligned to page border
       if ((addr_start >> PAGE_SHIFT) != ((addr_start + size_b) >> PAGE_SHIFT)) len++; // touches two pages 
-      printk(KERN_INFO "len = %d\n",len);
-
+      if (RAB_DEBUG_LEVEL > 1) {
+	printk(KERN_INFO "len = %d\n",len);
+      }
       // what get_user_pages returns
       pages = (struct page **)kmalloc((size_t)(len*sizeof(struct page *)),GFP_KERNEL);
             if (pages == NULL) {
@@ -669,6 +670,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       addr_phys = (unsigned *)kmalloc((size_t)len*sizeof(unsigned),GFP_KERNEL);
       for (i=0;i<len;i++) {
 	addr_phys[i] = (unsigned)page_to_phys(pages[i]);
+	if (RAB_DEBUG_LEVEL > 1) {
+	  printk(KERN_INFO "phys addr = %#x\n",addr_phys[i]);
+	}
       }
     }
    
@@ -846,6 +850,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       printk(KERN_INFO "PULP: Set up RAB Slice %d on Port %d.\n",rab_slice,rab_port);
 
       if (!const_mapping) {
+
 	// clean L1 cache lines
 	__cpuc_flush_dcache_area((void *)addr_start_vec[i],addr_end_vec[i]-addr_start_vec[i]);
 

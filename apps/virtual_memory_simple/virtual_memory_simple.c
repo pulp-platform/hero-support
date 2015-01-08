@@ -4,6 +4,7 @@
 #include "../../lib/inc/pulp_host.h"
 #include "../../lib/inc/pulp_func.h"
 
+//#define CHECK_L2
 
 #ifndef SIZE
 #define SIZE   16
@@ -29,22 +30,19 @@ int main(){
   pulp_rab_free(pulp,0x0);
   pulp_init(pulp);
   
-  //pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
-  
   /*
    * Body
    */
   // preparation
-  int mat_a[SIZE][SIZE];
-  int mat_b[SIZE][SIZE];
-  int mat_c[SIZE][SIZE];
-  int mat_d[SIZE][SIZE];
+  __attribute__((aligned(64))) int mat_a[SIZE][SIZE];
+  __attribute__((aligned(64))) int mat_b[SIZE][SIZE];
+  __attribute__((aligned(64))) int mat_c[SIZE][SIZE];
+  __attribute__((aligned(64))) int mat_d[SIZE][SIZE];
 
   //int ** mat_a = (int **)malloc(sizeof(int)*SIZE*SIZE);
   //int ** mat_b = (int **)malloc(sizeof(int)*SIZE*SIZE);
   //int ** mat_c = (int **)malloc(sizeof(int)*SIZE*SIZE);
   //int ** mat_d = (int **)malloc(sizeof(int)*SIZE*SIZE);
-
 
   int i,j,k;
 
@@ -128,8 +126,7 @@ int main(){
 	printf("ERROR: computation wrong!\n");
      }
   }
-
-
+  
   // print the matrix - for verification
   if ( SIZE > 16 )
     k = 16;
@@ -144,9 +141,9 @@ int main(){
     printf("\n");
   }
 
-  printf("mat_c[0][15] @ %#x :\n",(int)&mat_c[0][15]);
-  printf("mat_c[1][0] @ %#x :\n",(int)&mat_c[1][0]);
-  printf("mat_c[2][0] @ %#x :\n",(int)&mat_c[2][0]);
+  //printf("mat_c[0][15] @ %#x :\n",(int)&mat_c[0][15]);
+  //printf("mat_c[1][0] @ %#x :\n",(int)&mat_c[1][0]);
+  //printf("mat_c[2][0] @ %#x :\n",(int)&mat_c[2][0]);
 
   printf("Matrix D @ %#x :\n",(int)&mat_d[0][0]);
   for (i=0;i<k;i++) {
@@ -155,6 +152,76 @@ int main(){
     }
     printf("\n");
   }
+
+#ifdef CHECK_L2 
+  /*
+   * Read matrices from L2
+   */
+  unsigned address;
+  
+  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  printf("address =  %#x\n",address);
+
+  address -= L2_MEM_BASE_ADDR;
+
+  // print the matrix - for verification
+  if ( SIZE > 16 )
+    k = 16;
+  else 
+    k = SIZE;
+
+  printf("Matrix A_L2 @ %#x :\n",address);
+  for (i=0;i<k;i++) {
+    for (j=0;j<k;j++) {
+      printf("%d\t",pulp_read32(pulp->l2_mem.v_addr,address,'b'));
+      //printf("@ %#x\n",address);
+      address += 4;
+    }
+    printf("\n");
+  }
+
+  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  printf("address =  %#x\n",address);
+
+  address -= L2_MEM_BASE_ADDR;
+
+  // print the matrix - for verification
+  if ( SIZE > 16 )
+    k = 16;
+  else 
+    k = SIZE;
+
+  printf("Matrix B_L2 @ %#x :\n",address);
+  for (i=0;i<k;i++) {
+    for (j=0;j<k;j++) {
+      printf("%d\t",pulp_read32(pulp->l2_mem.v_addr,address,'b'));
+      //printf("@ %#x\n",address);
+      address += 4;
+    }
+    printf("\n");
+  }
+
+  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  printf("address =  %#x\n",address);
+
+  address -= L2_MEM_BASE_ADDR;
+
+  // print the matrix - for verification
+  if ( SIZE > 16 )
+    k = 16;
+  else 
+    k = SIZE;
+
+  printf("Matrix C_L2 @ %#x :\n",address);
+  for (i=0;i<k;i++) {
+    for (j=0;j<k;j++) {
+      printf("%d\t",pulp_read32(pulp->l2_mem.v_addr,address,'b'));
+      //printf("@ %#x\n",address);
+      address += 4;
+    }
+    printf("\n");
+  }
+#endif
 
   sleep(2);
 

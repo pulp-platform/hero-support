@@ -415,9 +415,9 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
       }
     }
   }
-  // for (i=0;i<n_data;i++) {
-  //   printf("%d \t %#x \t %#x \n",order[i], (unsigned)task->data_desc[order[i]].v_addr, (unsigned)task->data_desc[order[i]].size);
-  // }
+  for (i=0;i<n_data;i++) {
+    printf("%d \t %#x \t %#x \n",order[i], (unsigned)task->data_desc[order[i]].v_addr, (unsigned)task->data_desc[order[i]].size);
+  }
 
   v_addr_int[0] = (unsigned)task->data_desc[order[0]].v_addr; 
   size_int[0] = (unsigned)task->data_desc[order[0]].size; 
@@ -439,6 +439,7 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   // setup the RAB
   for (i=0;i<n_data_int;i++) {
     pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur);
+    printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
   }
 
   free(v_addr_int);

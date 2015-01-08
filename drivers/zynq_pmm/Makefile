@@ -6,7 +6,8 @@ ARCH=arm
 CROSS_COMPILE=arm-xilinx-linux-gnueabi-
 
 # Paths
-KERNELDIR=/scratch/vogelpi/PULPonFPGA/WorkSpace/SW/linux-xlnx
+#KERNELDIR=/scratch/vogelpi/PULPonFPGA/WorkSpace/SW/linux-xlnx
+KERNELDIR=/scratch/vogelpi/mini-itx/workspace/linux-xlnx
 
 all: modules
 modules:
