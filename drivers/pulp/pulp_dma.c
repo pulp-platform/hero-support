@@ -71,7 +71,7 @@ void pulp_dma_xfer_cleanup(DmaCleanup * pulp_dma_cleanup){
 #ifndef PROFILE_DMA
   struct dma_async_tx_descriptor ** descs;
 #endif   
-struct page ** pages;
+  struct page ** pages;
   unsigned n_pages;
   
   int i;
@@ -82,6 +82,7 @@ struct page ** pages;
 #ifndef PROFILE_DMA
   // free transaction descriptors array
   descs = *(pulp_dma_cleanup->descs);
+// FIXME!!! -> kernel crashes very often
   kfree(descs);
 #endif
 

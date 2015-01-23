@@ -577,7 +577,6 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
 
   // if sync, wait for PULP to finish
   // else configure the driver to listen for the interrupt and which process to wakeup
-    
 
   return 0;
 }

@@ -10,9 +10,9 @@
 #define CHECK_RESULT
 #define PRINT_MAT
 
-//#define ARM_DMA_SIZE_B 0x10000 // 64kB = L2 Size
-#define ARM_DMA_SIZE_B 0x8000
-//#define ARM_DMA_SIZE_B 0x400
+#define ARM_DMA_SIZE_B 0x10000 // 64kB = L2 Size
+//#define ARM_DMA_SIZE_B 0x8000
+//#define ARM_DMA_SIZE_B 0x1000
 #define PULP_DMA_SIZE_B 0x2000 // 8kB
 
 #define ARM_DMA_SIZE  ARM_DMA_SIZE_B/4
@@ -76,6 +76,10 @@ int main(){
   /*
    * First, test the Zynq PS DMA engine.
    */
+  printf("Testing Zynq PS DMA engine...\n");
+  printf("Source: %d Bytes starting at %p\n",ARM_DMA_SIZE_B,arm_dma_array);
+  sleep(1);
+ 
   // clean L2
   for (i=0; i<ARM_DMA_SIZE; i++) {
 #ifndef USE_L3
@@ -84,7 +88,7 @@ int main(){
     pulp_write32(pulp->l3_mem.v_addr,l2_offset+4*i,'b',0);
 #endif
   }
-  
+ 
   clock_gettime(CLOCK_REALTIME,&tp1);
 
 #ifndef USE_L3
@@ -104,9 +108,7 @@ int main(){
     ns_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) % 1000000000;
     s_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) / 1000000000;
   }
-  //printf("Elapsed time in seconds = %i\n",s_duration);
-  //printf("Elapsed time in nanoseconds = %li\n",ns_duration);
-  printf("Measured Zynq PS DMA bandwidth = %.2f MB/s\n (includes transfer)",((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
+  printf("Measured Zynq PS DMA bandwidth = %.2f MB/s (includes transfer setup)\n",((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
 
 #ifdef CHECK_RESULT
   int value;
@@ -132,125 +134,79 @@ int main(){
   /*
    * Second, run a test program on PULP to test it's own DMA engine.
    */
+  printf("Testing PULP DMA engine...\n");  
   
-  //// manually setup data structures (no compiler support right now)
-  //printf("Heterogenous OpenMP Matrix Multiplication Execution...\n");
-  //
-  //TaskDesc task_desc;
-  // 
-  //char name[30];
-  //strcpy(name,"dma_performance_measurement");
-  //
-  //task_desc.name = &name[0];
-  //task_desc.n_clusters = -1;
-  //task_desc.n_data = 1;
-  // 
-  //DataDesc data_desc[task_desc.n_data];
-  //data_desc[0].v_addr = (unsigned *)&pulp_dma_array;
-  //data_desc[0].size   = PULP_DMA_SIZE_B;
-  //
-  //task_desc.data_desc = data_desc;
-  //
-  //sleep(1);
-  //
-  //// issue the offload
-  //pulp_omp_offload_task(pulp,&task_desc);
-  ////pulp_omp_wait(pulp,ker_id);
-  //
-  ///*
-  // * Check
-  // */
-  //int checksum = 0;
-  //for(i=0; i<SIZE; i++) {
-  //  for (k=0; k<SIZE; k++) {
-  //    mat_d[i][k] = 0;
-  //    for (j=0; j<SIZE; j++) {
-  //	mat_d[i][k] += mat_a[i][j] * mat_b[j][k];
-  //    }
-  //    checksum += mat_d[i][k];
-  //  }
-  //}
-  //printf("Checksum = %d\n",checksum);
-  //
-  //for(i=0; i<SIZE; i++) {
-  //  for (j=0; j<SIZE; j++) {
-  //    if (mat_c[i][j] != mat_c[i][j])
-  //	printf("ERROR: computation wrong!\n");
-  //  }
-  //}
+  // manually setup data structures (no compiler support right now)
+  TaskDesc task_desc;
    
-//#ifdef CHECK_RESULT 
-//  /*
-//   * Read matrices from L2
-//   */
-//  unsigned address, temp;
-//   
-//  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
-//  printf("address =  %#x\n",address);
-// 
-//  address -= L2_MEM_BASE_ADDR;
-// 
-//  // print the matrix - for verification
-//  if ( SIZE > 16 )
-//    k = 16;
-//  else 
-//    k = SIZE;
-// 
-//  printf("Matrix A_L2 @ %#x :\n",address);
-//  for (i=0;i<k;i++) {
-//    temp = address + i*SIZE*4;
-//    for (j=0;j<k;j++) {
-//      printf("%d\t",pulp_read32(pulp->l2_mem.v_addr,temp,'b'));
-//      //printf("@ %#x\n",temp);
-//      temp += 4;
-//    }
-//    printf("\n");
-//  }
-// 
-//  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
-//  printf("address =  %#x\n",address);
-// 
-//  address -= L2_MEM_BASE_ADDR;
-// 
-//  // print the matrix - for verification
-//  if ( SIZE > 16 )
-//    k = 16;
-//  else 
-//    k = SIZE;
-// 
-//  printf("Matrix B_L2 @ %#x :\n",address);
-//  for (i=0;i<k;i++) {
-//    temp = address + i*SIZE*4;
-//    for (j=0;j<k;j++) {
-//      printf("%d\t",pulp_read32(pulp->l2_mem.v_addr,temp,'b'));
-//      //printf("@ %#x\n",temp);
-//      temp += 4;
-//    }
-//    printf("\n");
-//  }
-// 
-//  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
-//  printf("address =  %#x\n",address);
-// 
-//  address -= L2_MEM_BASE_ADDR;
-// 
-//  // print the matrix - for verification
-//  if ( SIZE > 16 )
-//    k = 16;
-//  else 
-//    k = SIZE;
-// 
-//  printf("Matrix C_L2 @ %#x :\n",address);
-//  for (i=0;i<k;i++) {
-//    temp = address + i*SIZE*4;
-//    for (j=0;j<k;j++) {
-//      printf("%d\t",pulp_read32(pulp->l2_mem.v_addr,temp,'b'));
-//      //printf("@ %#x\n",temp);
-//      temp += 4;
-//    }
-//    printf("\n");
-//  }
-//#endif
+  char name[30];
+  strcpy(name,"dma_performance_measurement");
+  
+  task_desc.name = &name[0];
+  task_desc.n_clusters = -1;
+  task_desc.n_data = 1;
+   
+  DataDesc data_desc[task_desc.n_data];
+  data_desc[0].v_addr = (unsigned *)&pulp_dma_array;
+  data_desc[0].size   = PULP_DMA_SIZE_B;
+  
+  task_desc.data_desc = data_desc;
+  
+  sleep(1);
+  
+  clock_gettime(CLOCK_REALTIME,&tp1);
+
+  // issue the offload
+  pulp_omp_offload_task(pulp,&task_desc);
+  //pulp_omp_wait(pulp,ker_id);
+  
+  clock_gettime(CLOCK_REALTIME,&tp2);
+
+  // compute bandwidth
+  s_duration = (int)(tp2.tv_sec - tp1.tv_sec);
+  if ((tp2.tv_nsec > tp1.tv_nsec) && (s_duration < 1)) { // no overflow
+    ns_duration = (tp2.tv_nsec - tp1.tv_nsec);
+  }
+  else {//((tp2.tv_nsec < tp1.tv_nsec) && (s_duration > 1)) {// overflow of tv_nsec
+    ns_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) % 1000000000;
+    s_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) / 1000000000;
+  }
+  printf("Measured PULP DMA bandwidth = %.2f MB/s (includes offload and transfer setup)\n",((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
+
+  int time_high, time_low;
+  time_high = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  time_low = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+
+  float time;
+  time = ((2<<31)*(float)time_high + (float)time_low)/(50);
+
+  printf("PULP - DMA: size = %d [bytes]\n",PULP_DMA_SIZE_B);
+  printf("PULP - DMA: time = %.2f [us]\n",time);
+
+  float bw;
+  bw = PULP_DMA_SIZE_B/time;
+  printf("DMA bandwidth measured on PULP = %.2f MiB/s\n",bw);
+
+#ifdef CHECK_RESULT
+  unsigned address, temp;
+  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+ 
+  address -= L2_MEM_BASE_ADDR;
+
+  for (i=0; i<PULP_DMA_SIZE; i++) {
+    temp = address + i*4;
+    value = pulp_read32(pulp->l2_mem.v_addr,temp,'b');
+    //printf("entry %d = %d \n",i,value);
+    if ( pulp_dma_array[i] != value ) {
+      printf("Error: mismatch in Entry %i detected\n",i);
+      printf("Value found in L2 = %d\n",value);
+      printf("Value expected    = %d\n",arm_dma_array[i]);
+      break;
+    }
+    if ( i == PULP_DMA_SIZE-1 )
+      printf("Success: L2 content matches array in DRAM.\n");
+  }
+#endif // CHECK_RESULT
  
   //free(arm_dma_array);
   //free(pulp_dma_array);

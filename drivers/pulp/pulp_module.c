@@ -866,8 +866,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
         
       // set callback parameters for last transaction
       if ( i == n_segments-1 ) {
-	descs[i]->callback = (dma_async_tx_callback)pulp_dma_xfer_cleanup;
-	descs[i]->callback_param = &pulp_dma_cleanup[dma_cmd];
+      	descs[i]->callback = (dma_async_tx_callback)pulp_dma_xfer_cleanup;
+      	descs[i]->callback_param = &pulp_dma_cleanup[dma_cmd];
       }
 
       // submit the transaction
@@ -889,7 +889,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 	break;
       udelay(10);
     }
-    kfree(*descs);
+// FIXME!!! -> kernel crashes very often
+    //kfree(*descs); 
 
     // time measurement
     time_dma_end = ktime_get();
