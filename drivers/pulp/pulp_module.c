@@ -12,15 +12,23 @@
 #include <linux/time.h>         /* do_gettimeofday */
 #include <linux/ioctl.h>        /* ioctl */
 #include <linux/slab.h>         /* kmalloc */
-//#include <linux/wait.h>
+
 #include <linux/sched.h>
 #include <linux/delay.h>        /* udelay */
 #include <linux/device.h>       // class_create, device_create
 
-#include "../../lib/inc/zynq.h"
-#include "../../lib/inc/pulp_host.h"
+/***************************************************************************************/
+//#include <linux/wait.h>
+#include <linux/ktime.h>      /* For ktime_get(), ktime_us_delta() */
+/***************************************************************************************/
 
-#define RAB_DEBUG_LEVEL 1
+#include "zynq.h"
+#include "pulp_host.h"
+
+#include "pulp_module.h"
+#include "pulp_mem.h"
+#include "pulp_rab.h"
+#include "pulp_dma.h"
 
 // VM_RESERVERD for mmap
 #ifndef VM_RESERVED
@@ -28,59 +36,35 @@
 #endif
 
 // methods declarations
-int pulp_open(struct inode *inode, struct file *filp);
-int pulp_release(struct inode *p_inode, struct file *filp);
-ssize_t pulp_read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos);
-int pulp_mmap(struct file *filp, struct vm_area_struct *vma);
-long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+static int     pulp_open   (struct inode *inode, struct file *filp);
+static int     pulp_release(struct inode *p_inode, struct file *filp);
+static int     pulp_mmap   (struct file *filp, struct vm_area_struct *vma);
+static long    pulp_ioctl  (struct file *filp, unsigned int cmd, unsigned long arg);
 
-irqreturn_t pulp_isr_eoc(int irq, void *ptr);
-irqreturn_t pulp_isr_mailbox(int irq, void *ptr);
-irqreturn_t pulp_isr_rab(int irq, void *ptr);
+static irqreturn_t pulp_isr_eoc    (int irq, void *ptr);
+static irqreturn_t pulp_isr_mailbox(int irq, void *ptr);
+static irqreturn_t pulp_isr_rab    (int irq, void *ptr);
 
 // important structs
 struct file_operations pulp_fops = {
-  .owner = THIS_MODULE,
-  //.llseek = pulp_llseek,
-  .open = pulp_open,
-  .release = pulp_release,
-  //.read = pulp_read,
-  //.write = pulp_write,
-  .mmap = pulp_mmap,
+  .owner          = THIS_MODULE,
+  .open           = pulp_open,
+  .release        = pulp_release,
+  .mmap           = pulp_mmap,
   .unlocked_ioctl = pulp_ioctl,
 };
 
-// type definitions -> move to .h ???
-typedef struct {
-  dev_t dev; // device number
-  struct file_operations *fops;
-  struct cdev cdev;
-  int minor;
-  int major;
-  void *l3_mem;
-  void *l2_mem;
-  void *mailbox;
-  void *soc_periph;
-  void *clusters;
-  void *rab_config;
-  void *gpio;
-  void *slcr;
-  void *mpcore;
-} PulpDev;
-
-// global variables
-PulpDev my_dev;
-
 // static variables
+static PulpDev my_dev;
+
 static struct class *my_class; 
 static struct timeval time;
 static unsigned slcr_value;
 static unsigned mailbox_is;
 static char rab_interrupt_type[6];
-#define RAB_TABLE_WIDTH 3
-static unsigned rab_slices[RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES];
-static struct page ** page_ptrs[RAB_N_PORTS*RAB_N_SLICES];
-static unsigned page_ptr_ref_cntrs[RAB_N_PORTS*RAB_N_SLICES];
+
+static struct dma_chan * pulp_dma_chan[2];
+static DmaCleanup pulp_dma_cleanup[2];
 
 // methods definitions
 /***********************************************************************************
@@ -88,9 +72,9 @@ static unsigned page_ptr_ref_cntrs[RAB_N_PORTS*RAB_N_SLICES];
  * init 
  *
  ***********************************************************************************/
-static int __init pulp_init(void) {
-  
-  int err, i;
+static int __init pulp_init(void)
+{
+  int err;
   unsigned mpcore_icdicfr3, mpcore_icdicfr4;
 
   printk(KERN_ALERT "PULP: Loading device driver.\n");
@@ -135,41 +119,42 @@ static int __init pulp_init(void) {
    *
    **********/
   my_dev.rab_config = ioremap_nocache(RAB_CONFIG_BASE_ADDR, RAB_CONFIG_SIZE_B);
-  printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.rab_config); 
-  // initialize the RAB slices table
-  for (i=0;i<RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES;i++)
-    rab_slices[i] = 0;
-  // initialize the RAB pages and reference counter lists
-  for (i=0;i<RAB_N_PORTS*RAB_N_SLICES;i++) {
-    page_ptrs[i] = 0;
-    page_ptr_ref_cntrs[i] = 0;
-  }
+  printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.rab_config); 
+  pulp_rab_init();
 
   my_dev.mailbox = ioremap_nocache(MAILBOX_H_BASE_ADDR, MAILBOX_SIZE_B);
-  printk(KERN_INFO "PULP: Mailbox mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.mailbox); 
+  printk(KERN_INFO "PULP: Mailbox mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.mailbox); 
  
   my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
-  printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.slcr); 
+  printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.slcr); 
 
   my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
-  printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.mpcore); 
+  printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.mpcore); 
 
   my_dev.gpio = ioremap_nocache(H_GPIO_BASE_ADDR, H_GPIO_SIZE_B);
-  printk(KERN_INFO "PULP: Host GPIO mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.gpio); 
+  printk(KERN_INFO "PULP: Host GPIO mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.gpio); 
   // remove GPIO reset, the driver and the runtime use the SLCR resets
   iowrite32(0x80000000,my_dev.gpio+0x8);
 
   // actually not needed - handled in user space
   my_dev.clusters = ioremap_nocache(CLUSTERS_H_BASE_ADDR, CLUSTERS_SIZE_B);
-  printk(KERN_INFO "PULP: Clusters mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.clusters); 
+  printk(KERN_INFO "PULP: Clusters mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.clusters); 
 
   // actually not needed - handled in user space
   my_dev.soc_periph = ioremap_nocache(SOC_PERIPHERALS_H_BASE_ADDR, SOC_PERIPHERALS_SIZE_B);
-  printk(KERN_INFO "PULP: SoC peripherals mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.soc_periph); 
+  printk(KERN_INFO "PULP: SoC peripherals mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.soc_periph); 
   
   // actually not needed - handled in user space
   my_dev.l2_mem = ioremap_nocache(L2_MEM_H_BASE_ADDR, L2_MEM_SIZE_B);
-  printk(KERN_INFO "PULP: L2 memory mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.l2_mem); 
+  printk(KERN_INFO "PULP: L2 memory mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.l2_mem); 
 
   // actually not needed - handled in user space
   my_dev.l3_mem = ioremap_nocache(L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B);
@@ -178,7 +163,8 @@ static int __init pulp_init(void) {
     err = EPERM;
     goto fail_ioremap;
   }
-  printk(KERN_INFO "PULP: Shared L3 memory (DRAM) mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.l3_mem);
+  printk(KERN_INFO "PULP: Shared L3 memory (DRAM) mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.l3_mem);
  
   /*********************
    *
@@ -236,6 +222,21 @@ static int __init pulp_init(void) {
     printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
     goto fail_request_irq;
   }
+  /************************************
+   *
+   *  request DMA channels
+   *
+   ************************************/
+  err = pulp_dma_chan_req(&pulp_dma_chan[0],0);
+  if (err) {
+    printk(KERN_WARNING "PULP: Error requesting DMA channel.\n");
+    goto fail_request_dma;
+  }
+  err = pulp_dma_chan_req(&pulp_dma_chan[1],1);
+  if (err) {
+    printk(KERN_WARNING "PULP: Error requesting DMA channel.\n");
+    goto fail_request_dma;
+  }
 
   /************************************
    *
@@ -255,6 +256,9 @@ static int __init pulp_init(void) {
    * error handling
    */
  fail_register_device:
+  pulp_dma_chan_clean(pulp_dma_chan[1]);
+  pulp_dma_chan_clean(pulp_dma_chan[0]);
+fail_request_dma: 
   free_irq(END_OF_COMPUTATION_IRQ,NULL);
   free_irq(MAILBOX_IRQ,NULL);
   free_irq(RAB_MISS_IRQ,NULL);
@@ -284,6 +288,8 @@ module_init(pulp_init);
 static void __exit pulp_exit(void) {
   printk(KERN_ALERT "PULP: Unloading device driver.\n");
   // undo __init pulp_init
+  pulp_dma_chan_clean(pulp_dma_chan[1]);
+  pulp_dma_chan_clean(pulp_dma_chan[0]);
   free_irq(END_OF_COMPUTATION_IRQ,NULL);
   free_irq(MAILBOX_IRQ,NULL);
   free_irq(RAB_MISS_IRQ,NULL);
@@ -468,10 +474,10 @@ irqreturn_t pulp_isr_eoc(int irq, void *ptr) {
    
   // do something
   do_gettimeofday(&time);
-  printk(KERN_INFO "PULP: End of Computation: %02li:%02li:%02li.\n",(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+  printk(KERN_INFO "PULP: End of Computation: %02li:%02li:%02li.\n",
+	 (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
  
   // interrupt is just a pulse, no need to clear it
- 
   return IRQ_HANDLED;
 }
  
@@ -482,7 +488,8 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
   // clear the interrupt
   mailbox_is = 0x7 & ioread32(my_dev.mailbox+MAILBOX_IS_OFFSET_B);
   iowrite32(0x7,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
-  printk(KERN_INFO "PULP: Mailbox Interface 0 interrupt status: %#x. Interrupt handled at: %02li:%02li:%02li.\n",mailbox_is,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+  printk(KERN_INFO "PULP: Mailbox Interface 0 interrupt status: %#x. Interrupt handled at: %02li:%02li:%02li.\n",
+	 mailbox_is,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
  
   return IRQ_HANDLED;
 }
@@ -502,7 +509,8 @@ irqreturn_t pulp_isr_rab(int irq, void *ptr) {
   // interrupt is just a pulse, no need to clear it
   // instead reset PULP
 
-  printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+  printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
+	 rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
   // read FPGA reset control register
   slcr_value = ioread32(my_dev.slcr+SLCR_FPGA_RST_CTRL_OFFSET_B);
   // extract the FPGA_OUT_RST bits
@@ -518,51 +526,62 @@ irqreturn_t pulp_isr_rab(int irq, void *ptr) {
   return IRQ_HANDLED;
 }
 
+
 /***********************************************************************************
  *
  * ioctl 
  *
  ***********************************************************************************/
 long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
-  int err = 0, i, j, k;
+  int err = 0, i, j;
   long retval = 0;
   
   // to read from user space
   unsigned request[3];
   unsigned long ret, n_bytes_left;
-  unsigned byte, const_mapping;
+  unsigned byte;
 
   // what we get from user space
-  unsigned addr_start, size_b;
-  unsigned char rab_port, prot, date_exp, date_cur;
-  
+  unsigned size_b;
+   
   // what get_user_pages needs
-  unsigned long start;
   unsigned len; 
-  int result;
   struct page ** pages;
-  unsigned * addr_phys;
-
-  // what the RAB needs
-  unsigned addr_end, addr_offset;
+  
+  // what mem_map_sg needs needs
   unsigned * addr_start_vec;
   unsigned * addr_end_vec;
   unsigned * addr_offset_vec;
-  unsigned rab_slice, offset, n_slices;
+  unsigned * page_idxs_start;
+  unsigned * page_idxs_end;
+  unsigned n_segments;
 
-  // what is needed to manage the RAB table (rab_slices)
-  unsigned * page_start_idxs;
-  unsigned * page_end_idxs;
-  unsigned page_idx_start_old, page_idx_end_old;
-  unsigned page_ptr_idx, page_ptr_idx_old;
-  struct page ** pages_old;
+  // needed for cache flushing
+  unsigned offset_start, offset_end;
+
+  // needed for RAB managment
+  RabSliceReq rab_slice_request;
+  RabSliceReq *rab_slice_req = &rab_slice_request;
  
+  // needed for DMA management
+  unsigned addr_l3, addr_pulp;
+  unsigned char dma_cmd;
+  unsigned addr_src, addr_dst;
+
+  struct dma_async_tx_descriptor ** descs;
+
+#ifdef PROFILE_DMA
+  ktime_t time_dma_start, time_dma_end;
+  unsigned time_dma_acc;
+  time_dma_acc = 0;
+#endif
+
   /*
    * extract the type and number bitfields, and don't decode wrong
    * cmds: return ENOTTY before access_ok()
    */
   if (_IOC_TYPE(cmd) != PULP_IOCTL_MAGIC) return -ENOTTY;
-  if ( (_IOC_NR(cmd) < 0xB0) | (_IOC_NR(cmd) > 0xB2) ) return -ENOTTY;
+  if ( (_IOC_NR(cmd) < 0xB0) | (_IOC_NR(cmd) > 0xB3) ) return -ENOTTY;
 
   /*
    * the direction is a bitmask, and VERIFY_WRITE catches R/W
@@ -595,329 +614,291 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     }
      
     // parse request
-    prot = request[0] & 0x7;    
-    rab_port = BF_GET(request[0], RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_PORT);
-    date_exp = BF_GET(request[0], RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, RAB_CONFIG_N_BITS_DATE);
-    date_cur = BF_GET(request[0], RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT + RAB_CONFIG_N_BITS_DATE, RAB_CONFIG_N_BITS_DATE);
-    addr_start = request[1];
+    RAB_GET_PROT(rab_slice_req->prot, request[0]);    
+    RAB_GET_PORT(rab_slice_req->rab_port, request[0]);
+    RAB_GET_DATE_EXP(rab_slice_req->date_exp, request[0]);
+    RAB_GET_DATE_CUR(rab_slice_req->date_cur, request[0]);
+
+    rab_slice_req->addr_start = request[1];
     size_b = request[2];
     
-    addr_end = addr_start + size_b;
-    n_slices = 1;
+    rab_slice_req->addr_end = rab_slice_req->addr_start + size_b;
+    n_segments = 1;
 
-    if (RAB_DEBUG_LEVEL > 0) {
-      printk(KERN_INFO "rab_port %d.\n",rab_port);
-      printk(KERN_INFO "date_exp %d.\n",date_exp);
-      printk(KERN_INFO "date_cur %d.\n",date_cur);
+    if (DEBUG_LEVEL_RAB > 0) {
+      printk(KERN_INFO "PULP: New RAB request:\n");
+      printk(KERN_INFO "PULP: rab_port = %d.\n",rab_slice_req->rab_port);
+      printk(KERN_INFO "PULP: date_exp = %d.\n",rab_slice_req->date_exp);
+      printk(KERN_INFO "PULP: date_cur = %d.\n",rab_slice_req->date_cur);
     }
-    
+  
     // check type of remapping
-    if ( (rab_port == 0) | (addr_start == L3_MEM_BASE_ADDR) ) const_mapping = 1;
-    else const_mapping = 0;
-    
-    
-    if (const_mapping) { // constant remapping
+    if ( (rab_slice_req->rab_port == 0) | (rab_slice_req->addr_start == L3_MEM_BASE_ADDR) ) 
+      rab_slice_req->const_mapping = 1;
+    else rab_slice_req->const_mapping = 0;
+        
+    if (rab_slice_req->const_mapping) { // constant remapping
 
-      switch(addr_start) {
+      switch(rab_slice_req->addr_start) {
       
       case MAILBOX_H_BASE_ADDR:
-	addr_offset = MAILBOX_BASE_ADDR - MAILBOX_SIZE_B; // Interface 0
+	rab_slice_req->addr_offset = MAILBOX_BASE_ADDR - MAILBOX_SIZE_B; // Interface 0
 	break;
 		
       case L2_MEM_H_BASE_ADDR:
-	addr_offset = L2_MEM_BASE_ADDR;
+	rab_slice_req->addr_offset = L2_MEM_BASE_ADDR;
 	break;
 
-   case PULP_H_BASE_ADDR:
-	addr_offset = PULP_BASE_ADDR;
+      case PULP_H_BASE_ADDR:
+	rab_slice_req->addr_offset = PULP_BASE_ADDR;
 	break;
 
       default: // L3_MEM_BASE_ADDR - port 1
-	addr_offset = L3_MEM_H_BASE_ADDR;
+	rab_slice_req->addr_offset = L3_MEM_H_BASE_ADDR;
       }
 
       len = 1;
     }
     else { // address translation required
             
-      // align to page size / 4kB
-      start = (unsigned long)(addr_start >> PAGE_SHIFT);
       // number of pages
-      len = size_b >> PAGE_SHIFT;
-      if (BF_GET(size_b,0,PAGE_SHIFT) | BF_GET(addr_start,0,PAGE_SHIFT)) len++; // less than one page or not aligned to page border
-      if ((addr_start >> PAGE_SHIFT) != ((addr_start + size_b) >> PAGE_SHIFT)) len++; // touches two pages 
-      if (RAB_DEBUG_LEVEL > 1) {
-	printk(KERN_INFO "len = %d\n",len);
-      }
-      // what get_user_pages returns
-      pages = (struct page **)kmalloc((size_t)(len*sizeof(struct page *)),GFP_KERNEL);
-            if (pages == NULL) {
-	printk(KERN_WARNING "PULP: Memory allocation failed.\n");
-	return -ENOMEM;
-      }      
-        
-      // get pointers to user-space buffers and lock them into memory
-      down_read(&current->mm->mmap_sem);
-      result = get_user_pages(current, current->mm, addr_start, len, 1, 0, pages, NULL);
-      up_read(&current->mm->mmap_sem);
-      if (result != len) {
-	printk(KERN_WARNING "PULP: Could not get requested user-space virtual addresses.\n");
-	printk(KERN_WARNING "Requested %d pages starting at v_addr %#x\n",len,addr_start);
-	printk(KERN_WARNING "Obtained  %d pages\n",result);
-      }
+      len = pulp_mem_get_num_pages(rab_slice_req->addr_start,size_b);
       
-      // virtual to physical address translation
-      addr_phys = (unsigned *)kmalloc((size_t)len*sizeof(unsigned),GFP_KERNEL);
-      for (i=0;i<len;i++) {
-	addr_phys[i] = (unsigned)page_to_phys(pages[i]);
-	if (RAB_DEBUG_LEVEL > 1) {
-	  printk(KERN_INFO "phys addr = %#x\n",addr_phys[i]);
-	}
+      // get and lock user-space pages
+      err = pulp_mem_get_user_pages(&pages, rab_slice_req->addr_start, len, rab_slice_req->prot & 0x4);
+      if (err) {
+	printk(KERN_WARNING "PULP: Locking of user-space pages failed.\n");
+	return err;
+      }
+ 
+      // virtual to physcial address translation + segmentation
+      n_segments = pulp_mem_map_sg(&addr_start_vec, &addr_end_vec, &addr_offset_vec,
+				 &page_idxs_start, &page_idxs_end, &pages, len, 
+				 rab_slice_req->addr_start, rab_slice_req->addr_end);
+      if ( n_segments < 1 ) {
+	printk(KERN_WARNING "PULP: Virtual to physical address translation failed.\n");
+	return n_segments;
       }
     }
-   
-    // setup mapping information
-    addr_start_vec = (unsigned *)kmalloc((size_t)(len*sizeof(unsigned)),GFP_KERNEL);
-    if (addr_start_vec == NULL) {
-      printk(KERN_WARNING "PULP: Memory allocation failed.\n");
-      return -ENOMEM;
-    }
-    addr_end_vec = (unsigned *)kmalloc((size_t)(len*sizeof(unsigned)),GFP_KERNEL);
-    if (addr_end_vec == NULL) {
-      printk(KERN_WARNING "PULP: Memory allocation failed.\n");
-      return -ENOMEM;
-    }
-    addr_offset_vec = (unsigned *)kmalloc((size_t)(len*sizeof(unsigned)),GFP_KERNEL);
-    if (addr_offset_vec == NULL) {
-      printk(KERN_WARNING "PULP: Memory allocation failed.\n");
-      return -ENOMEM;
-    }
-    page_start_idxs = (unsigned *)kmalloc((size_t)(len*sizeof(unsigned)),GFP_KERNEL);
-    if (page_start_idxs == NULL) {
-      printk(KERN_WARNING "PULP: Memory allocation failed.\n");
-      return -ENOMEM;
-    }
-    page_end_idxs = (unsigned *)kmalloc((size_t)(len*sizeof(unsigned)),GFP_KERNEL);
-    if (page_end_idxs == NULL) {
-      printk(KERN_WARNING "PULP: Memory allocation failed.\n");
-      return -ENOMEM;
-    }      
-    addr_start_vec[0] = addr_start;
-    addr_end_vec[0] = addr_end;
-    page_start_idxs[0] = 0;
-    page_end_idxs[0] = 0;
 
-    /*
-     *  analyze the physical addresses
-     */
-    if ( (!const_mapping) & (len > 1) ) {
-     	
-      // check the number of slices required
-      for (i=1;i<len;i++) {	  
-
-	// are the pages also contiguous in physical memory?
-	if (addr_phys[i] != (addr_phys[i-1] + PAGE_SIZE)) { // no
-
-	  if (RAB_DEBUG_LEVEL > 1) {
-	    printk(KERN_INFO "i = %d\n",i);
-	    printk(KERN_INFO "addr_phys[i]   = %#x\n",addr_phys[i]);
-	    printk(KERN_INFO "addr_phys[i-1] = %#x\n",addr_phys[i-1]);
-
-	    printk(KERN_INFO "n_slices = %d\n",n_slices);
-	    printk(KERN_INFO "addr_start_vec[n_slices-1] = %#x\n",addr_start_vec[n_slices-1]);
-	    printk(KERN_INFO "addr_end_vec[n_slices-1]   = %#x\n",addr_end_vec[n_slices-1]);
-	  }
-
-	  // finish current slice
-	  addr_end_vec[n_slices-1] = (addr_start & 0xFFFFF000) + PAGE_SIZE*i;
-	  page_end_idxs[n_slices-1] = i-1;
-	  // add a new slice
-	  n_slices++;
-	  addr_start_vec[n_slices-1] = (addr_start & 0xFFFFF000) + PAGE_SIZE*i;
-	  addr_offset_vec[n_slices-1] = addr_phys[i];
-	  page_start_idxs[n_slices-1] = i;
-	}
-	if (i == (len-1)) {
-	  // finish last slice
-	  addr_end_vec[n_slices-1] = addr_end;
-	  page_end_idxs[n_slices-1] = i;
-	}
-      }
-    }
-    if (const_mapping) {
-      addr_offset_vec[0] = addr_offset;
-    }
-    else { // const_mapping == false
-      addr_offset_vec[0] = addr_phys[0] + (addr_start & 0xFFF); // offset in page
-      kfree(addr_phys);
-    }
-
-    /*
-     *  check for free field in page_ptrs list
-     */
-    page_ptr_idx = 0;
-    for (i=0;i<RAB_N_SLICES*RAB_N_PORTS;i++) {
-      if (page_ptr_ref_cntrs[i] == 0) {
-	page_ptr_idx = i;
-	break;
-      }
-      if ( i == (RAB_N_SLICES*RAB_N_PORTS) ) {
-	printk(KERN_INFO "PULP: No RAB slice available.\n");
-	return -EIO;
-      }
+    //  check for free field in page_ptrs list
+    err = pulp_rab_page_ptrs_get_field(rab_slice_req);
+    if (err) {
+      return err;
     }
 
     /*
      *  setup the slices
      */ 
-    // to do: protect with semaphore!!!
-    for (i=0;i<n_slices;i++) {
-
-      // search for a free slice
-      rab_slice = 0;
-      for (j=0;j<RAB_N_SLICES;j++) {
-	if (RAB_DEBUG_LEVEL > 1) {
-	  printk(KERN_INFO "Testing Slice %d\n",j);
-	}
-	if ( date_cur > ( BF_GET(rab_slices[rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+j*RAB_TABLE_WIDTH], RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, RAB_CONFIG_N_BITS_DATE))) { // found an expired slice
-	  rab_slice = j;
-	  break;
-	}
-	else if (j == (RAB_N_SLICES-1) ) { // no slice free
-	  printk(KERN_INFO "PULP: No RAB slice available.\n");
-	  return -EIO;
-	}
+    // to do: protect with semaphore!?
+    for (i=0;i<n_segments;i++) {
+      
+      if (!rab_slice_req->const_mapping) {
+	rab_slice_req->addr_start = addr_start_vec[i];
+	rab_slice_req->addr_end = addr_end_vec[i];
+	rab_slice_req->addr_offset = addr_offset_vec[i];
+	rab_slice_req->page_idx_start = page_idxs_start[i];
+	rab_slice_req->page_idx_end = page_idxs_end[i];
       }
-   
+
+      // get a free slice
+      err = pulp_rab_slice_get(rab_slice_req);
+      if (err) {
+	return err;
+      }
+
       // free memory of slices to be re-configured
-      page_ptr_idx_old = rab_slices[rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice*RAB_TABLE_WIDTH+2];
-      pages_old = page_ptrs[page_ptr_idx_old];
-      if (pages_old) { // not used for a constant mapping
-	// determine pages to be unlocked
-	page_idx_start_old = BF_GET(rab_slices[rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice*RAB_TABLE_WIDTH+1],RAB_CONFIG_N_BITS_PAGE, RAB_CONFIG_N_BITS_PAGE);
-	page_idx_end_old = BF_GET(rab_slices[rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice*RAB_TABLE_WIDTH+1],0,RAB_CONFIG_N_BITS_PAGE);
-	// unlock remapped pages
-	for (j=page_idx_start_old;j<=page_idx_end_old;j++) {
-	  if (RAB_DEBUG_LEVEL > 0) {
-	    printk(KERN_INFO "Unlocking Page %d remapped on RAB Slice %d on Port %d.\n",j,rab_slice,rab_port);
-	  }
-	  if (!PageReserved(pages_old[j])) 
-	    SetPageDirty(pages_old[j]);
-	  page_cache_release(pages_old[j]);
-	  // lower reference counter
-	  page_ptr_ref_cntrs[page_ptr_idx_old]--;
-	}
-	// free memory if no more references exist
-	if (!page_ptr_ref_cntrs[page_ptr_idx_old]) {
-	  kfree(pages_old);
-	  page_ptrs[i*RAB_N_SLICES+j] = 0;
-	}
-	if (RAB_DEBUG_LEVEL > 0) {
-	  printk(KERN_INFO "Number of references to pages pointer = %d.\n",page_ptr_ref_cntrs[page_ptr_idx_old]);
-	}
-      }
+      pulp_rab_slice_free(rab_slice_req);
       
-      // occupy slice
-      rab_slices[rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice*RAB_TABLE_WIDTH+0] = request[0];
-      BF_SET(rab_slices[rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice*RAB_TABLE_WIDTH+1], page_start_idxs[i], RAB_CONFIG_N_BITS_PAGE, RAB_CONFIG_N_BITS_PAGE);
-      BF_SET(rab_slices[rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice*RAB_TABLE_WIDTH+1], page_end_idxs[i], 0, RAB_CONFIG_N_BITS_PAGE);
-      rab_slices[rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice*RAB_TABLE_WIDTH+2] = page_ptr_idx;
-      // check that the selected reference list entry is really free = memory has properly been freed
-      if ( (!i) & page_ptr_ref_cntrs[page_ptr_idx] ) {
-	printk(KERN_WARNING "PULP: Selected reference list entry not free. Number of references = %d.\n",page_ptr_ref_cntrs[page_ptr_idx]);
-	return -EIO;
-      }
-      page_ptr_ref_cntrs[page_ptr_idx]++;
-      if (const_mapping) {
-	page_ptrs[page_ptr_idx] = 0;
-      }
-      else {
-	page_ptrs[page_ptr_idx] = pages;
+      // setup slice
+      err = pulp_rab_slice_setup(my_dev.rab_config, rab_slice_req, pages);
+      if (err) {
+	return err;
       }
 
-      // setup new slice
-      offset = 0x10*(rab_port*RAB_N_SLICES+rab_slice);
-      iowrite32(addr_start_vec[i],my_dev.rab_config+offset+0x10);
-      iowrite32(addr_end_vec[i],my_dev.rab_config+offset+0x14);
-      iowrite32(addr_offset_vec[i],my_dev.rab_config+offset+0x18);
-      iowrite32(prot,my_dev.rab_config+offset+0x1c);
-      
-      if (RAB_DEBUG_LEVEL > 0) {
-	printk(KERN_INFO "addr_start  %#x\n",addr_start_vec[i]);
-	printk(KERN_INFO "addr_end    %#x\n",addr_end_vec[i]);
-	printk(KERN_INFO "addr_offset %#x\n",addr_offset_vec[i]);
-      }      
-      printk(KERN_INFO "PULP: Set up RAB Slice %d on Port %d.\n",rab_slice,rab_port);
+      // flush caches
+      if (!rab_slice_req->const_mapping) {
+	for (j=page_idxs_start[i]; j<page_idxs_start[i]+1; j++) {
+	  // flush the whole page?
+	  if (!i) 
+	    offset_start = BF_GET(addr_start_vec[i],0,PAGE_SHIFT);
+	  else
+	    offset_start = 0;
 
-      if (!const_mapping) {
+	  if (i == (n_segments-1) )
+	    offset_end = BF_GET(addr_end_vec[i],0,PAGE_SHIFT);
+	  else 
+	    offset_end = PAGE_SIZE;
 
-	// clean L1 cache lines
-	__cpuc_flush_dcache_area((void *)addr_start_vec[i],addr_end_vec[i]-addr_start_vec[i]);
-
-	// clean L2 cache lines 
-	outer_cache.flush_range(addr_start_vec[i],addr_end_vec[i]-addr_start_vec[i]);
+	  pulp_mem_cache_flush(pages[j],offset_start,offset_end);
+	}
       }
-    
     }
-    // kfree
-    kfree(addr_start_vec);
-    kfree(addr_end_vec);
-    kfree(addr_offset_vec);
-    kfree(page_start_idxs);
-    kfree(page_end_idxs);
-
+    
+    if (!rab_slice_req->const_mapping) {
+      // kfree
+      kfree(addr_start_vec);
+      kfree(addr_end_vec);
+      kfree(addr_offset_vec);
+      kfree(page_idxs_start);
+      kfree(page_idxs_end);
+    }
     break;
 
   case PULP_IOCTL_RAB_FREE: // Free RAB slices based on time code
-    
-    date_cur = BF_GET(arg,0,RAB_CONFIG_N_BITS_DATE);
+
+    // get current date    
+    rab_slice_req->date_cur = BF_GET(arg,0,RAB_CONFIG_N_BITS_DATE);
 
     // check every slice on every port
     for (i=0;i<RAB_N_PORTS;i++) {
+      rab_slice_req->rab_port = i;
+      
       for (j=0;j<RAB_N_SLICES;j++) {
-	date_exp = BF_GET(rab_slices[i*RAB_N_SLICES*RAB_TABLE_WIDTH+j*RAB_TABLE_WIDTH], RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, RAB_CONFIG_N_BITS_DATE);
-
-	if ((date_cur > date_exp) | (date_cur == 0) | (date_cur == BIT_MASK_GEN(RAB_CONFIG_N_BITS_DATE))) {
-	  
-	  if (RAB_DEBUG_LEVEL > 0) {
-	    printk(KERN_INFO "Freeing RAB Slice %d on Port %d.\n",j,i);
-	  }
-	  
-	  page_ptr_idx_old = rab_slices[i*RAB_N_SLICES*RAB_TABLE_WIDTH+j*RAB_TABLE_WIDTH+2];
-	  pages_old = page_ptrs[page_ptr_idx_old];
-	  if (pages_old) { // not used for a constant mapping
-	    // determine pages to be unlocked
-	    page_idx_start_old = BF_GET(rab_slices[i*RAB_N_SLICES*RAB_TABLE_WIDTH+j*RAB_TABLE_WIDTH+1],RAB_CONFIG_N_BITS_PAGE, RAB_CONFIG_N_BITS_PAGE);
-	    page_idx_end_old = BF_GET(rab_slices[i*RAB_N_SLICES*RAB_TABLE_WIDTH+j*RAB_TABLE_WIDTH+1],0,RAB_CONFIG_N_BITS_PAGE);
-	    // unlock remapped pages
-	    for (k=page_idx_start_old;k<=page_idx_end_old;k++) {
-	      if (RAB_DEBUG_LEVEL > 0) {
-		printk(KERN_INFO "Unlocking Page %d remapped on RAB Slice %d on Port %d.\n",k,j,i);
-	      }
-	      if (!PageReserved(pages_old[k])) 
-		SetPageDirty(pages_old[k]);
-	      page_cache_release(pages_old[k]);
-	      // lower reference counter
-	      page_ptr_ref_cntrs[page_ptr_idx_old]--;
-	    }
-	    // free memory if no more references exist
-	    if (!page_ptr_ref_cntrs[page_ptr_idx_old]) {
-	      kfree(pages_old);
-	      page_ptrs[i*RAB_N_SLICES+j] = 0;
-	    }
-	    if (RAB_DEBUG_LEVEL > 1) {
-	      printk(KERN_INFO "Number of references to pages pointer %d.\n",page_ptr_ref_cntrs[rab_slice]);
-	    }
-	  }
-
-	  // delete the entries in the table
-	  for (k=0;k<RAB_TABLE_WIDTH;k++) {
-	    rab_slices[i*RAB_N_SLICES*RAB_TABLE_WIDTH+j*RAB_TABLE_WIDTH+k] = 0;
-	  }
-	  page_ptr_ref_cntrs[i*RAB_N_SLICES+j] = 0;
-	}
+	rab_slice_req->rab_slice = j;
+	
+	if ( !rab_slice_req->date_cur ||
+	     (rab_slice_req->date_cur == BIT_MASK_GEN(RAB_CONFIG_N_BITS_DATE)) ||
+	     (pulp_rab_slice_check(rab_slice_req)) ) // free slice
+	  pulp_rab_slice_free(rab_slice_req);
       }
     }
+    break;
+
+  case PULP_IOCTL_DMAC_XFER: // Setup a transfer using the PL330 DMAC inside Zynq
+  
+    // get transfer data from user space - arg already checked above
+    ret = 1;
+    byte = 0;
+    n_bytes_left = 3*sizeof(unsigned); 
+    while (ret > 0) {
+      ret = __copy_from_user(request, (void __user *)arg, n_bytes_left);
+      if (ret < 0) {
+    	printk(KERN_WARNING "PULP: cannot copy DMAC transfer data from user space.\n");
+    	return ret;
+      }
+      byte += ret;
+      n_bytes_left -= ret;
+    }
+    
+    addr_l3   = request[0];
+    addr_pulp = request[1];
+    
+    size_b = request[2] & 0x7FFFFFFF;
+    dma_cmd = (request[2] >> 31); 
+    
+    if (DEBUG_LEVEL_DMA > 0) {
+      printk(KERN_INFO "PULP: New DMA request:\n");
+      printk(KERN_INFO "PULP: addr_l3   = %#x.\n",addr_l3);
+      printk(KERN_INFO "PULP: addr_pulp = %#x.\n",addr_pulp);
+      printk(KERN_INFO "PULP: size_b = %#x.\n",size_b);
+      printk(KERN_INFO "PULP: dma_cmd = %#x.\n",dma_cmd);
+    }
+    
+    // number of pages
+    len = pulp_mem_get_num_pages(addr_l3, size_b);
+    
+    // get and lock user-space pages
+    ret = pulp_mem_get_user_pages(&pages, addr_l3, len, dma_cmd);
+    if (err) {
+      printk(KERN_WARNING "PULP: Locking of user-space pages failed.\n");
+      return err;
+    }    
+   
+    // virtual to physcial address translation + segmentation
+    n_segments = pulp_mem_map_sg(&addr_start_vec, &addr_end_vec, &addr_offset_vec,
+  				 &page_idxs_start, &page_idxs_end, &pages, len, 
+  				 addr_l3, addr_l3+size_b);
+    if ( n_segments < 1 ) {
+      printk(KERN_WARNING "PULP: Virtual to physical address translation failed.\n");
+      return n_segments;
+    }
+    
+    // allocate memory to hold the transaction descriptors
+    descs = (struct dma_async_tx_descriptor **)
+      kmalloc((size_t)(n_segments*sizeof(struct dma_async_tx_descriptor *)),GFP_KERNEL);
+
+    // prepare cleanup
+    pulp_dma_cleanup[dma_cmd].descs = &descs;
+    pulp_dma_cleanup[dma_cmd].pages = &pages;
+    pulp_dma_cleanup[dma_cmd].n_pages = len;
+    
+    /*
+     *  setup the transfers
+     */ 
+    size_b = 0;
+    for (i=0;i<n_segments;i++) {
+  
+      addr_pulp += size_b;
+
+      if (dma_cmd) { // PULP -> L3 // not yet tested
+  	addr_src = addr_pulp;
+  	addr_dst = addr_offset_vec[i];
+      }
+      else { // L3 -> PULP
+  	addr_src = addr_offset_vec[i]; 
+  	addr_dst = addr_pulp;
+      }
+      size_b = addr_end_vec[i] - addr_start_vec[i];
+
+      // flush caches
+      for (j=page_idxs_start[i]; j<(page_idxs_start[i]+1); j++) {
+	// flush the whole page?
+	if (!i) 
+	  offset_start = BF_GET(addr_start_vec[i],0,PAGE_SHIFT);
+	else
+	  offset_start = 0;
+  
+	if (i == (n_segments-1) )
+	  offset_end = BF_GET(addr_end_vec[i],0,PAGE_SHIFT);
+	else 
+	  offset_end = PAGE_SIZE;
+  
+	pulp_mem_cache_flush(pages[j],offset_start,offset_end);
+      }
+
+      // prepare the transfers, fill the descriptors
+      err = pulp_dma_xfer_prep(&descs[i], &pulp_dma_chan[dma_cmd], addr_dst, addr_src, size_b, (i == n_segments-1));
+      if (err) {
+	printk(KERN_WARNING "PULP: Could not setup DMA transfer.\n");
+	return err;
+      }    
+        
+      // set callback parameters for last transaction
+      if ( i == n_segments-1 ) {
+	descs[i]->callback = (dma_async_tx_callback)pulp_dma_xfer_cleanup;
+	descs[i]->callback_param = &pulp_dma_cleanup[dma_cmd];
+      }
+
+      // submit the transaction
+      descs[i]->cookie = dmaengine_submit(descs[i]);
+    }
+
+#ifdef PROFILE_DMA
+      time_dma_start = ktime_get();
+#endif      
+
+    // issue pending DMA requests and wait for callback notification
+    dma_async_issue_pending(pulp_dma_chan[dma_cmd]);
+
+#ifdef PROFILE_DMA 
+    // wait for finish
+    for (j=0;j<100000;j++) {
+      ret = dma_async_is_tx_complete(pulp_dma_chan[dma_cmd],descs[n_segments-1]->cookie,NULL,NULL);
+      if (!ret)
+	break;
+      udelay(10);
+    }
+    kfree(*descs);
+
+    // time measurement
+    time_dma_end = ktime_get();
+    time_dma_acc = ktime_us_delta(time_dma_end,time_dma_start);
+    
+    printk("PULP - DMA: size = %d [bytes]\n",request[2] & 0x7FFFFFFF);
+    printk("PULP - DMA: time = %d [us]\n",time_dma_acc);
+#endif
+      
     break;
 
   default:

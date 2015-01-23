@@ -1,10 +1,10 @@
 #include <unistd.h> // for sleep
 
-#include "../../../lib/inc/zynq.h"
-#include "../../../lib/inc/pulp_host.h"
-#include "../../../lib/inc/pulp_func.h"
+#include "zynq.h"
+#include "pulp_host.h"
+#include "pulp_func.h"
 
-#define CHECK_L2
+//#define CHECK_L2
 #define PRINT_MAT
 
 #ifndef SIZE

@@ -1,5 +1,5 @@
 # Name of the program
-NAME=parMatrixMul
+NAME=dma_performance_measurement
 
 # Cross compilation stuff
 ARCH=arm

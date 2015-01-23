@@ -1,14 +1,14 @@
 #ifndef PULP_HOST_H___
 #define PULP_HOST_H___
 
-#include "../../../../hardware/pulp2/sw/libs/sys_lib/inc/pulp.h"
-#include "../../../../hardware/pulp2/sw/libs/sys_lib/inc/pulpemu.h"
+#include "pulp.h"
+#include "pulpemu.h"
 
 #define ZEDBOARD 1
-#define ZC706 2
+#define ZC706    2
+#define MINI_ITX 3
 
-#define DEBUG_LEVEL 0
-
+#define DEBUG_LEVEL 3
 
 /*
  * Macros
@@ -26,7 +26,32 @@
 // Extract a bitfield of length len starting at bit start from y.
 #define BF_GET(y, start, len)    ( ((y)>>(start)) & BIT_MASK_GEN(len) )
 // Insert a new bitfield value x into y.
-#define BF_SET(y, x, start, len) ( y= ((y) &~ BF_MASK_GEN(start, len)) | BF_PREP(x, start, len) )
+#define BF_SET(y, x, start, len) \
+  ( y= ((y) &~ BF_MASK_GEN(start, len)) | BF_PREP(x, start, len) )
+
+// RAB related
+#define RAB_GET_PROT(prot, request) ( prot = request & 0x7 )
+#define RAB_SET_PROT(request, prot) \
+  ( BF_SET(request, prot, 0, RAB_CONFIG_N_BITS_PROT) )
+
+#define RAB_GET_PORT(port, request) \
+  ( port = BF_GET(request, RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_PORT) )
+#define RAB_SET_PORT(request, port) \
+  ( BF_SET(request, port, RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_PORT) )
+
+#define RAB_GET_DATE_EXP(date_exp, request) \
+  ( date_exp = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
+		      RAB_CONFIG_N_BITS_DATE) )
+#define RAB_SET_DATE_EXP(request, date_exp) \
+  ( BF_SET(request, date_exp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
+	   RAB_CONFIG_N_BITS_DATE) )
+
+#define RAB_GET_DATE_CUR(date_cur, request) \
+  ( date_cur = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+		      + RAB_CONFIG_N_BITS_DATE, RAB_CONFIG_N_BITS_DATE) )
+#define RAB_SET_DATE_CUR(request, date_cur) \
+  ( BF_SET(request, date_cur, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+	   + RAB_CONFIG_N_BITS_DATE, RAB_CONFIG_N_BITS_DATE) )
 
 /*
  * General settings
@@ -35,9 +60,11 @@
 
 // ioctl setup
 #define PULP_IOCTL_MAGIC 'p'
-#define PULP_IOCTL_RAB_REQ  _IOR(PULP_IOCTL_MAGIC,0xB0,int)
-#define PULP_IOCTL_RAB_FREE _IOR(PULP_IOCTL_MAGIC,0xB1,int)
-#define PULP_IOCTL_RAB_EDIT _IOR(PULP_IOCTL_MAGIC,0xB2,int)
+#define PULP_IOCTL_RAB_REQ   _IOR(PULP_IOCTL_MAGIC,0xB0,int)
+#define PULP_IOCTL_RAB_FREE  _IOR(PULP_IOCTL_MAGIC,0xB1,int)
+//#define PULP_IOCTL_RAB_EDIT _IOR(PULP_IOCTL_MAGIC,0xB2,int)
+
+#define PULP_IOCTL_DMAC_XFER _IOR(PULP_IOCTL_MAGIC,0xB3,int)
 
 #define L3_MEM_BASE_ADDR 0x80000000
 
@@ -129,7 +156,8 @@
  * Dependent parameters
  */
 #define L3_MEM_SIZE_B    (L3_MEM_SIZE_MB*1024*1024)
-#define L3_MEM_H_BASE_ADDR (DRAM_SIZE_MB - L3_MEM_SIZE_MB)*1024*1024 // = 0x1C000000 for 512 MB DRAM and 64 MB L3
+#define L3_MEM_H_BASE_ADDR \
+  (DRAM_SIZE_MB - L3_MEM_SIZE_MB)*1024*1024 // = 0x1C000000 for 512 MB DRAM and 64 MB L3
 
 #define L2_MEM_SIZE_B      (L2_MEM_SIZE_KB*1024)
 #define L2_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_ADDR + L2_MEM_BASE_ADDR)
@@ -141,7 +169,8 @@
 
 //#define PULP_CLUSTER_OFFSET  (PULP_P_BASE_ADDR>>28)
 
-#define MAILBOX_H_BASE_ADDR     (PULP_H_BASE_ADDR - PULP_BASE_ADDR + MAILBOX_BASE_ADDR - MAILBOX_SIZE_B) // Interface 0
+#define MAILBOX_H_BASE_ADDR \
+  (PULP_H_BASE_ADDR - PULP_BASE_ADDR + MAILBOX_BASE_ADDR - MAILBOX_SIZE_B) // Interface 0
 #define MAILBOX_WRDATA_OFFSET_B 0x0 
 #define MAILBOX_RDDATA_OFFSET_B 0x8 
 #define MAILBOX_STATUS_OFFSET_B 0x10

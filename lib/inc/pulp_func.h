@@ -52,19 +52,22 @@ typedef struct {
 } TaskDesc;
 
 // function prototypes
-int pulp_reserve_v_addr(PulpDev *pulp);
-int pulp_free_v_addr(PulpDev *pulp);
+int  pulp_reserve_v_addr(PulpDev *pulp);
+int  pulp_free_v_addr(PulpDev *pulp);
 void pulp_print_v_addr(PulpDev *pulp);
 
-int pulp_read32(unsigned *base_addr, unsigned off, char off_type);
+int  pulp_read32(unsigned *base_addr, unsigned off, char off_type);
 void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned value);
 
 int pulp_mmap(PulpDev *pulp);
 int pulp_munmap(PulpDev *pulp);
 int pulp_init(PulpDev *pulp);
 
-int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, unsigned char prot, unsigned char port, unsigned char date_exp, unsigned char date_cur);
+int  pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
+		  unsigned char prot, unsigned char port, unsigned char date_exp, unsigned char date_cur);
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur);
+
+int pulp_dma_xfer(PulpDev *pulp, unsigned addr_l3, unsigned addr_pulp, unsigned size_b, unsigned host_read);
 
 int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task);
 

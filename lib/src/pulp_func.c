@@ -344,16 +344,25 @@ int pulp_init(PulpDev *pulp) {
   return 0;
 }
 
+/*
+ * Request a remapping (one or more RAB slices)
+ * addr_start: (virtual) start address
+ * size_b    : size of the remapping in bytes
+ * prot      : protection flags, one bit each for write, read, and enable
+ * port      : RAB port, 0 = Host->PULP, 1 = PULP->Host
+ * date_exp  : expiration date of the mapping
+ * date_cur  : current date, used to check for suitable slices
+ */
 int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, unsigned char prot, unsigned char port, unsigned char date_exp, unsigned char date_cur) {
   
   unsigned request[3];
 
   // setup the request
   request[0] = 0;
-  BF_SET(request[0], date_cur, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT + RAB_CONFIG_N_BITS_DATE, RAB_CONFIG_N_BITS_DATE);
-  BF_SET(request[0], date_exp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, RAB_CONFIG_N_BITS_DATE);
-  BF_SET(request[0], port, RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_PORT);
-  BF_SET(request[0], prot, 0, RAB_CONFIG_N_BITS_PROT);
+  RAB_SET_PROT(request[0], prot);
+  RAB_SET_PORT(request[0], port);
+  RAB_SET_DATE_EXP(request[0], date_exp);
+  RAB_SET_DATE_CUR(request[0], date_cur);
   request[1] = addr_start;
   request[2] = size_b;
   
@@ -363,6 +372,11 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, unsigned c
   return 0;
 } 
 
+/*
+ * Free RAB slices
+ * All expired RAB slices are going to be freed
+ * date_cur  : current date, 0 = free all slices
+ */
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
   
   // make the request
@@ -371,6 +385,30 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
   return;
 } 
 
+
+int pulp_dma_xfer(PulpDev *pulp, unsigned addr_l3, unsigned addr_pulp, unsigned size_b, unsigned host_read) {
+   
+  unsigned request[3];
+  
+  // check & process arguments
+  if (size_b >> 31) {
+    printf("Error: Requested transfer size too large - cannot encode DMA transfer direction.\n ");
+    return -EINVAL;
+  }
+  else if (host_read) {
+    BF_SET(size_b,1,31,1);
+  }
+  
+  // setup the request
+  request[0] = addr_l3;
+  request[1] = addr_pulp;
+  request[2] = size_b;
+
+  // make the request
+  ioctl(pulp->fd,PULP_IOCTL_DMAC_XFER,request);
+
+  return 0;
+}
 
 int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
 
@@ -415,8 +453,11 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
       }
     }
   }
-  for (i=0;i<n_data;i++) {
-    printf("%d \t %#x \t %#x \n",order[i], (unsigned)task->data_desc[order[i]].v_addr, (unsigned)task->data_desc[order[i]].size);
+  if (DEBUG_LEVEL > 2) {
+    printf("Reordered %d data elements: \n",n_data);
+    for (i=0;i<n_data;i++) {
+      printf("%d \t %#x \t %#x \n",order[i], (unsigned)task->data_desc[order[i]].v_addr, (unsigned)task->data_desc[order[i]].size);
+    }
   }
 
   v_addr_int[0] = (unsigned)task->data_desc[order[0]].v_addr; 
@@ -437,9 +478,15 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   }
 
   // setup the RAB
+  if (DEBUG_LEVEL > 2) {
+    printf("Requesting %d remapping(s):\n",n_data_int);
+  }
   for (i=0;i<n_data_int;i++) {
+    if (DEBUG_LEVEL > 2) {
+      printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
+      sleep(1);
+    }
     pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur);
-    printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
   }
 
   free(v_addr_int);
@@ -454,10 +501,11 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   }
 
   // check the virtual addresses
-  for (i=0;i<task->n_data;i++) {
-    printf("v_addr_%d %#x\n",i,(unsigned) (task->data_desc[i].v_addr));
+  if (DEBUG_LEVEL > 2) {
+    for (i=0;i<task->n_data;i++) {
+      printf("v_addr_%d %#x\n",i,(unsigned) (task->data_desc[i].v_addr));
+    }
   }
-
 
   /*
    * offload
