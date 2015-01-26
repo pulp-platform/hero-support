@@ -12,6 +12,7 @@
 
 // type definitions
 typedef struct {
+  struct dma_chan * chan;
   struct dma_async_tx_descriptor *** descs;
   struct page *** pages;
   unsigned n_pages;

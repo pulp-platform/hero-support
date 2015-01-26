@@ -7,7 +7,7 @@
 #define DEBUG_LEVEL_MEM 0
 #define DEBUG_LEVEL_RAB 0
 #define DEBUG_LEVEL_DMA 0
-#define PROFILE_DMA 0
+//#define PROFILE_DMA
 
 // type definitions
 typedef struct {

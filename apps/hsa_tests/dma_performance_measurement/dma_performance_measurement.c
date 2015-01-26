@@ -10,9 +10,9 @@
 #define CHECK_RESULT
 #define PRINT_MAT
 
-#define ARM_DMA_SIZE_B 0x10000 // 64kB = L2 Size
+//#define ARM_DMA_SIZE_B 0x10000 // 64kB = L2 Size
 //#define ARM_DMA_SIZE_B 0x8000
-//#define ARM_DMA_SIZE_B 0x1000
+#define ARM_DMA_SIZE_B 0x1000
 #define PULP_DMA_SIZE_B 0x2000 // 8kB
 
 #define ARM_DMA_SIZE  ARM_DMA_SIZE_B/4

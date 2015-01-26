@@ -12,8 +12,8 @@
 //#define SIZE   32
 #endif
 
-int main(){
-  
+int main() {
+ 
   /*
    * Initialization
    */ 
@@ -39,7 +39,7 @@ int main(){
   __attribute__((aligned(64))) int mat_a[SIZE][SIZE];
   __attribute__((aligned(64))) int mat_b[SIZE][SIZE];
   __attribute__((aligned(64))) int mat_c[SIZE][SIZE];
-  __attribute__((aligned(64))) int mat_d[SIZE][SIZE];
+  __attribute__((aligned(64))) int mat_d[SIZE][SIZE];  
 
   int i,j,k;
 

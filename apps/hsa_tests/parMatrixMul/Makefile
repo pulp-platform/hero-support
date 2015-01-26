@@ -17,7 +17,8 @@ CC=$(CROSS_COMPILE)gcc
 AR=$(CROSS_COMPILE)ar
 OB=$(CROSS_COMPILE)objdump
 
-FLAGS=-Wall -O2 -g 	
+#FLAGS=-Wall -O2 -g 	
+FLAGS=-Wall -O0 -g 	
 
 lib:	$(C_FILES)
 	$(foreach l,$(C_FILES),$(CC) -I$(ARM_INC_DIR) -I$(PULP_INC_DIR) -c $(l) $(FLAGS);)

@@ -819,10 +819,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       kmalloc((size_t)(n_segments*sizeof(struct dma_async_tx_descriptor *)),GFP_KERNEL);
 
     // prepare cleanup
+    pulp_dma_cleanup[dma_cmd].chan = pulp_dma_chan[dma_cmd];
     pulp_dma_cleanup[dma_cmd].descs = &descs;
     pulp_dma_cleanup[dma_cmd].pages = &pages;
     pulp_dma_cleanup[dma_cmd].n_pages = len;
-    
+
     /*
      *  setup the transfers
      */ 
@@ -849,7 +850,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 	else
 	  offset_start = 0;
   
-	if (i == (n_segments-1) )
+	if ( i == (n_segments-1) )
 	  offset_end = BF_GET(addr_end_vec[i],0,PAGE_SHIFT);
 	else 
 	  offset_end = PAGE_SIZE;
@@ -865,7 +866,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       }    
         
       // set callback parameters for last transaction
-      if ( i == n_segments-1 ) {
+      if ( i == (n_segments-1) ) {
       	descs[i]->callback = (dma_async_tx_callback)pulp_dma_xfer_cleanup;
       	descs[i]->callback_param = &pulp_dma_cleanup[dma_cmd];
       }
@@ -889,8 +890,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 	break;
       udelay(10);
     }
-// FIXME!!! -> kernel crashes very often
-    //kfree(*descs); 
+    // terminate all transfers and free descriptors
+    dmaengine_terminate_all(pulp_dma_chan[dma_cmd]);
+    // free transaction descriptors array
+    kfree(descs); 
 
     // time measurement
     time_dma_end = ktime_get();
