@@ -4,4 +4,4 @@
 vivado-2014.1 make
 
 # Copy
-scp *.ko pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/driver/.
+scp *.ko ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/drivers/.

@@ -8,9 +8,9 @@ vivado-2014.1 make all
 
 # Copy
 # Host executable
-scp ${NAME} pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/programs/.
+scp ${NAME} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
 # Host sources for GDB
-scp *.c pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/programs/.
-scp *.h pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/programs/.
+scp *.c ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
+scp *.h ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
 # Accelerator binary
-scp *.bin pirmin@iis-ubuntu2.ee.ethz.ch:~/pulp_on_fpga/share/programs/.
+scp *.bin ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.

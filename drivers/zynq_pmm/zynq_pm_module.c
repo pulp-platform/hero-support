@@ -37,7 +37,7 @@
 #include <linux/device.h>       /* class_create, device_create */
 #include <linux/proc_fs.h>      /* for /proc */
 
-#include "../../lib/inc/zynq.h"
+#include "zynq.h"
 #include "v7_pmu.h"
 
 // methods declarations
@@ -153,7 +153,8 @@ static int __init zynq_pmm_init(void) {
   if (my_dev.l2c_310 == NULL) {
     printk(KERN_INFO "ZYNQ_PMM: ioremap_nochache not allowed for non-reserved RAM.\n");
   }
-  printk(KERN_INFO "ZYNQ_PMM: L2 Cache Controller L2C-310 mapped to virtual kernel space @ %#lx.\n",(long unsigned int) my_dev.l2c_310);
+  printk(KERN_INFO "ZYNQ_PMM: L2 Cache Controller L2C-310 mapped to virtual kernel space @ %#lx.\n",
+	 (long unsigned int) my_dev.l2c_310);
  
   /*
    *  tell the kernel about the device
@@ -183,17 +184,23 @@ static int __init zynq_pmm_init(void) {
    */
   // configure the events to monitor
   if (l2_mode == 0) {
-    iowrite32( L2C_310_REG2_EV_COUNTER1_EV_RH << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER1_CFG_OFFSET_B);
-    iowrite32( L2C_310_REG2_EV_COUNTER0_EV_RR << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER0_CFG_OFFSET_B);
+    iowrite32( L2C_310_REG2_EV_COUNTER1_EV_RH << 2 ,
+	       my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER1_CFG_OFFSET_B);
+    iowrite32( L2C_310_REG2_EV_COUNTER0_EV_RR << 2 ,
+	       my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER0_CFG_OFFSET_B);
   }
   else {
-    iowrite32( L2C_310_REG2_EV_COUNTER1_EV_WH << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER1_CFG_OFFSET_B);
-    iowrite32( L2C_310_REG2_EV_COUNTER0_EV_WR << 2 , my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER0_CFG_OFFSET_B);
+    iowrite32( L2C_310_REG2_EV_COUNTER1_EV_WH << 2 ,
+	       my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER1_CFG_OFFSET_B);
+    iowrite32( L2C_310_REG2_EV_COUNTER0_EV_WR << 2 ,
+	       my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER0_CFG_OFFSET_B);
   }
   // reset the counters
-  iowrite32( L2C_310_REG2_EV_COUNTERS_RESET, my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
+  iowrite32( L2C_310_REG2_EV_COUNTERS_RESET,
+	     my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
   // enable the counters
-  iowrite32( L2C_310_REG2_EV_COUNTERS_ENABLE, my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
+  iowrite32( L2C_310_REG2_EV_COUNTERS_ENABLE,
+	     my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
 
   /*
    * enable user mode access to counters in ARM Cortex-A9
@@ -245,7 +252,8 @@ static void __exit zynq_pmm_exit(void) {
    */
   disable_pmn(0);
   disable_pmn(1);
-  iowrite32( L2C_310_REG2_EV_COUNTERS_DISABLE, my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
+  iowrite32( L2C_310_REG2_EV_COUNTERS_DISABLE,
+	     my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
 
   /*
    * remove the /proc entry
@@ -336,17 +344,22 @@ static void zynq_pmm_proc_update(void *data) {
    *  L2C-310
    */
   // disable the counters
-  iowrite32( L2C_310_REG2_EV_COUNTERS_DISABLE, my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
+  iowrite32( L2C_310_REG2_EV_COUNTERS_DISABLE,
+	     my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
 
   // read the counters
-  l2c_310_reg2_ev_counter1 = ioread32(my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER1_OFFSET_B);
-  l2c_310_reg2_ev_counter0 = ioread32(my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER0_OFFSET_B);
+  l2c_310_reg2_ev_counter1 = ioread32(my_dev.l2c_310
+				      + L2C_310_REG2_EV_COUNTER1_OFFSET_B);
+  l2c_310_reg2_ev_counter0 = ioread32(my_dev.l2c_310
+				      + L2C_310_REG2_EV_COUNTER0_OFFSET_B);
 
   // reset the counters
-  iowrite32( L2C_310_REG2_EV_COUNTERS_RESET, my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
+  iowrite32( L2C_310_REG2_EV_COUNTERS_RESET,
+	     my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
   
   // reenable the counters
-  iowrite32( L2C_310_REG2_EV_COUNTERS_ENABLE, my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
+  iowrite32( L2C_310_REG2_EV_COUNTERS_ENABLE,
+	     my_dev.l2c_310 + L2C_310_REG2_EV_COUNTER_CTRL_OFFSET_B);
 
   /*
    *  generate the proc entry
@@ -354,13 +367,18 @@ static void zynq_pmm_proc_update(void *data) {
   // Info
   current_length = sprintf(proc_text,"Zynq Performance Monitoring Module \n");
    if (l2_mode == 0) 
-    current_length += sprintf(proc_text+current_length, "Monitoring cache miss rates - L2: Read accesses only! \n");
+    current_length += sprintf(proc_text+current_length,
+			      "Monitoring cache miss rates - L2: Read accesses only! \n");
   else 
-    current_length += sprintf(proc_text+current_length, "Monitoring cache miss rates - L2: Write accesses only! \n");
+    current_length += sprintf(proc_text+current_length,
+			      "Monitoring cache miss rates - L2: Write accesses only! \n");
   
-  current_length += sprintf(proc_text+current_length,"------------------------------------------------------------------\n");
-  current_length += sprintf(proc_text+current_length,"| Cache\t\t | # Misses\t | # Accesses\t | Miss Rate\t |\n");
-  current_length += sprintf(proc_text+current_length,"------------------------------------------------------------------\n");
+  current_length += sprintf(proc_text+current_length,
+			    "------------------------------------------------------------------\n");
+  current_length += sprintf(proc_text+current_length,
+			    "| Cache\t\t | # Misses\t | # Accesses\t | Miss Rate\t |\n");
+  current_length += sprintf(proc_text+current_length,
+			    "------------------------------------------------------------------\n");
   // L1
   for (i=0; i<N_ARM_CORES; i++) {
     // shift down to avoid corrupted results due to integer division
@@ -375,7 +393,9 @@ static void zynq_pmm_proc_update(void *data) {
      }
     else
       l1_miss_rate[i] = 0;
-    current_length += sprintf(proc_text+current_length,"| L1 Core %i\t | %u \t | %u \t |  %u %% \t |\n", i, arm_pmu_pmxevcntr1[i], arm_pmu_pmxevcntr0[i], l1_miss_rate[i]);
+    current_length += sprintf(proc_text+current_length,
+			      "| L1 Core %i\t | %u \t | %u \t |  %u %% \t |\n",
+			      i, arm_pmu_pmxevcntr1[i], arm_pmu_pmxevcntr0[i], l1_miss_rate[i]);
   }
   // L2
   // shift down to avoid corrupted results due to integer division
@@ -386,22 +406,30 @@ static void zynq_pmm_proc_update(void *data) {
  
   if (l2c_310_reg2_ev_counter0) {
     //l2_miss_rate = 100*(l2c_310_reg2_ev_counter0 - l2c_310_reg2_ev_counter1)/l2c_310_reg2_ev_counter0;
-    l2_miss_rate = 100*( (l2c_310_reg2_ev_counter0 >> shift[N_ARM_CORES]) - (l2c_310_reg2_ev_counter1 >> shift[N_ARM_CORES]) )/(l2c_310_reg2_ev_counter0 >> shift[N_ARM_CORES]);
+    l2_miss_rate = 100*( (l2c_310_reg2_ev_counter0 >> shift[N_ARM_CORES]) 
+			 - (l2c_310_reg2_ev_counter1 >> shift[N_ARM_CORES]) )
+      /(l2c_310_reg2_ev_counter0 >> shift[N_ARM_CORES]);
   }
   else
     l2_miss_rate = 0;
-  current_length += sprintf(proc_text+current_length,"| L2 \t\t | %i\t | %u\t |  %u %% \t |\n", l2c_310_reg2_ev_counter0-l2c_310_reg2_ev_counter1, l2c_310_reg2_ev_counter0, l2_miss_rate);  
-  current_length += sprintf(proc_text+current_length,"------------------------------------------------------------------\n");
+  current_length += sprintf(proc_text+current_length,
+			    "| L2 \t\t | %i\t | %u\t |  %u %% \t |\n",
+			    l2c_310_reg2_ev_counter0-l2c_310_reg2_ev_counter1,
+			    l2c_310_reg2_ev_counter0, l2_miss_rate);  
+  current_length += sprintf(proc_text+current_length,
+			    "------------------------------------------------------------------\n");
   
   // global miss rates
   for (i=0; i<N_ARM_CORES; i++) {
     //miss_rate[i] = l1_miss_rate[i]*l2_miss_rate/100;
     if (arm_pmu_pmxevcntr0[i])
-      miss_rate[i] = ((l2_miss_rate ) * (arm_pmu_pmxevcntr1[i] >> shift[i]))/(arm_pmu_pmxevcntr0[i] >> shift[i]);
+      miss_rate[i] = ((l2_miss_rate ) * (arm_pmu_pmxevcntr1[i] >> shift[i]))
+	/(arm_pmu_pmxevcntr0[i] >> shift[i]);
     else
       l1_miss_rate[i] = 0;
    
-    current_length += sprintf(proc_text+current_length,"Global miss rate Core %i: %u %%\n",i,miss_rate[i]);
+    current_length += sprintf(proc_text+current_length,
+			      "Global miss rate Core %i: %u %%\n",i,miss_rate[i]);
   }
   
   // total global miss rate
