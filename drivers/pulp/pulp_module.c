@@ -58,11 +58,14 @@ struct file_operations pulp_fops = {
 static PulpDev my_dev;
 
 static struct class *my_class; 
+
+// for ISR
 static struct timeval time;
 static unsigned slcr_value;
 static unsigned mailbox_is;
 static char rab_interrupt_type[6];
 
+// for DMA
 static struct dma_chan * pulp_dma_chan[2];
 static DmaCleanup pulp_dma_cleanup[2];
 
@@ -545,8 +548,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
   unsigned size_b;
    
   // what get_user_pages needs
-  unsigned len; 
   struct page ** pages;
+  unsigned len; 
   
   // what mem_map_sg needs needs
   unsigned * addr_start_vec;
@@ -564,11 +567,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
   RabSliceReq *rab_slice_req = &rab_slice_request;
  
   // needed for DMA management
+  struct dma_async_tx_descriptor ** descs;
   unsigned addr_l3, addr_pulp;
   unsigned char dma_cmd;
   unsigned addr_src, addr_dst;
-
-  struct dma_async_tx_descriptor ** descs;
 
 #ifdef PROFILE_DMA
   ktime_t time_dma_start, time_dma_end;
@@ -819,9 +821,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       kmalloc((size_t)(n_segments*sizeof(struct dma_async_tx_descriptor *)),GFP_KERNEL);
 
     // prepare cleanup
-    pulp_dma_cleanup[dma_cmd].chan = pulp_dma_chan[dma_cmd];
-    pulp_dma_cleanup[dma_cmd].descs = &descs;
-    pulp_dma_cleanup[dma_cmd].pages = &pages;
+    pulp_dma_cleanup[dma_cmd].descs = descs;
+    pulp_dma_cleanup[dma_cmd].pages = pages;
     pulp_dma_cleanup[dma_cmd].n_pages = len;
 
     /*
@@ -878,7 +879,6 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 #ifdef PROFILE_DMA
       time_dma_start = ktime_get();
 #endif      
-
     // issue pending DMA requests and wait for callback notification
     dma_async_issue_pending(pulp_dma_chan[dma_cmd]);
 
@@ -890,8 +890,6 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 	break;
       udelay(10);
     }
-    // terminate all transfers and free descriptors
-    dmaengine_terminate_all(pulp_dma_chan[dma_cmd]);
     // free transaction descriptors array
     kfree(descs); 
 

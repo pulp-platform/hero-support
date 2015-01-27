@@ -99,21 +99,16 @@ void pulp_dma_xfer_cleanup(DmaCleanup * pulp_dma_cleanup){
   struct dma_async_tx_descriptor ** descs;
 #endif
 
-#ifdef PROFILE_DMA   
   struct page ** pages;
   unsigned n_pages;
   
   int i;
-#endif
 
   if ( DEBUG_LEVEL_DMA > 0)
     printk("PULP - DMA: Transfer finished, cleanup called.\n");
 
-  //// FIXME!!! - causes kernel panics if not in profiling mode
-  //   Maybe a because pulp_dma_xfer_cleanup is executed as a tasklet!!!
-#ifdef PROFILE_DMA
   // finally unlock remapped pages
-  pages = *(pulp_dma_cleanup->pages);
+  pages = pulp_dma_cleanup->pages;
   n_pages = pulp_dma_cleanup->n_pages;
   
   for (i=0; i<n_pages; i++) {
@@ -124,15 +119,10 @@ void pulp_dma_xfer_cleanup(DmaCleanup * pulp_dma_cleanup){
   
   // free pages struct pointer array
   kfree(pages);
-#endif
-  ////
 
 #ifndef PROFILE_DMA
-  // terminate all transfers and free descriptors
-  dmaengine_terminate_all(pulp_dma_cleanup->chan);
-
   // free transaction descriptors array
-  descs = *(pulp_dma_cleanup->descs);
+  descs = pulp_dma_cleanup->descs;
   kfree(descs);
 #endif
   
