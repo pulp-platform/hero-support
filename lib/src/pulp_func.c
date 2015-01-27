@@ -4,33 +4,36 @@
 //#include <errno.h>
 //printf("ERRNO = %i\n",errno);
 
-
-/*
+/**
  * Reserve the virtual address space overlapping with the physical
  * address map of pulp using the mmap() syscall with MAP_FIXED and
  * MAP_ANONYMOUS
+ * @pulp: pointer to the PulpDev structure
  */
-int pulp_reserve_v_addr(PulpDev *pulp) {
-
+int pulp_reserve_v_addr(PulpDev *pulp)
+{
   pulp->reserved_v_addr.size = PULP_SIZE_B;
-  pulp->reserved_v_addr.v_addr = mmap((int *)PULP_BASE_ADDR,pulp->reserved_v_addr.size,PROT_NONE,MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,-1,0);
+  pulp->reserved_v_addr.v_addr = mmap((int *)PULP_BASE_ADDR,pulp->reserved_v_addr.size,
+				      PROT_NONE,MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,-1,0);
   if (pulp->reserved_v_addr.v_addr == MAP_FAILED) {
     printf("MMAP failed to reserve virtual addresses overlapping with physical address map of PULP.\n");
     return EIO;
   }
   else {
-    printf("Reserved virtual addresses starting at %p and overlapping with physical address map of PULP. \n",pulp->reserved_v_addr.v_addr);
+    printf("Reserved virtual addresses starting at %p and overlapping with physical address map of PULP. \n",
+	   pulp->reserved_v_addr.v_addr);
   }
   
   return 0;
 }
 
-/*
+/**
  * Free the virtual address space overlapping with the physical
  * address map of pulp using the munmap() syscall
+ * @pulp: pointer to the PulpDev structure
  */
-int pulp_free_v_addr(PulpDev *pulp) {
-  
+int pulp_free_v_addr(PulpDev *pulp)
+{  
   int status;
 
   printf("Freeing reserved virtual addresses overlapping with physical address map of PULP.\n");
@@ -43,11 +46,11 @@ int pulp_free_v_addr(PulpDev *pulp) {
   return 0;
 }
 
-/*
+/**
  * Print information about the reserved virtual memory on the host
  */
-void pulp_print_v_addr(PulpDev *pulp) {
-
+void pulp_print_v_addr(PulpDev *pulp)
+{
   // check the reservation
   printf("\nMemory map of the process:\n");
   printf("# cat /proc/getpid()/maps\n");
@@ -64,12 +67,14 @@ void pulp_print_v_addr(PulpDev *pulp) {
   return;
 }
 
-/*
+/**
  * Read 32 bits
- * off: offset
- * off_type: type of the offset, 'b' = byte offset, else word offset
+ * @base_addr : virtual address pointer to base address 
+ * @off       : offset
+ * @off_type  : type of the offset, 'b' = byte offset, else word offset
  */
-int pulp_read32(unsigned *base_addr, unsigned off, char off_type) {
+int pulp_read32(unsigned *base_addr, unsigned off, char off_type)
+{
   if (DEBUG_LEVEL > 3) {
     unsigned *addr;
     if (off_type == 'b') 
@@ -84,12 +89,14 @@ int pulp_read32(unsigned *base_addr, unsigned off, char off_type) {
     return *(base_addr + off);
 }
 
-/*
+/**
  * Write 32 bits
- * off: offset
- * off_type: type of the offset, 'b' = byte offset, else word offset
+ * @base_addr : virtual address pointer to base address 
+ * @off       : offset
+ * @off_type  : type of the offset, 'b' = byte offset, else word offset
  */
-void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned value) {
+void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned value)
+{
   if (DEBUG_LEVEL > 3) {
     unsigned *addr;
     if (off_type == 'b') 
@@ -104,12 +111,13 @@ void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned val
     *(base_addr + off) = value;
 }
 
-/*
+/**
  * Memory map the device to virtual user space using the mmap()
  * syscall
+ * @pulp: pointer to the PulpDev structure
  */
-int pulp_mmap(PulpDev *pulp) {
-
+int pulp_mmap(PulpDev *pulp)
+{
   int offset;
 
   /*
@@ -129,7 +137,8 @@ int pulp_mmap(PulpDev *pulp) {
   offset = 0; // start of clusters
   pulp->clusters.size = CLUSTERS_SIZE_B;
   
-  pulp->clusters.v_addr = mmap(NULL,pulp->clusters.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->clusters.v_addr = mmap(NULL,pulp->clusters.size,
+			       PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->clusters.v_addr == MAP_FAILED) {
     printf("MMAP failed for clusters.\n");
     return EIO;
@@ -142,7 +151,8 @@ int pulp_mmap(PulpDev *pulp) {
   offset = CLUSTERS_SIZE_B; // start of peripherals
   pulp->soc_periph.size = SOC_PERIPHERALS_SIZE_B;
  
-  pulp->soc_periph.v_addr = mmap(NULL,pulp->soc_periph.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
+  pulp->soc_periph.v_addr = mmap(NULL,pulp->soc_periph.size,
+				 PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
   if (pulp->soc_periph.v_addr == MAP_FAILED) {
     printf("MMAP failed for SoC peripherals.\n");
     return EIO;
@@ -155,20 +165,22 @@ int pulp_mmap(PulpDev *pulp) {
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B; // start of mailbox
   pulp->mailbox.size = MAILBOX_SIZE_B;
  
-  pulp->mailbox.v_addr = mmap(NULL,pulp->mailbox.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
+  pulp->mailbox.v_addr = mmap(NULL,pulp->mailbox.size,
+			      PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
   if (pulp->mailbox.v_addr == MAP_FAILED) {
     printf("MMAP failed for Mailbox.\n");
     return EIO;
   }
   else {
-    printf("SoC peripherals mapped to virtual user space at %p.\n",pulp->mailbox.v_addr);
+    printf("Mailbox mapped to virtual user space at %p.\n",pulp->mailbox.v_addr);
   }
  
   // L2
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B; // start of L2
   pulp->l2_mem.size = L2_MEM_SIZE_B;
  
-  pulp->l2_mem.v_addr = mmap(NULL,pulp->l2_mem.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->l2_mem.v_addr = mmap(NULL,pulp->l2_mem.size,
+			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
  
   if (pulp->l2_mem.v_addr == MAP_FAILED) {
     printf("MMAP failed for L2 memory.\n");
@@ -183,7 +195,8 @@ int pulp_mmap(PulpDev *pulp) {
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B; // start of L3
   pulp->l3_mem.size = L3_MEM_SIZE_B;
     
-  pulp->l3_mem.v_addr = mmap(NULL,pulp->l3_mem.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->l3_mem.v_addr = mmap(NULL,pulp->l3_mem.size,
+			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->l3_mem.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return EIO;
@@ -194,10 +207,12 @@ int pulp_mmap(PulpDev *pulp) {
  
   // PULP external
   // GPIO
-  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B; // start of GPIO
+  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B
+    + L3_MEM_SIZE_B; // start of GPIO
   pulp->gpio.size = H_GPIO_SIZE_B;
     
-  pulp->gpio.v_addr = mmap(NULL,pulp->gpio.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->gpio.v_addr = mmap(NULL,pulp->gpio.size,
+			   PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->gpio.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return EIO;
@@ -207,10 +222,12 @@ int pulp_mmap(PulpDev *pulp) {
   }
 
   // CLKING
-  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B + H_GPIO_SIZE_B; // start of Clking
+  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B
+    + L3_MEM_SIZE_B + H_GPIO_SIZE_B; // start of Clking
   pulp->clking.size = CLKING_SIZE_B;
     
-  pulp->clking.v_addr = mmap(NULL,pulp->clking.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->clking.v_addr = mmap(NULL,pulp->clking.size,
+			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->clking.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return EIO;
@@ -220,10 +237,12 @@ int pulp_mmap(PulpDev *pulp) {
   }
 
   // STDOUT
-  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B; // start of Stdout
+  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B
+    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B; // start of Stdout
   pulp->stdout.size = STDOUT_SIZE_B;
     
-  pulp->stdout.v_addr = mmap(NULL,pulp->stdout.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->stdout.v_addr = mmap(NULL,pulp->stdout.size,
+			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->stdout.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return EIO;
@@ -233,10 +252,12 @@ int pulp_mmap(PulpDev *pulp) {
   }
 
   // RAB config
-  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B; // start of RAB config
+  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B
+    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B; // start of RAB config
   pulp->rab_config.size = RAB_CONFIG_SIZE_B;
     
-  pulp->rab_config.v_addr = mmap(NULL,pulp->rab_config.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->rab_config.v_addr = mmap(NULL,pulp->rab_config.size,
+				 PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->rab_config.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return EIO;
@@ -247,10 +268,12 @@ int pulp_mmap(PulpDev *pulp) {
 
   // Zynq
   // SLCR
-  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B; // start of SLCR
+  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B
+    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B; // start of SLCR
   pulp->slcr.size = SLCR_SIZE_B;
     
-  pulp->slcr.v_addr = mmap(NULL,pulp->slcr.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->slcr.v_addr = mmap(NULL,pulp->slcr.size,
+			   PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->slcr.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return EIO;
@@ -260,10 +283,13 @@ int pulp_mmap(PulpDev *pulp) {
   }
 
   // MPCore
-  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B; // start of MPCore
+  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B
+    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B
+    + SLCR_SIZE_B; // start of MPCore
   pulp->mpcore.size = MPCORE_SIZE_B;
     
-  pulp->mpcore.v_addr = mmap(NULL,pulp->mpcore.size,PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+  pulp->mpcore.v_addr = mmap(NULL,pulp->mpcore.size,
+			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->mpcore.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return EIO;
@@ -275,12 +301,13 @@ int pulp_mmap(PulpDev *pulp) {
   return 0;
 }
 
-/*
+/**
  * Undo the memory mapping of the device to virtual user space using
  * the munmap() syscall
+ * @pulp: pointer to the PulpDev structure
  */
-int pulp_munmap(PulpDev *pulp) {
-
+int pulp_munmap(PulpDev *pulp)
+{
   unsigned status;
 
   // undo the memory mappings
@@ -321,22 +348,23 @@ int pulp_munmap(PulpDev *pulp) {
   return 0;
 }
 
-/*
+/**
  * Initialize the memory mapped device 
+ * @pulp: pointer to the PulpDev structure
  */
-int pulp_init(PulpDev *pulp) {
-
+int pulp_init(PulpDev *pulp)
+{
   // set fetch enable to 0, disable reset
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
 
   // RAB setup
   // port 0: Host -> PULP
-  pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,0xFF,0xFF);   // L2
+  pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,0xFF,0xFF);     // L2
   //pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B,0x7,0,0xFF,0xFF); // Mailbox, Interface 0
   pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B*2,0x7,0,0xFF,0xFF); // Mailbox, Interface 0 and Interface 1
-  pulp_rab_req(pulp,PULP_H_BASE_ADDR,0x10000,0x7,0,0xFF,0xFF); // TCDM
+  pulp_rab_req(pulp,PULP_H_BASE_ADDR,0x10000,0x7,0,0xFF,0xFF);             // TCDM
   // port 1: PULP -> Host
-  pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,0xFF,0xFF);     // L3 memory (contiguous)
+  pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,0xFF,0xFF);       // L3 memory (contiguous)
   
   // enable mailbox interrupts
   pulp_write32(pulp->mailbox.v_addr,MAILBOX_IE_OFFSET_B,'b',0x6);
@@ -344,17 +372,20 @@ int pulp_init(PulpDev *pulp) {
   return 0;
 }
 
-/*
+/**
  * Request a remapping (one or more RAB slices)
- * addr_start: (virtual) start address
- * size_b    : size of the remapping in bytes
- * prot      : protection flags, one bit each for write, read, and enable
- * port      : RAB port, 0 = Host->PULP, 1 = PULP->Host
- * date_exp  : expiration date of the mapping
- * date_cur  : current date, used to check for suitable slices
+ * @pulp      : pointer to the PulpDev structure
+ * @addr_start: (virtual) start address
+ * @size_b    : size of the remapping in bytes
+ * @prot      : protection flags, one bit each for write, read, and enable
+ * @port      : RAB port, 0 = Host->PULP, 1 = PULP->Host
+ * @date_exp  : expiration date of the mapping
+ * @date_cur  : current date, used to check for suitable slices
  */
-int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, unsigned char prot, unsigned char port, unsigned char date_exp, unsigned char date_cur) {
-  
+int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
+		 unsigned char prot, unsigned char port,
+		 unsigned char date_exp, unsigned char date_cur)
+{
   unsigned request[3];
 
   // setup the request
@@ -372,10 +403,11 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, unsigned c
   return 0;
 } 
 
-/*
+/**
  * Free RAB slices
  * All expired RAB slices are going to be freed
- * date_cur  : current date, 0 = free all slices
+ * @pulp      : pointer to the PulpDev structure
+ * @date_cur  : current date, 0 = free all slices
  */
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
   
@@ -385,9 +417,18 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
   return;
 } 
 
-
-int pulp_dma_xfer(PulpDev *pulp, unsigned addr_l3, unsigned addr_pulp, unsigned size_b, unsigned host_read) {
-   
+/**
+ * Setup a DMA transfer using the Zynq PS DMA engine
+ * @pulp      : pointer to the PulpDev structure
+ * @addr_l3   : virtual address in host's L3
+ * @addr_pulp : physical address in PULP, so far, only L2 tested
+ * @size_b    : size in bytes
+ * @host_read : 0: Host -> PULP, 1: PULP -> Host (not tested)
+ */
+int pulp_dma_xfer(PulpDev *pulp,
+		  unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
+		  unsigned host_read)
+{ 
   unsigned request[3];
   
   // check & process arguments
@@ -410,6 +451,11 @@ int pulp_dma_xfer(PulpDev *pulp, unsigned addr_l3, unsigned addr_pulp, unsigned 
   return 0;
 }
 
+/**
+ * Setup a DMA transfer using the Zynq PS DMA engine
+ * @pulp : pointer to the PulpDev structure
+ * @task : pointer to the TaskDesc structure
+ */
 int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
 
   int i,j,temp;
@@ -456,7 +502,9 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   if (DEBUG_LEVEL > 2) {
     printf("Reordered %d data elements: \n",n_data);
     for (i=0;i<n_data;i++) {
-      printf("%d \t %#x \t %#x \n",order[i], (unsigned)task->data_desc[order[i]].v_addr, (unsigned)task->data_desc[order[i]].size);
+      printf("%d \t %#x \t %#x \n", order[i],
+	     (unsigned)task->data_desc[order[i]].v_addr,
+	     (unsigned)task->data_desc[order[i]].size);
     }
   }
 
@@ -464,7 +512,8 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   size_int[0] = (unsigned)task->data_desc[order[0]].size; 
   for (i=1;i<n_data;i++) {
     j = order[i];
-    gap_size = (unsigned)task->data_desc[j].v_addr - (v_addr_int[n_data_int-1] + size_int[n_data_int-1]);
+    gap_size = (unsigned)task->data_desc[j].v_addr - (v_addr_int[n_data_int-1]
+						      + size_int[n_data_int-1]);
     if ( gap_size > RAB_CONFIG_MAX_GAP_SIZE_B ) { // to do: check protections, check dates!!!
       // the gap is too large, create a new mapping
       n_data_int++;
@@ -581,15 +630,15 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   return 0;
 }
 
-int pulp_check_results(PulpDev *pulp) {
-
-   return 0;
-};
-
-void pulp_reset(PulpDev *pulp) {
-
+/**
+ * Reset PULP
+ * @pulp : pointer to the PulpDev structure
+ */
+void pulp_reset(PulpDev *pulp)
+{
   unsigned slcr_value;
 
+  // Reset using GPIO register
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x00000000);
   usleep(10);
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
@@ -601,39 +650,64 @@ void pulp_reset(PulpDev *pulp) {
   slcr_value = slcr_value & 0xF;
   
   // Enable reset
-  pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', slcr_value | (0x1 << SLCR_FPGA_OUT_RST));
+  pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b',
+	       slcr_value | (0x1 << SLCR_FPGA_OUT_RST));
     
   // Wait
   usleep(10);
     
   // Disable reset
-  pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', slcr_value & (0xF & (0x0 << SLCR_FPGA_OUT_RST)));
+  pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 
+	       slcr_value & (0xF & (0x0 << SLCR_FPGA_OUT_RST)));
 }
 
-  // release PL reset
-  //pulp_write32(pulp->gpio.v_addr,0x8,'b',0);
-  //usleep(10);
-  //pulp_write32(pulp->gpio.v_addr,0x8,'b',3);
+/**
+ * Allocate memory in contiguous L3
+ * @pulp:   pointer to the PulpDev structure
+ * @size_b: size in Bytes of the requested chunk
+ * @p_addr: pointer to store the physical address to
+ *
+ * DANGER: This function can only allocate each address once!
+ *
+ */
+unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr)
+{
+  unsigned v_addr;
 
-  // // keep cores in reset, set fetch enable to 0
-  // pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0xc,'b',0);
-  // pulp_write32(pulp->clusters.v_addr,CLUSTER_CONTROLLER_OFFSET_B+0x4,'b',0);
+  // round l3_offset to next higher 64-bit word -> required for 64-bit PULP DMA
+  if (pulp->l3_offset & 0x7) {
+    pulp->l3_offset = (pulp->l3_offset & 0xFFFFFFF8) + 0x8;
+  }
+
+  if ( (pulp->l3_offset + size_b) >= L3_MEM_SIZE_B) {
+    printf("ERROR: out of contiguous L3 memory.\n");
+    *p_addr = 0;
+    return 0;
+  }
   
-  // // initialize the demux (core id, cluster id and global cluster offset)
-  // pulp_write32(pulp->demux_config.v_addr,0x0,'b',0);
-  // pulp_write32(pulp->demux_config.v_addr,0x4,'b',0);
-  // pulp_write32(pulp->demux_config.v_addr,0x8,'b',PULP_CLUSTER_OFFSET);
+  v_addr = (unsigned int)pulp->l3_mem.v_addr + pulp->l3_offset;
+  *p_addr = L3_MEM_BASE_ADDR + pulp->l3_offset;
   
-  // setup the cluster DMA
-  //pulp_write32(pulp->clusters.v_addr,CLUSTER_DMA_OFFSET_B+0x10,'b',PULP_CLUSTER_OFFSET);
+  pulp->l3_offset += size_b;
 
-  // setup the RAB
-  // port 0: Host -> PULP
-  // L2 memory
-  //offset = 0x10*((RAB_N_PORTS-2)*RAB_N_SLICES+0);
-  //printf("RAB config offset = %#x\n",offset);
-  //pulp_write32(pulp->rab_config.v_addr,offset+0x10,'b',PULP_H_BASE_ADDR);
-  //pulp_write32(pulp->rab_config.v_addr,offset+0x14,'b',PULP_H_BASE_ADDR+L2_MEM_SIZE_B);
-  //pulp_write32(pulp->rab_config.v_addr,offset+0x18,'b',L2_MEM_BASE_ADDR);
-  //pulp_write32(pulp->rab_config.v_addr,offset+0x1c,'b',0x7);
+  if (DEBUG_LEVEL > 2) {
+    printf("Host virtual address = %#x \n",v_addr);
+    printf("PMCA physical address = %#x \n",*p_addr);
+  }
+  
+  return v_addr;
+}
 
+/**
+ * Free memory previously allocated in contiguous L3
+ * @pulp:   pointer to the PulpDev structure
+ * @v_addr: pointer to unsigned containing the virtual address
+ * @p_addr: pointer to unsigned containing the physical address
+ *
+ * DANGER: This function does not do anything!
+ *
+ */
+void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr)
+{
+  
+}

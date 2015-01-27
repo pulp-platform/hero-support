@@ -11,7 +11,6 @@
 #include <sys/ioctl.h>  // for ioctl
 #include <stdlib.h>     // for system
 
-
 #include "zynq.h"
 #include "pulp_host.h"
 
@@ -35,6 +34,7 @@ typedef struct {
   PulpSubDev slcr;
   PulpSubDev mpcore;
   PulpSubDev reserved_v_addr;
+  unsigned int l3_offset; // used for pulp_l3_malloc
 } PulpDev;
 
 // shared variable data structure
@@ -64,15 +64,19 @@ int pulp_munmap(PulpDev *pulp);
 int pulp_init(PulpDev *pulp);
 
 int  pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
-		  unsigned char prot, unsigned char port, unsigned char date_exp, unsigned char date_cur);
+		  unsigned char prot, unsigned char port,
+		  unsigned char date_exp, unsigned char date_cur);
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur);
 
-int pulp_dma_xfer(PulpDev *pulp, unsigned addr_l3, unsigned addr_pulp, unsigned size_b, unsigned host_read);
+int pulp_dma_xfer(PulpDev *pulp, 
+		  unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
+		  unsigned host_read);
 
 int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task);
 
-int pulp_check_results(PulpDev *pulp);
-
 void pulp_reset(PulpDev *pulp);
+
+unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr);
+void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr);
 
 #endif // PULP_FUNC_H__
