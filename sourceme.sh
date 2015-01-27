@@ -23,3 +23,9 @@ export SCP_TARGET_MACHINE="pirmin@iis-ubuntu2.ee.ethz.ch"
 
 # base path to which the make_and_copy.sh scripts transfer the compiled stuff
 export SCP_TARGET_PATH="~/pulp_on_fpga/share"
+
+# create lib/lib folder if not existing
+if [ ! -d ${ARM_LIB_DIR1}/lib ]
+then
+    mkdir ${ARM_LIB_DIR1}/lib
+fi    
