@@ -63,7 +63,7 @@ int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
   unsigned char date_exp_i;
   expired = 0;
 
-  if (DEBUG_LEVEL_RAB > 1) {
+  if (DEBUG_LEVEL_RAB > 2) {
     printk(KERN_INFO "PULP - RAB: Testing Slice %d on Port %d\n",
 	   rab_slice_req->rab_slice, rab_slice_req->rab_port);
   }
@@ -111,7 +111,7 @@ void pulp_rab_slice_free(RabSliceReq *rab_slice_req)
   unsigned page_ptr_idx_old, page_idx_start_old, page_idx_end_old, entry;
   struct page ** pages_old;
 
-  if (DEBUG_LEVEL_RAB > 0) {
+  if (DEBUG_LEVEL_RAB > 2) {
     printk(KERN_INFO "PULP - RAB: Freeing Slice %d on Port %d.\n",
 	   rab_slice_req->rab_slice, rab_slice_req->rab_port);
   }
@@ -136,11 +136,11 @@ void pulp_rab_slice_free(RabSliceReq *rab_slice_req)
       }
       if (!PageReserved(pages_old[i])) 
 	SetPageDirty(pages_old[i]);
-      page_cache_release(pages_old[i]);
-      // lower reference counter
-      page_ptr_ref_cntrs[page_ptr_idx_old]--;
+      page_cache_release(pages_old[i]); 
     }
-
+    // lower reference counter
+    page_ptr_ref_cntrs[page_ptr_idx_old]--;
+      
     // free memory if no more references exist
     if (!page_ptr_ref_cntrs[page_ptr_idx_old]) {
       kfree(pages_old);

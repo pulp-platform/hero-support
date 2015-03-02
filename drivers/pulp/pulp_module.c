@@ -627,7 +627,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     rab_slice_req->addr_end = rab_slice_req->addr_start + size_b;
     n_segments = 1;
 
-    if (DEBUG_LEVEL_RAB > 0) {
+    if (DEBUG_LEVEL_RAB > 1) {
       printk(KERN_INFO "PULP: New RAB request:\n");
       printk(KERN_INFO "PULP: rab_port = %d.\n",rab_slice_req->rab_port);
       printk(KERN_INFO "PULP: date_exp = %d.\n",rab_slice_req->date_exp);
