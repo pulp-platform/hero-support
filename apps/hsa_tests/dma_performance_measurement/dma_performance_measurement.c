@@ -54,6 +54,7 @@ int main(){
   //pulp_print_v_addr(pulp);
   //sleep(1);  
   pulp_reset(pulp);
+  //pulp_clking_set_freq(pulp,100);
   pulp_rab_free(pulp,0x0);
   pulp_init(pulp);
   
@@ -147,7 +148,7 @@ int main(){
   task_desc.n_data = 1;
    
   DataDesc data_desc[task_desc.n_data];
-  data_desc[0].v_addr = (unsigned *)&pulp_dma_array;
+  data_desc[0].ptr = (unsigned *)&pulp_dma_array;
   data_desc[0].size   = PULP_DMA_SIZE_B;
   
   task_desc.data_desc = data_desc;

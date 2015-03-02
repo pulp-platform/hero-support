@@ -39,12 +39,14 @@ typedef struct {
 
 // shared variable data structure
 typedef struct {
-  unsigned *v_addr;
+  void *ptr;
   size_t size;
+  int type;
 } DataDesc;
 
 // task descriptor created by the compiler
 typedef struct {
+  int task_id; // used for RAB managment -> expiration date
   char *name;
   int n_clusters;
   int n_data;
@@ -63,9 +65,13 @@ int pulp_mmap(PulpDev *pulp);
 int pulp_munmap(PulpDev *pulp);
 int pulp_init(PulpDev *pulp);
 
-int  pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
-		  unsigned char prot, unsigned char port,
-		  unsigned char date_exp, unsigned char date_cur);
+int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
+void pulp_stdout_print(PulpDev *pulp, unsigned pe);
+void pulp_stdout_clear(PulpDev *pulp, unsigned pe);
+
+int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
+		 unsigned char prot, unsigned char port,
+		 unsigned char date_exp, unsigned char date_cur);
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur);
 
 int pulp_dma_xfer(PulpDev *pulp, 
@@ -75,8 +81,32 @@ int pulp_dma_xfer(PulpDev *pulp,
 int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task);
 
 void pulp_reset(PulpDev *pulp);
+int  pulp_boot(PulpDev *pulp, TaskDesc *task);
 
 unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr);
-void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr);
+void         pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr);
+
+// required for ROD
+#define PULP_READY 0
+#define PULP_START 1
+#define PULP_BUSY  2
+#define PULP_DONE  3 
+#define PULP_STOP  0xFFFFFFFF 
+
+int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs);
+int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs);
+int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
+int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs);
+
+int pulp_offload_out(PulpDev *pulp, TaskDesc *task);
+int pulp_offload_in(PulpDev *pulp, TaskDesc *task);
+
+int pulp_offload_start(PulpDev *pulp, TaskDesc *task);
+int pulp_offload_wait(PulpDev *pulp, TaskDesc *task);
+
+//int pulp_offload_nowait(PulpDev *pulp, 
+//			ompOffload_desc_t *desc, omp_offload_t **omp_offload, uint32_t *fomp_offload);
+//int pulp_offload_wait(PulpDev *pulp, omp_offload_t *omp_offload, uint32_t fomp_offload);
+//int pulp_offload_finish(PulpDev *pulp, omp_offload_t *omp_offload, uint32_t fomp_offload);
 
 #endif // PULP_FUNC_H__

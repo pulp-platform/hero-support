@@ -89,11 +89,11 @@ int main() {
   task_desc.n_data = 3;
    
   DataDesc data_desc[task_desc.n_data];
-  data_desc[0].v_addr = (unsigned *)&mat_a;
+  data_desc[0].ptr = (unsigned *)&mat_a;
   data_desc[0].size   = SIZE*SIZE*sizeof(int);
-  data_desc[1].v_addr = (unsigned *)&mat_b;
+  data_desc[1].ptr = (unsigned *)&mat_b;
   data_desc[1].size   = SIZE*SIZE*sizeof(int);
-  data_desc[2].v_addr = (unsigned *)&mat_c;
+  data_desc[2].ptr = (unsigned *)&mat_c;
   data_desc[2].size   = SIZE*SIZE*sizeof(int);
   
   task_desc.data_desc = data_desc;

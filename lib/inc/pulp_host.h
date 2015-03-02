@@ -106,16 +106,22 @@
 #define H_GPIO_BASE_ADDR 0x51000000
 #define H_GPIO_SIZE_B    0x1000
 
-#define CLKING_BASE_ADDR 0x51010000
-#define CLKING_SIZE_B    0x1000
+#define CLKING_BASE_ADDR              0x51010000
+#define CLKING_SIZE_B                 0x1000
+#define CLKING_CONFIG_REG_0_OFFSET_B  0x200 
+#define CLKING_CONFIG_REG_2_OFFSET_B  0x208 
+#define CLKING_CONFIG_REG_23_OFFSET_B 0x25C 
+#define CLKING_STATUS_REG_OFFSET_B    0x4 
 
 #define STDOUT_H_BASE_ADDR 0x51020000
-#define STDOUT_SIZE_B    0x1000
+#define STDOUT_SIZE_B    0x10000
+#define STDOUT_PE_SIZE_B 0x1000
 
 #define RAB_CONFIG_BASE_ADDR      0x51030000
 #define RAB_CONFIG_SIZE_B         0x1000
 #define RAB_N_PORTS               2
-#define RAB_N_SLICES              16
+//#define RAB_N_SLICES              16
+#define RAB_N_SLICES              64
 #define RAB_CONFIG_N_BITS_PORT    1
 #define RAB_CONFIG_N_BITS_PROT    3
 #define RAB_CONFIG_N_BITS_DATE    8
