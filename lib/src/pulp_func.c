@@ -5,6 +5,7 @@
  * Reserve the virtual address space overlapping with the physical
  * address map of pulp using the mmap() syscall with MAP_FIXED and
  * MAP_ANONYMOUS
+ *
  * @pulp: pointer to the PulpDev structure
  */
 int pulp_reserve_v_addr(PulpDev *pulp)
@@ -27,6 +28,7 @@ int pulp_reserve_v_addr(PulpDev *pulp)
 /**
  * Free the virtual address space overlapping with the physical
  * address map of pulp using the munmap() syscall
+ *
  * @pulp: pointer to the PulpDev structure
  */
 int pulp_free_v_addr(PulpDev *pulp)
@@ -66,6 +68,7 @@ void pulp_print_v_addr(PulpDev *pulp)
 
 /**
  * Read 32 bits
+ *
  * @base_addr : virtual address pointer to base address 
  * @off       : offset
  * @off_type  : type of the offset, 'b' = byte offset, else word offset
@@ -88,6 +91,7 @@ int pulp_read32(unsigned *base_addr, unsigned off, char off_type)
 
 /**
  * Write 32 bits
+ *
  * @base_addr : virtual address pointer to base address 
  * @off       : offset
  * @off_type  : type of the offset, 'b' = byte offset, else word offset
@@ -111,6 +115,7 @@ void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned val
 /**
  * Memory map the device to virtual user space using the mmap()
  * syscall
+ *
  * @pulp: pointer to the PulpDev structure
  */
 int pulp_mmap(PulpDev *pulp)
@@ -301,6 +306,7 @@ int pulp_mmap(PulpDev *pulp)
 /**
  * Undo the memory mapping of the device to virtual user space using
  * the munmap() syscall
+ *
  * @pulp: pointer to the PulpDev structure
  */
 int pulp_munmap(PulpDev *pulp)
@@ -347,6 +353,7 @@ int pulp_munmap(PulpDev *pulp)
 
 /**
  * Set the clock frequency of PULP, only do this at startup of PULP!!! 
+ *
  * @pulp:         pointer to the PulpDev structure
  * @des_freq_mhz: desired frequency in MHz
  */
@@ -386,6 +393,7 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
 
 /**
  * Initialize the memory mapped device 
+ *
  * @pulp: pointer to the PulpDev structure
  */
 int pulp_init(PulpDev *pulp)
@@ -398,7 +406,7 @@ int pulp_init(PulpDev *pulp)
   pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,0xFF,0xFF);     // L2
   //pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B,0x7,0,0xFF,0xFF); // Mailbox, Interface 0
   pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B*2,0x7,0,0xFF,0xFF); // Mailbox, Interface 0 and Interface 1
-  pulp_rab_req(pulp,PULP_H_BASE_ADDR,0x10000,0x7,0,0xFF,0xFF);             // TCDM
+  pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,0xFF,0xFF);             // TCDM + Cluster Peripherals
   // port 1: PULP -> Host
   pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,0xFF,0xFF);       // L3 memory (contiguous)
   
@@ -409,7 +417,22 @@ int pulp_init(PulpDev *pulp)
 }
 
 /**
+ * Clear interrupt status flag in mailbox. The next write of PULP will
+ * again be handled by the PULP driver.
+ *
+ * @pulp: pointer to the PulpDev structure
+ */
+void pulp_mailbox_clear_is(PulpDev *pulp)
+{
+  //unsigned mailbox_is;
+  //mailbox_is = 0x7 & pulp_read32(pulp->mailbox.v_addr,MAILBOX_IS_OFFSET_B,'b');
+ 
+  pulp_write32(pulp->mailbox.v_addr,MAILBOX_IS_OFFSET_B,'b',0x7);
+}
+
+/**
  * Request a remapping (one or more RAB slices)
+ *
  * @pulp      : pointer to the PulpDev structure
  * @addr_start: (virtual) start address
  * @size_b    : size of the remapping in bytes
@@ -441,6 +464,7 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
 
 /**
  * Free RAB slices
+ *
  * @pulp      : pointer to the PulpDev structure
  * @date_cur  : current date, 0 = free all slices
  */
@@ -454,6 +478,7 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
 
 /**
  * Setup a DMA transfer using the Zynq PS DMA engine
+ *
  * @pulp      : pointer to the PulpDev structure
  * @addr_l3   : virtual address in host's L3
  * @addr_pulp : physical address in PULP, so far, only L2 tested
@@ -488,6 +513,7 @@ int pulp_dma_xfer(PulpDev *pulp,
 
 /**
  * Setup a DMA transfer using the Zynq PS DMA engine
+ *
  * @pulp : pointer to the PulpDev structure
  * @task : pointer to the TaskDesc structure
  */
@@ -631,6 +657,7 @@ void pulp_reset(PulpDev *pulp)
 /**
  * Load binary to L2 and boot PULP. Not yet uses the Zynq PS DMA
  * engine.  
+ *
  * @pulp : pointer to the PulpDev structure 
  * @task : pointer to the TaskDesc structure
  */
@@ -686,6 +713,7 @@ int pulp_boot(PulpDev *pulp, TaskDesc *task)
 
 /**
  * Allocate memory in contiguous L3
+ *
  * @pulp:   pointer to the PulpDev structure
  * @size_b: size in Bytes of the requested chunk
  * @p_addr: pointer to store the physical address to
@@ -723,6 +751,7 @@ unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr)
 
 /**
  * Free memory previously allocated in contiguous L3
+ *
  * @pulp:   pointer to the PulpDev structure
  * @v_addr: pointer to unsigned containing the virtual address
  * @p_addr: pointer to unsigned containing the physical address
@@ -737,6 +766,7 @@ void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr)
 
 /**
  * Find out which shared data elements to pass by reference. 
+ *
  * @task :     pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
  */
@@ -764,6 +794,7 @@ int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs) {
 /**
  * Try to reorder the shared data elements to minimize the number of
  * calls to the driver. Call the driver to set up RAB slices.
+ *
  * @task:      pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
  */
@@ -925,6 +956,7 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
 
 /**
  * Get back the shared data elements from PULP that were passed by value.
+ *
  * @pulp:      pointer to the PulpDev structure
  * @task:      pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
@@ -970,6 +1002,8 @@ int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, i
       j++;
     }
   }
+  // clear mailbox interrupt
+  pulp_mailbox_clear_is(pulp);
   
   if (DEBUG_LEVEL > 1) {
     printf("Got back %d of %d data elements from PULP.\n",j,n_data-n_idxs);
@@ -981,6 +1015,7 @@ int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, i
 /**
  * Offload a new task to PULP, set up RAB slices and pass descriptors
  * to PULP. 
+ *
  * @pulp: pointer to the PulpDev structure 
  * @task: pointer to the TaskDesc structure
  */
@@ -1020,6 +1055,7 @@ int pulp_offload_out(PulpDev *pulp, TaskDesc *task)
 /**
  * Finish a task offload, clear RAB slices and get back descriptors
  * passed by value.
+ *
  * @pulp: pointer to the PulpDev structure 
  * @task: pointer to the TaskDesc structure
  */
@@ -1056,6 +1092,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
 
 /**
  * Start offload execution on PULP.
+ *
  * @pulp: pointer to the PulpDev structure 
  * @task: pointer to the TaskDesc structure
  */
@@ -1088,6 +1125,8 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
   
   // read status
   status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
+  // clear mailbox interrupt
+  pulp_mailbox_clear_is(pulp);
   if ( status != PULP_READY ) {
     printf("ERROR: PULP status not ready. PULP status = %#x.\n",status);
     return -EBUSY;
@@ -1107,6 +1146,7 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
 
 /**
  * Wait for an offloaded task to finish on PULP.
+ *
  * @pulp: pointer to the PulpDev structure 
  * @task: pointer to the TaskDesc structure
  */
@@ -1135,6 +1175,8 @@ int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
 
   // read status
   status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
+  // clear mailbox interrupt
+  pulp_mailbox_clear_is(pulp);
   if ( status != PULP_DONE ) {
     printf("ERROR: PULP status not done. PULP status = %#x.\n",status);
     return -EBUSY;

@@ -65,6 +65,8 @@ int pulp_mmap(PulpDev *pulp);
 int pulp_munmap(PulpDev *pulp);
 int pulp_init(PulpDev *pulp);
 
+void pulp_mailbox_clear_is(PulpDev *pulp);
+
 int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
 void pulp_stdout_print(PulpDev *pulp, unsigned pe);
 void pulp_stdout_clear(PulpDev *pulp, unsigned pe);
@@ -86,12 +88,9 @@ int  pulp_boot(PulpDev *pulp, TaskDesc *task);
 unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr);
 void         pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr);
 
+
+
 // required for ROD
-#define PULP_READY 0
-#define PULP_START 1
-#define PULP_BUSY  2
-#define PULP_DONE  3 
-#define PULP_STOP  0xFFFFFFFF 
 
 int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs);
 int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs);

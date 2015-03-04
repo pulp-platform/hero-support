@@ -6,10 +6,11 @@
  */
 #define ZEDBOARD 1
 #define ZC706 2
+#define MINI_ITX 3
 
 //#define BOARD ZC706
 #ifndef BOARD
-#define BOARD ZC706
+#define BOARD MINI_ITX
 #endif // BOARD
 
 /*
@@ -21,7 +22,7 @@
 #define ARM_CLK_FREQ_MHZ 300
 #define DRAM_SIZE_MB 512
 
-#elif BOARD == ZC706
+#elif BOARD == ZC706 || BOARD == MINI_ITX
 
 #define ARM_CLK_FREQ_MHZ 667
 #define DRAM_SIZE_MB 1024

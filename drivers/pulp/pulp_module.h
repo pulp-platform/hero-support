@@ -8,6 +8,7 @@
 #define DEBUG_LEVEL_RAB 0
 #define DEBUG_LEVEL_DMA 0
 //#define PROFILE_DMA
+#define PROFILE_RAB
 
 // type definitions
 typedef struct {

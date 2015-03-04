@@ -62,6 +62,7 @@ static struct class *my_class;
 // for ISR
 static struct timeval time;
 static unsigned slcr_value;
+static unsigned mailbox_data;
 static unsigned mailbox_is;
 static char rab_interrupt_type[6];
 
@@ -179,12 +180,20 @@ static int __init pulp_init(void)
   mpcore_icdicfr3=ioread32(my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B);
   mpcore_icdicfr4=ioread32(my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B);
    
-  // configure rising-edge active for 61, 63-65, and high-level active for 62
+  //// configure rising-edge active for 61, 63-65, and high-level active for 62
+  //mpcore_icdicfr3 &= 0x03FFFFFF; // delete bits 31 - 26
+  //mpcore_icdicfr3 |= 0xDC000000; // set bits 31 - 26: 11 01 11
+  //  
+  //mpcore_icdicfr4 &= 0xFFFFFFF0; // delete bits 3 - 0
+  //mpcore_icdicfr4 |= 0x0000000F; // set bits 3 - 0: 11 11
+
+  // configure rising-edge active for 61-65
   mpcore_icdicfr3 &= 0x03FFFFFF; // delete bits 31 - 26
-  mpcore_icdicfr3 |= 0xDC000000; // set bits 31 - 26: 11 01 11
+  mpcore_icdicfr3 |= 0xFC000000; // set bits 31 - 26: 11 11 11
     
   mpcore_icdicfr4 &= 0xFFFFFFF0; // delete bits 3 - 0
   mpcore_icdicfr4 |= 0x0000000F; // set bits 3 - 0: 11 11
+
      
   // write configuration
   iowrite32(mpcore_icdicfr3,my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B);
@@ -485,15 +494,38 @@ irqreturn_t pulp_isr_eoc(int irq, void *ptr) {
 }
  
 irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
-  // do something
-  do_gettimeofday(&time);
+  
+  // read mailbox
+  // ATTENTION: not checking for empty, error
+  mailbox_data = ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
+
+  if (mailbox_data == RAB_UPDATE) {
+
+#ifdef PROFILE_RAB 
+    // stop the PULP timer  
+    iowrite32(0x1,my_dev.clusters+TIMER_STOP_OFFSET_B);
+
+    //// empty the mailbox
+    //while ( !(ioread32(my_dev.mailbox+MAILBOX_STATUS_OFFSET_B) & 0x1) ) {
+    //  ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
+    //}
+#endif
+
+    // do something
+    do_gettimeofday(&time);
  
-  // clear the interrupt
-  mailbox_is = 0x7 & ioread32(my_dev.mailbox+MAILBOX_IS_OFFSET_B);
-  iowrite32(0x7,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
-  printk(KERN_INFO "PULP: Mailbox Interface 0 interrupt status: %#x. Interrupt handled at: %02li:%02li:%02li.\n",
-	 mailbox_is,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
- 
+    // clear the interrupt
+    mailbox_is = 0x7 & ioread32(my_dev.mailbox+MAILBOX_IS_OFFSET_B);
+    iowrite32(0x7,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
+    printk(KERN_INFO "PULP: Mailbox Interface 0 interrupt status: %#x. Interrupt handled at: %02li:%02li:%02li.\n",
+	   mailbox_is,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+
+#ifdef PROFILE_RAB
+    // signal ready to PULP
+    iowrite32(HOST_READY,my_dev.mailbox+MAILBOX_WRDATA_OFFSET_B);
+#endif
+  }
+
   return IRQ_HANDLED;
 }
 

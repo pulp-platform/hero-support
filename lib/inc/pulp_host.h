@@ -4,11 +4,26 @@
 #include "pulp.h"
 #include "pulpemu.h"
 
+#define DEBUG_LEVEL 3
+
 #define ZEDBOARD 1
 #define ZC706    2
 #define MINI_ITX 3
 
-#define DEBUG_LEVEL 3
+// mailbox communication
+#define PULP_READY 0x0
+#define PULP_START 0x1
+#define PULP_BUSY  0x2
+#define PULP_DONE  0x3 
+#define PULP_STOP  0xF 
+
+#define HOST_READY 0x1000
+//#define HOST_START 0x1001
+//#define HOST_BUSY  0x1002
+#define HOST_DONE  0x1003
+
+#define TO_RUNTIME 0x10000000 // pass PULP driver
+#define RAB_UPDATE 0x10000001 // handled by PULP driver
 
 /*
  * Macros
@@ -62,24 +77,26 @@
 #define PULP_IOCTL_MAGIC 'p'
 #define PULP_IOCTL_RAB_REQ   _IOR(PULP_IOCTL_MAGIC,0xB0,int)
 #define PULP_IOCTL_RAB_FREE  _IOR(PULP_IOCTL_MAGIC,0xB1,int)
-//#define PULP_IOCTL_RAB_EDIT _IOR(PULP_IOCTL_MAGIC,0xB2,int)
 
-#define PULP_IOCTL_DMAC_XFER _IOR(PULP_IOCTL_MAGIC,0xB3,int)
+#define PULP_IOCTL_RAB_BUF_REQ  _IOR(PULP_IOCTL_MAGIC,0xB2,int)
+#define PULP_IOCTL_RAB_BUF_FREE _IOR(PULP_IOCTL_MAGIC,0xB3,int)
+
+#define PULP_IOCTL_DMAC_XFER _IOR(PULP_IOCTL_MAGIC,0xB4,int)
 
 #define L3_MEM_BASE_ADDR 0x80000000
 
 /*
  * Board selection
  */
-//#define BOARD ZC706 or ZEDBOARD
+//#define BOARD MINI_ITX/ZC706 or ZEDBOARD
 #ifndef BOARD
-#define BOARD ZC706
+#define BOARD MINI_ITX
 #endif // BOARD
 
 /*
  * Board specific settings
  */
-#if BOARD == ZEDBOARD
+#if BOARD == ZEDBOARD 
 
 // L3
 #define L3_MEM_SIZE_MB 128 
@@ -88,7 +105,7 @@
 #define N_CLUSTERS 1
 #define L2_MEM_SIZE_KB 64
 
-#elif BOARD == ZC706
+#elif BOARD == ZC706 || BOARD == MINI_ITX
 
 // L3
 #define L3_MEM_SIZE_MB 128
@@ -114,13 +131,12 @@
 #define CLKING_STATUS_REG_OFFSET_B    0x4 
 
 #define STDOUT_H_BASE_ADDR 0x51020000
-#define STDOUT_SIZE_B    0x10000
-#define STDOUT_PE_SIZE_B 0x1000
+#define STDOUT_SIZE_B      0x10000
+#define STDOUT_PE_SIZE_B   0x1000
 
 #define RAB_CONFIG_BASE_ADDR      0x51030000
 #define RAB_CONFIG_SIZE_B         0x1000
 #define RAB_N_PORTS               2
-//#define RAB_N_SLICES              16
 #define RAB_N_SLICES              64
 #define RAB_CONFIG_N_BITS_PORT    1
 #define RAB_CONFIG_N_BITS_PROT    3
@@ -152,7 +168,6 @@
 //#define DEMUX_CONFIG_CORE_OFFSET_B    0x1000
 //#define DEMUX_CONFIG_CLUSTER_OFFSET_B 0x0
 
-
 //#define CONFIG_BASE_ADDR 0x83C00000
 //#define CONFIG_SIZE_B 0x401000 // something above than the highest config register
 //#define DEMUX_CONFIG_BASE_ADDR 0x83C00000
@@ -175,6 +190,7 @@
 
 //#define PULP_CLUSTER_OFFSET  (PULP_P_BASE_ADDR>>28)
 
+// mailbox
 #define MAILBOX_H_BASE_ADDR \
   (PULP_H_BASE_ADDR - PULP_BASE_ADDR + MAILBOX_BASE_ADDR - MAILBOX_SIZE_B) // Interface 0
 #define MAILBOX_WRDATA_OFFSET_B 0x0 
@@ -184,10 +200,18 @@
 #define MAILBOX_IS_OFFSET_B     0x20
 #define MAILBOX_IE_OFFSET_B     0x24
 
+// cluster peripherals, offsets compared to TCDM/clusters address
+#define TIMER_H_OFFSET_B           (TIMER_BASE_ADDR - PULP_BASE_ADDR)
+#define TIMER_START_OFFSET_B       (TIMER_H_OFFSET_B + 0x00) 
+#define TIMER_STOP_OFFSET_B        (TIMER_H_OFFSET_B + 0x04) 
+#define TIMER_RESET_OFFSET_B       (TIMER_H_OFFSET_B + 0x08) 
+#define TIMER_GET_TIME_LO_OFFSET_B (TIMER_H_OFFSET_B + 0x0c) 
+#define TIMER_GET_TIME_HI_OFFSET_B (TIMER_H_OFFSET_B + 0x10) 
+
 /*
  * Program execution
  */
-#define BOOT_OFFSET_B 0x100
-#define BOOT_ADDR (L3_MEM_BASE_ADDR + BOOT_OFFSET_B)
+//#define BOOT_OFFSET_B 0x100
+//#define BOOT_ADDR (L3_MEM_BASE_ADDR + BOOT_OFFSET_B)
 
 #endif // PULP_HOST_H___
