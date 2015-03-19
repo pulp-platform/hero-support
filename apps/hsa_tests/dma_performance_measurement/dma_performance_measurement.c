@@ -18,6 +18,8 @@
 #define ARM_DMA_SIZE  ARM_DMA_SIZE_B/4
 #define PULP_DMA_SIZE  PULP_DMA_SIZE_B/4
 
+#define PULP_CLK_FREQ_MHZ 75
+
 int main(){
   
   //// preparation
@@ -54,7 +56,7 @@ int main(){
   //pulp_print_v_addr(pulp);
   //sleep(1);  
   pulp_reset(pulp);
-  //pulp_clking_set_freq(pulp,100);
+  printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
   pulp_rab_free(pulp,0x0);
   pulp_init(pulp);
   

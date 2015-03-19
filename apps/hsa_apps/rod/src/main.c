@@ -21,6 +21,8 @@
 
 #include "Removal-Object.h"
 
+//#define PULP_CLK_FREQ_MHZ 85
+#define PULP_CLK_FREQ_MHZ 75
 #define REPETITIONS 2
 //#define PIPELINE
 
@@ -108,7 +110,7 @@ int main(int argc, char *argv[]) {
   pulp_mmap(pulp);
   //pulp_print_v_addr(pulp);
   pulp_reset(pulp);
-  pulp_clking_set_freq(pulp,75);
+  printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
   pulp_rab_free(pulp,0x0);
   pulp_init(pulp);
   
@@ -246,6 +248,8 @@ int main(int argc, char *argv[]) {
     pulp_stdout_print(pulp,1);
     pulp_stdout_print(pulp,2);
     pulp_stdout_print(pulp,3);
+
+    sleep(20);
 
   }
   printf("\n[APP ] Write image output\n");

@@ -22,6 +22,11 @@ else
     exit 1
 fi
 
+# Check & create sd_image directory
+if [ ! -d "../sd_image" ]; then
+    mkdir ../sd_image
+fi
+
 # Compile the Linux kernel
 echo "Comiling the Linux kernel"
 make ARCH=arm CROSS_COMPILE=arm-xilinx-linux-gnueabi- $1 UIMAGE_LOADADDR=0x8000 uImage
