@@ -68,6 +68,31 @@
   ( BF_SET(request, date_cur, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
 	   + RAB_CONFIG_N_BITS_DATE, RAB_CONFIG_N_BITS_DATE) )
 
+// for RAB striping - ATTENTION: not compatible with date_exp, date_cur!!!
+#define RAB_GET_OFFLOAD_ID(offload_id, request) \
+  ( offload_id = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
+		    RAB_CONFIG_N_BITS_OFFLOAD_ID) )
+#define RAB_SET_OFFLOAD_ID(request, offload_id) \
+  ( BF_SET(request, offload_id, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
+	   RAB_CONFIG_N_BITS_OFFLOAD_ID) )
+
+#define RAB_GET_N_ELEM(n_elem, request) \
+  ( n_elem = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+		    + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
+#define RAB_SET_N_ELEM(request, n_elem) \
+  ( BF_SET(request, n_elem, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+	   + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
+
+#define RAB_GET_N_STRIPES(n_stripes, request) \
+  ( n_stripes = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+		       + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
+		       RAB_CONFIG_N_BITS_N_STRIPES) )
+#define RAB_SET_N_STRIPES(request, n_stripes) \
+  ( BF_SET(request, n_stripes, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+	   + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
+	   RAB_CONFIG_N_BITS_N_STRIPES) )
+
+  
 /*
  * General settings
  */
@@ -78,8 +103,8 @@
 #define PULP_IOCTL_RAB_REQ   _IOR(PULP_IOCTL_MAGIC,0xB0,int)
 #define PULP_IOCTL_RAB_FREE  _IOR(PULP_IOCTL_MAGIC,0xB1,int)
 
-#define PULP_IOCTL_RAB_BUF_REQ  _IOR(PULP_IOCTL_MAGIC,0xB2,int)
-#define PULP_IOCTL_RAB_BUF_FREE _IOR(PULP_IOCTL_MAGIC,0xB3,int)
+#define PULP_IOCTL_RAB_REQ_STRIPED  _IOR(PULP_IOCTL_MAGIC,0xB2,int)
+#define PULP_IOCTL_RAB_FREE_STRIPED _IOR(PULP_IOCTL_MAGIC,0xB3,int)
 
 #define PULP_IOCTL_DMAC_XFER _IOR(PULP_IOCTL_MAGIC,0xB4,int)
 
@@ -137,11 +162,16 @@
 #define RAB_CONFIG_BASE_ADDR      0x51030000
 #define RAB_CONFIG_SIZE_B         0x1000
 #define RAB_N_PORTS               2
-#define RAB_N_SLICES              64
+#define RAB_N_SLICES              32
 #define RAB_CONFIG_N_BITS_PORT    1
 #define RAB_CONFIG_N_BITS_PROT    3
 #define RAB_CONFIG_N_BITS_DATE    8
 #define RAB_CONFIG_N_BITS_PAGE    16
+
+#define RAB_CONFIG_N_BITS_OFFLOAD_ID 1
+#define RAB_CONFIG_N_BITS_N_ELEM     3
+#define RAB_CONFIG_N_BITS_N_STRIPES  22
+
 //#define RAB_CONFIG_CHECK_PROT     1
 #define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
 
@@ -190,6 +220,9 @@
 
 //#define PULP_CLUSTER_OFFSET  (PULP_P_BASE_ADDR>>28)
 
+// RAB
+#define RAB_MAX_DATE BIT_MASK_GEN(RAB_CONFIG_N_BITS_DATE)
+
 // mailbox
 #define MAILBOX_H_BASE_ADDR \
   (PULP_H_BASE_ADDR - PULP_BASE_ADDR + MAILBOX_BASE_ADDR - MAILBOX_SIZE_B) // Interface 0
@@ -213,5 +246,23 @@
  */
 //#define BOOT_OFFSET_B 0x100
 //#define BOOT_ADDR (L3_MEM_BASE_ADDR + BOOT_OFFSET_B)
+
+//#define ROD
+//#define PROFILE_RAB
+#define MAX_STRIPE_SIZE 0x1800
+
+// RAB profiling
+#define CLK_CNTR_RESPONSE_OFFSET_B 0x00
+#define CLK_CNTR_UPDATE_OFFSET_B   0x04
+#define CLK_CNTR_SETUP_OFFSET_B    0x08
+#define CLK_CNTR_CLEANUP_OFFSET_B  0x0c
+#define N_UPDATES_OFFSET_B         0x10
+#define N_SLICES_UPDATED_OFFSET_B  0x14
+#define N_PAGES_SETUP_OFFSET_B     0x18
+#define N_CLEANUPS_OFFSET_B        0x1c
+
+#define CLK_CNTR_CACHE_FLUSH_OFFSET_B    0x20
+#define CLK_CNTR_GET_USER_PAGES_OFFSET_B 0x24
+#define CLK_CNTR_MAP_SG_OFFSET_B         0x28
 
 #endif // PULP_HOST_H___

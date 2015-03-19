@@ -38,8 +38,26 @@ typedef struct {
   unsigned page_ptr_idx;
   unsigned page_idx_start;
   unsigned page_idx_end;
-  unsigned const_mapping;
+  unsigned flags; // bit 0 = const mapping, bit 1 = striped mapping
 } RabSliceReq;
+
+typedef struct {
+  unsigned n_slices;
+  unsigned *slices;
+  unsigned char rab_port;
+  unsigned char prot;
+  unsigned n_stripes;
+  unsigned *rab_stripes;
+  unsigned page_ptr_idx;
+} RabStripeElem;
+
+typedef struct {
+  unsigned n_elements;
+  RabStripeElem ** elements;
+  unsigned n_stripes;
+  unsigned stripe_idx;
+} RabStripeReq;
+
 
 // methods declarations
 void pulp_rab_init(void);
@@ -48,7 +66,7 @@ int  pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req);
 
 int  pulp_rab_slice_check(RabSliceReq *rab_slice_req);
 int  pulp_rab_slice_get(RabSliceReq *rab_slice_req);
-void pulp_rab_slice_free(RabSliceReq *rab_slice_req);
+void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req);
 int  pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct page **pages);
 
 #endif/*_PULP_RAB_H_*/

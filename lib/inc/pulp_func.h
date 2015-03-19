@@ -76,6 +76,11 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
 		 unsigned char date_exp, unsigned char date_cur);
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur);
 
+int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
+			 unsigned **data_idxs, int n_elements,  
+			 unsigned char prot, unsigned char port);
+void pulp_rab_free_striped(PulpDev *pulp);
+
 int pulp_dma_xfer(PulpDev *pulp, 
 		  unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
 		  unsigned host_read);

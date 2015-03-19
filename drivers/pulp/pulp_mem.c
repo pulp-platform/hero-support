@@ -10,25 +10,30 @@
 void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned offset_end) 
 {
 
-  void * addr;
+  void * kaddr;
   unsigned size_b;
+  long unsigned int paddr;
 
-  /* create a kernel-space mapping, the cache maintenance functions
+  /* create a kernel-space mapping, the L1 cache maintenance functions
      work on kernel virtual addresses, only exist for low memory */
-  addr = kmap(page); 
+  kaddr = kmap(page); 
   
-  addr = addr + offset_start;
+  kaddr = kaddr + offset_start;
   size_b = offset_end - offset_start;
 
   // clean L1 cache lines
-  __cpuc_flush_dcache_area(addr,size_b);
+  __cpuc_flush_dcache_area(kaddr,size_b);
   
-  // clean L2 cache lines 
-  outer_cache.flush_range((long unsigned int)addr,size_b);
+  /* extract the physical address, the L2 cache maintenance functions
+     work on physical addresses */
+  paddr = page_to_phys(page);
+  paddr = paddr + offset_start;
+
+  // clean L2 cache lines
+  outer_cache.flush_range(paddr,paddr+size_b);
 
   // destroy kernel-space mapping
   kunmap(page);
-
 }
 
 /**

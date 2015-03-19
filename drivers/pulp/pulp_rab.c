@@ -64,7 +64,7 @@ int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
   expired = 0;
 
   if (DEBUG_LEVEL_RAB > 2) {
-    printk(KERN_INFO "PULP - RAB: Testing Slice %d on Port %d\n",
+    printk(KERN_INFO "PULP - RAB: Testing Slice %d on Port %d.\n",
 	   rab_slice_req->rab_slice, rab_slice_req->rab_port);
   }
   RAB_GET_DATE_EXP(date_exp_i,rab_slices[rab_slice_req->rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH
@@ -103,9 +103,10 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
 /**
  * Free a RAB slice and unlock any corresponding memory pages.
  *
+ * @rab_config: kernel virtual address of the RAB configuration port.
  * @rab_slice_req: specifies the slice to free.
  */
-void pulp_rab_slice_free(RabSliceReq *rab_slice_req)
+void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 {
   int i;
   unsigned page_ptr_idx_old, page_idx_start_old, page_idx_end_old, entry;
@@ -123,20 +124,26 @@ void pulp_rab_slice_free(RabSliceReq *rab_slice_req)
 
   if (pages_old) { // not used for a constant mapping
     
+    // deactivate the slice
+    entry = 0x10*(rab_slice_req->rab_port*RAB_N_SLICES+rab_slice_req->rab_slice);
+    iowrite32(0, rab_config+entry+0x1c);    
+
     // determine pages to be unlocked
     entry = rab_slice_req->rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice_req->rab_slice*RAB_TABLE_WIDTH+1;
     RAB_GET_PAGE_IDX_START(page_idx_start_old,rab_slices[entry]);
     RAB_GET_PAGE_IDX_END(page_idx_end_old,rab_slices[entry]);
 
     // unlock remapped pages
-    for (i=page_idx_start_old;i<=page_idx_end_old;i++) {
-      if (DEBUG_LEVEL_RAB > 0) {
-	printk(KERN_INFO "PULP - RAB: Unlocking Page %d remapped on Slice %d on Port %d.\n",
-	       i, rab_slice_req->rab_slice, rab_slice_req->rab_port);
+    if ( !(rab_slice_req->flags & 0x2) ) { // do not unlock pages in striped mode until the last slice is freed
+      for (i=page_idx_start_old;i<=page_idx_end_old;i++) {
+	if (DEBUG_LEVEL_RAB > 0) {
+	  printk(KERN_INFO "PULP - RAB: Unlocking Page %d remapped on Slice %d on Port %d.\n",
+		 i, rab_slice_req->rab_slice, rab_slice_req->rab_port);
+	}
+	if (!PageReserved(pages_old[i])) 
+	  SetPageDirty(pages_old[i]);
+	page_cache_release(pages_old[i]); 
       }
-      if (!PageReserved(pages_old[i])) 
-	SetPageDirty(pages_old[i]);
-      page_cache_release(pages_old[i]); 
     }
     // lower reference counter
     page_ptr_ref_cntrs[page_ptr_idx_old]--;
@@ -188,21 +195,26 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
 
   // for the first segment, check that the selected reference list
   // entry is really free = memory has properly been freed
-  if ( page_ptr_ref_cntrs[rab_slice_req->page_ptr_idx] & !rab_slice_req->page_idx_start ) { 
+  if ( page_ptr_ref_cntrs[rab_slice_req->page_ptr_idx] & !rab_slice_req->page_idx_start 
+       & !(rab_slice_req->flags & 0x2) ) { 
     printk(KERN_WARNING "PULP - RAB: Selected reference list entry not free. Number of references = %d.\n"
 	   , page_ptr_ref_cntrs[rab_slice_req->page_ptr_idx]);
     return -EIO;
   }
   page_ptr_ref_cntrs[rab_slice_req->page_ptr_idx]++;
-  
-  if (rab_slice_req->const_mapping) {
+  if (DEBUG_LEVEL_RAB > 0) {
+    printk(KERN_INFO "PULP - RAB: Number of references to pages pointer = %d.\n",
+	   page_ptr_ref_cntrs[rab_slice_req->page_ptr_idx]);
+  }
+
+  if (rab_slice_req->flags & 0x1) {
     page_ptrs[rab_slice_req->page_ptr_idx] = 0;
   }
   else {
     page_ptrs[rab_slice_req->page_ptr_idx] = pages;
   }
 
-  // setup new slice, configure the hardware
+  // set up new slice, configure the hardware
   offset = 0x10*(rab_slice_req->rab_port*RAB_N_SLICES+rab_slice_req->rab_slice);
   iowrite32(rab_slice_req->addr_start, rab_config+offset+0x10);
   iowrite32(rab_slice_req->addr_end, rab_config+offset+0x14);

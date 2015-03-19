@@ -477,6 +477,209 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
 } 
 
 /**
+ * Request striped remappings
+ *
+ * @pulp:       pointer to the PulpDev structure
+ * @task:       pointer to the TaskDesc structure
+ * @data_idxs:  pointer to array marking the elements to pass by reference
+ * @n_elements: number of striped data elements
+ * @prot      : protection flags, one bit each for write, read, and enable
+ * @port      : RAB port, 0 = Host->PULP, 1 = PULP->Host
+ */
+int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
+			 unsigned **data_idxs, int n_elements,  
+			 unsigned char prot, unsigned char port)
+{
+  int i,j,k,m;
+
+  /////////////////////////////////////////////////////////////////
+
+  unsigned request[3];
+  unsigned n_stripes, n_slices_max, n_fields, offload_id; 
+
+  unsigned addr_start, addr_end, size_b;
+
+  unsigned * max_stripe_size_b; 
+  unsigned ** rab_stripes;
+
+  max_stripe_size_b = (unsigned *)malloc((size_t)(n_elements*sizeof(unsigned))); 
+  rab_stripes = (unsigned **)malloc((size_t)(n_elements*sizeof(unsigned *))); 
+
+  unsigned tx_band_start = 0;
+  size_b = 0;
+  offload_id = 0;
+
+#ifdef PROFILE_RAB
+ 
+ for (i=0;i<n_elements;i++) {
+    max_stripe_size_b[i] = MAX_STRIPE_SIZE; 
+  }
+
+  n_stripes = (task->data_desc[0].size)/max_stripe_size_b[0];
+  if (n_stripes * max_stripe_size_b[0] < task->data_desc[0].size)
+    n_stripes++;
+
+#elif defined(ROD)
+
+  // max sizes hardcoded
+  max_stripe_size_b[0] = 0x1100;
+  max_stripe_size_b[1] = 0x1100;
+  max_stripe_size_b[2] = 0xe00;  
+  
+  // extracted from accelerator code
+  unsigned R, TILE_HEIGHT;
+  unsigned w, h, n_bands, band_height, odd;
+  unsigned tx_band_size_in, tx_band_size_in_first, tx_band_size_in_last;
+  unsigned tx_band_size_out, tx_band_size_out_last;
+  unsigned overlap;
+  
+  R = 3;
+  TILE_HEIGHT = 10;
+  w = *(unsigned *)(task->data_desc[3].ptr);
+  h = *(unsigned *)(task->data_desc[4].ptr);
+
+  n_bands = h / TILE_HEIGHT;
+  band_height = TILE_HEIGHT;
+  odd = h - (n_bands * band_height);
+  
+  tx_band_size_in       = sizeof(unsigned char)*((band_height + (R << 1)) * w);
+  tx_band_size_in_first = sizeof(unsigned char)*((band_height + R) * w);
+  tx_band_size_in_last  = sizeof(unsigned char)*((band_height + odd + R ) * w);
+  tx_band_size_out      = sizeof(unsigned char)*( band_height * w);
+  tx_band_size_out_last = sizeof(unsigned char)*((band_height + odd )* w);
+  
+  overlap = sizeof(unsigned char)*(R * w);
+  n_stripes = n_bands;
+
+#endif   
+
+  i = -1;
+  for (k=0; k<task->n_data; k++) {
+
+    // check if element is passed by value or if the this element is not striped over
+    if ( (*data_idxs)[k] < 2 )
+      continue;
+    i++;
+    
+    if (DEBUG_LEVEL > 2) {
+      printf("size_b[%d] = %#x\n",i,task->data_desc[0].size);
+      printf("max_stripe_size_b[%d] = %#x\n",i,max_stripe_size_b[i]);
+    }
+     
+    n_slices_max = max_stripe_size_b[i]/0x1000;
+    if (n_slices_max*0x1000 < max_stripe_size_b[i])
+      n_slices_max++; // remainder
+    n_slices_max++;   // non-aligned
+
+    n_fields = 2*n_slices_max + 1; // addr_start & addr_offset per slice, addr_end  
+
+    rab_stripes[i] = (unsigned *)malloc((size_t)((n_stripes+1)*(n_fields)*sizeof(unsigned)));
+
+    // fill in stripe data
+    for (j=0; j<(n_stripes+1); j++) {
+
+      // first stripe for output elements, last stripe for input elements
+      if ( ((j == 0) && ((*data_idxs)[k] == 3)) || ((j == n_stripes) && ((*data_idxs)[k] == 2)) ) {
+	addr_start = 0;
+	addr_end = 0;
+      }
+      else {
+     	addr_start = (unsigned)(task->data_desc[k].ptr);
+	
+#ifdef PROFILE_RAB
+	
+	size_b = max_stripe_size_b[k];
+	tx_band_start = j*size_b;
+
+#elif defined(ROD) 
+	
+	if ( (*data_idxs)[k] == 2 ) { // input elements
+	  if (j == 0) {
+	    tx_band_start = 0;
+	    size_b = tx_band_size_in_first;
+	  }
+	  else {
+	    tx_band_start = tx_band_size_in_first + tx_band_size_in * (j-1) - (overlap * (2 + (j-1)*2));
+	    if (j == n_stripes-1 )	    
+	      size_b = tx_band_size_in_last;
+	    else
+	      size_b = tx_band_size_in;
+	  }
+	}
+	else {// 3, output elements
+	  tx_band_start = tx_band_size_out * (j-1);
+	  if (j == n_stripes ) 
+    	    size_b = tx_band_size_out_last;
+	  else
+    	    size_b = tx_band_size_out;
+	}
+#endif
+	addr_start += tx_band_start;
+	addr_end = addr_start + size_b;
+      }
+ 
+      // write the rab_stripes table
+      *(rab_stripes[i] + j*n_fields + 0) = addr_start;
+      for (m = 1; m<(n_fields-1); m++)
+	*(rab_stripes[i] + j*n_fields + m) = 0;
+      *(rab_stripes[i] + j*n_fields + n_fields-1) = addr_end; 
+    }
+
+    if (DEBUG_LEVEL > 2) {
+      printf("RAB stripe table @ %#x\n",(unsigned)rab_stripes[i]);
+      printf("Shared Element %d: \n",k);
+      for (j=0; j<(n_stripes+1); j++) {
+	if (j>2 && j<(n_stripes+1-3))
+	  continue;
+	printf("%d\t",j);
+	for (m=0; m<n_fields; m++) {
+	  printf("%#x\t",*(rab_stripes[i] + j*n_fields + m));
+	}
+	printf("\n");
+      }
+    }
+  }
+
+  // setup the request
+  request[0] = 0;
+  RAB_SET_PROT(request[0], prot);
+  RAB_SET_PORT(request[0], port);
+  RAB_SET_OFFLOAD_ID(request[0], offload_id);
+  RAB_SET_N_ELEM(request[0], n_elements);
+  RAB_SET_N_STRIPES(request[0], n_stripes);
+
+  request[1] = (unsigned)max_stripe_size_b; // addr of array holding max stripe sizes
+  request[2] = (unsigned)rab_stripes;       // addr of array holding pointers to stripe data
+  
+  // make the request
+  ioctl(pulp->fd,PULP_IOCTL_RAB_REQ_STRIPED,request);
+  
+  // free memory
+  free(max_stripe_size_b);
+  for (i=0; i<n_elements; i++) {
+    free(rab_stripes[i]);
+  }
+  free(rab_stripes);
+
+  return 0;
+} 
+
+/**
+ * Free striped remappings
+ *
+ * @pulp      : pointer to the PulpDev structure
+ */
+void pulp_rab_free_striped(PulpDev *pulp) {
+  
+  unsigned offload_id = 0;
+
+  // make the request
+  ioctl(pulp->fd,PULP_IOCTL_RAB_FREE_STRIPED,offload_id);
+  
+  return;
+} 
+
+/**
  * Setup a DMA transfer using the Zynq PS DMA engine
  *
  * @pulp      : pointer to the PulpDev structure
@@ -536,9 +739,11 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   // RAB setup
   pulp_offload_rab_setup(pulp, task, &data_idxs, n_idxs);
     
+#ifndef PROFILE_RAB
   // Pass data descriptor to PULP
   pulp_offload_pass_desc(pulp, task, &data_idxs);
-  
+#endif  
+
   // free memory
   free(data_idxs);
 
@@ -599,12 +804,17 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   printf("Starting program execution.\n");
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x800000ff);
   
+#ifdef PROFILE_RAB
+  pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',PULP_START);
+#endif
+
   // poll l2_mem address for finish
   volatile int done;
   done = 0;
   while (!done) {
     done = pulp_read32(pulp->l2_mem.v_addr,0xFFF8,'b');
-    usleep(1000);
+    //usleep(1000);
+    sleep(1);
     //printf("Waiting...\n");
   }
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
@@ -797,6 +1007,7 @@ int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs) {
  *
  * @task:      pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
+ * @n_idxs:    number of shared data elements passed by reference
  */
 int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs)
 {
@@ -809,12 +1020,33 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   unsigned * size_int;
   unsigned * order;
 
+  n_data_int = 1;
+
+// Mark striped data elements
+#ifdef PROFILE_RAB
+
+  n_data_int = 0;
+
+  // valid for PROFILE_RAB only
+  for (i=0; i<task->n_data; i++) {
+    (*data_idxs)[i] = 2;
+  }
+  n_idxs -= task->n_data;
+
+#elif defined(ROD)
+  // valid for ROD only
+  (*data_idxs)[0] = 2;
+  (*data_idxs)[1] = 2;
+  (*data_idxs)[2] = 3; // shifted
+  n_idxs -= 3;
+#endif  
+
   // !!!!TO DO: check type and set protections!!!
   prot = 0x7; 
   port = 1;   // PULP -> Host
   
   n_data = task->n_data;
-  n_data_int = 1;
+  
 
   date_cur = (unsigned char)(task->task_id + 1);
   date_exp = (unsigned char)(task->task_id + 3);
@@ -829,7 +1061,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   }
   j=0;
   for (i=0;i<n_data;i++) {
-    if ( (*data_idxs)[i] ) {
+    if ( (*data_idxs)[i] == 1 ) {
       order[j] = i;
       j++;
     }
@@ -874,7 +1106,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
     }
   }
 
-  // setup the RAB
+  // set up the RAB
   if (DEBUG_LEVEL > 2) {
     printf("Requesting %d remapping(s):\n",n_data_int);
   }
@@ -885,6 +1117,14 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
     }
     pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur);
   }
+
+  // set up RAB stripes
+  //pulp_rab_req_striped(pulp, task, data_idxs, n_idxs, prot, port);
+#ifdef PROFILE_RAB
+  pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port);
+#elif defined(ROD)
+  pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port);
+#endif
 
   // free memory
   free(v_addr_int);
@@ -1073,9 +1313,14 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   // read back data elements with sizes up to 32 bit from mailbox
   n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
   
-  // free rab slices
+  // free RAB slices
   date_cur = (unsigned char)(task->task_id + 4);
   pulp_rab_free(pulp, date_cur);
+
+#if defined(PROFILE_TAB) || defined(ROD)
+  // free striped RAB slices
+  pulp_rab_free_striped(pulp);
+#endif
 
   // fetch values of data elements passed by value
   err = pulp_offload_get_desc(pulp, task, &data_idxs, n_idxs);
@@ -1155,15 +1400,18 @@ int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
   int timeout, us_delay;
   unsigned status;
 
-  us_delay = 10;
+  //us_delay = 10;
+  us_delay = 100;
 
   // check if mailbox is empty
   if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1 ) {
+    //timeout = 100000;
     timeout = 100000;
     status = 1;
     // wait for not empty or timeout
     while ( status && (timeout > 0) ) {
       usleep(us_delay);
+      //printf("%d\n",usleep(us_delay));
       timeout--;
       status = (pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1);
     }
