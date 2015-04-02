@@ -4,7 +4,7 @@
 #include "pulp.h"
 #include "pulpemu.h"
 
-#define DEBUG_LEVEL 3
+#define DEBUG_LEVEL 0
 
 #define ZEDBOARD 1
 #define ZC706    2
@@ -247,7 +247,17 @@
 //#define BOOT_OFFSET_B 0x100
 //#define BOOT_ADDR (L3_MEM_BASE_ADDR + BOOT_OFFSET_B)
 
+#define SYNC_OFFSET_B 0xB000
+
+// for ROD, CT, JPEG
 //#define ROD
+//#define CT
+//#define JPEG
+#define MEM_SHARING 2
+//#define ZYNQ_PMM
+//#define PROFILE
+
+//#define MEM_SHARING 2
 //#define PROFILE_RAB
 #define MAX_STRIPE_SIZE 0x1800
 

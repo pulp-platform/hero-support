@@ -93,9 +93,7 @@ int  pulp_boot(PulpDev *pulp, TaskDesc *task);
 unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr);
 void         pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr);
 
-
-
-// required for ROD
+// required for ROD, CT, MJPEG
 
 int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs);
 int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs);
@@ -105,12 +103,10 @@ int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, i
 int pulp_offload_out(PulpDev *pulp, TaskDesc *task);
 int pulp_offload_in(PulpDev *pulp, TaskDesc *task);
 
+int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask);
+int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask);
+
 int pulp_offload_start(PulpDev *pulp, TaskDesc *task);
 int pulp_offload_wait(PulpDev *pulp, TaskDesc *task);
-
-//int pulp_offload_nowait(PulpDev *pulp, 
-//			ompOffload_desc_t *desc, omp_offload_t **omp_offload, uint32_t *fomp_offload);
-//int pulp_offload_wait(PulpDev *pulp, omp_offload_t *omp_offload, uint32_t fomp_offload);
-//int pulp_offload_finish(PulpDev *pulp, omp_offload_t *omp_offload, uint32_t fomp_offload);
 
 #endif // PULP_FUNC_H__

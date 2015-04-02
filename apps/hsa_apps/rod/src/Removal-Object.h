@@ -51,7 +51,9 @@ typedef struct {
   //uint32_t foffload;
   DataDesc *data_desc;
   TaskDesc *desc;
-  
+#if MEM_SHARING == 1
+  TaskDesc *fdesc;
+#endif
 }NCC_kernel_t;
 
 void erode(uint8_t*, uint8_t*, int, int, int);

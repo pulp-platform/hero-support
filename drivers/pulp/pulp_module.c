@@ -532,11 +532,25 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
   int i,j;
   unsigned idx, n_slices, n_fields, offset;
   
-  // read mailbox
-  // ATTENTION: not checking for empty, error
-  mailbox_data = ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
+  // check interrupt status
+  mailbox_is = 0x7 & ioread32(my_dev.mailbox+MAILBOX_IS_OFFSET_B);
+  
+  if (mailbox_is & 0x4) {
+    // clear the interrupt
+    iowrite32(0x4,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
 
-  if (mailbox_data == RAB_UPDATE) {
+    // do something
+    do_gettimeofday(&time);
+    printk(KERN_INFO "PULP: Mailbox Error handled: %02li:%02li:%02li.\n",
+	   (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+
+    return IRQ_HANDLED;
+  }
+
+  // read mailbox
+    mailbox_data = ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
+
+    if (mailbox_data == RAB_UPDATE) {
 
 #ifdef PROFILE_RAB 
     // stop the PULP timer  
@@ -552,6 +566,8 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
     if (DEBUG_LEVEL_RAB > 0) {
       printk(KERN_INFO "PULP: RAB update requested.\n");
     }
+
+#if !defined(MEM_SHARING) || (MEM_SHARING != 1) 
 
     rab_stripe_req[offload_id].stripe_idx++;
     idx = rab_stripe_req[offload_id].stripe_idx;
@@ -583,12 +599,14 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
 	}
       }
     }
+#endif
+
     // signal ready to PULP
     iowrite32(HOST_READY,my_dev.mailbox+MAILBOX_WRDATA_OFFSET_B);
 
     // clear the interrupt
     mailbox_is = 0x7 & ioread32(my_dev.mailbox+MAILBOX_IS_OFFSET_B);
-    iowrite32(0x7,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
+    iowrite32(0x2,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
 
 #ifdef PROFILE_RAB 
     // read the ARM clock counter
@@ -602,10 +620,13 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
     iowrite32(clk_cntr_update,my_dev.l3_mem+CLK_CNTR_UPDATE_OFFSET_B);
     iowrite32(n_slices_updated,my_dev.l3_mem+N_SLICES_UPDATED_OFFSET_B);
     iowrite32(n_updates,my_dev.l3_mem+N_UPDATES_OFFSET_B);
+#endif    
 
-    if (idx == rab_stripe_req[offload_id].n_stripes-1)
+#if defined(PROFILE_RAB) || defined(JPEG) 
+    if (idx == rab_stripe_req[offload_id].n_stripes) {
       rab_stripe_req[offload_id].stripe_idx = 0;
-
+      //printk(KERN_INFO "PULP: RAB stripe table wrap around.\n");
+    }
 #endif    
 
     // do something
@@ -883,6 +904,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     // get current date    
     rab_slice_req->date_cur = BF_GET(arg,0,RAB_CONFIG_N_BITS_DATE);
 
+    // unlock remapped pages
+    rab_slice_req->flags = 0x0;
+
     // check every slice on every port
     for (i=0;i<RAB_N_PORTS;i++) {
       rab_slice_req->rab_port = i;
@@ -924,7 +948,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     }
     
     // parse request
-    RAB_GET_PROT(prot, request[0]);    
+    RAB_GET_PROT(prot, request[0]);
     RAB_GET_PORT(rab_port, request[0]);
     RAB_GET_OFFLOAD_ID(offload_id, request[0]);
     RAB_GET_N_ELEM(rab_stripe_req[offload_id].n_elements, request[0]);
@@ -1278,36 +1302,43 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     // get offload id
     offload_id = BF_GET(arg,0,RAB_CONFIG_N_BITS_OFFLOAD_ID);
 
-    // process every data element independently
-    for (i=0; i<rab_stripe_req[offload_id].n_elements; i++) {
+    if ( rab_stripe_req[offload_id].n_elements > 0 ) {
 
-      if (DEBUG_LEVEL_RAB > 1) {
-	printk(KERN_INFO "Shared Element %d:\n",i);
-      }
+      // process every data element independently
+      for (i=0; i<rab_stripe_req[offload_id].n_elements; i++) {
+
+	if (DEBUG_LEVEL_RAB > 1) {
+	  printk(KERN_INFO "Shared Element %d:\n",i);
+	}
       
-      elem_cur = rab_stripe_req[offload_id].elements[i];
-      rab_slice_req->flags = 0x2; 
+	elem_cur = rab_stripe_req[offload_id].elements[i];
+     
+	// free the slices
+	for (j=0; j<elem_cur->n_slices; j++){
+	  rab_slice_req->rab_port = elem_cur->rab_port;
+	  rab_slice_req->rab_slice = elem_cur->slices[j];
 
-      // free the slices
-      for (j=0; j<elem_cur->n_slices; j++){
-	rab_slice_req->rab_port = elem_cur->rab_port;
-	rab_slice_req->rab_slice = elem_cur->slices[j];
+	  // unlock and release pages when freeing the last slice
+	  if (j < (elem_cur->n_slices-1) )
+	    rab_slice_req->flags = 0x2;
+	  else
+	    rab_slice_req->flags = 0x0;
 
-	// unlock and release pages when freeing the last slice
-	if (j == elem_cur->n_slices-1)
-	  rab_slice_req->flags = 0x0;
+	  pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
+	}
 
-	pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
+	// free memory
+	kfree(elem_cur->slices);
+	kfree(elem_cur->rab_stripes);
+	kfree(elem_cur);
       }
 
-      // free memory
-      kfree(elem_cur->slices);
-      kfree(elem_cur->rab_stripes);
-      kfree(elem_cur);
+      //free memory
+      kfree(rab_stripe_req[offload_id].elements);
+    
+      // mark the stripe request as freed
+      rab_stripe_req[offload_id].n_elements = 0;
     }
-
-    //free memory
-    kfree(rab_stripe_req[offload_id].elements);
 
 #ifdef PROFILE_RAB 
     // read the ARM clock counter

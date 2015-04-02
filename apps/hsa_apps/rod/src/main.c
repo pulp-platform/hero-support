@@ -13,19 +13,16 @@
 
 #include <sys/time.h> // for time measurements
 
-#define MEM_SHARING 2
-#define PROFILE
-
 //#include "ompOffload.h"
 #include "utils.h"
 
 #include "Removal-Object.h"
 
-//#define PULP_CLK_FREQ_MHZ 85
 #define PULP_CLK_FREQ_MHZ 75
-#define REPETITIONS 2
+//#define PULP_CLK_FREQ_MHZ 65
+//#define REPETITIONS 2
+#define REPETITIONS 10
 //#define PIPELINE
-
 
 int  NCC_init   (NCC_kernel_t *, int, int);
 inline void NCC_offload_out(NCC_kernel_t *nccInstance, uint8_t *frame, int offload_id);
@@ -53,14 +50,7 @@ double GetTimeMs()
     return ret;
 }
 
-//// vogelpi
-//#include "pulp_host.h"
-//#include "pulp_func.h"
-//#include "zynq_pmm_user.h"
-//#include <time.h> // for time measurements
-#define PROFILE
-#define ZYNQ_PMM
-
+// vogelpi
 PulpDev pulp_dev;
 PulpDev *pulp;
 
@@ -119,6 +109,10 @@ int main(int argc, char *argv[]) {
   pulp_stdout_clear(pulp,2);
   pulp_stdout_clear(pulp,3);
 
+  // clear contiguous L3
+  for (i = 0; i<L3_MEM_SIZE_B/4; i++)
+    pulp_write32(pulp->l3_mem.v_addr,i*4,'b',0);
+
   pulp_boot(pulp,&task_desc);
 
   // setup time measurement
@@ -153,11 +147,13 @@ int main(int argc, char *argv[]) {
     
   printf("\n###########################################################################\n");
   printf("\n[APP ] Load input images\n");
-  readPgmOrPpm("samples/ippo_256x64.pgm", &background);
-  readPgmOrPpm("samples/ippo2_256x64.pgm", &foreground);
+  //readPgmOrPpm("samples/ippo_256x64.pgm", &background);
+  //readPgmOrPpm("samples/ippo2_256x64.pgm", &foreground);
+  readPgmOrPpm("samples/ippo_256x384.pgm", &background);
+  readPgmOrPpm("samples/ippo2_256x384.pgm", &foreground);
 
-  printf("background.width  = %d\n", background.width);
-  printf("background.height = %d\n", background.height);
+  //printf("background.width  = %d\n", background.width);
+  //printf("background.height = %d\n", background.height);
   
     
   tmp = (uint8_t *)malloc(sizeof(uint8_t)*background.width*background.height);
@@ -175,8 +171,8 @@ int main(int argc, char *argv[]) {
     pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',PULP_START);
     //pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',PULP_STOP);
 
-    clock_gettime(CLOCK_REALTIME,&tp1_local);
     // offload 
+    clock_gettime(CLOCK_REALTIME,&tp1_local);
     NCC_offload_out(&NCC_instance, foreground.data, i);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
     accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
@@ -191,18 +187,23 @@ int main(int argc, char *argv[]) {
 
     if (DEBUG_LEVEL > 0) printf("[APP ] Offload %d scheduled\n", i);
 
+    clock_gettime(CLOCK_REALTIME,&tp1_local);
     ret = NCC_exe_wait(&NCC_instance);
+    clock_gettime(CLOCK_REALTIME,&tp2_local);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration3,&ns_duration3,ACC_CTRL);
     if ( ret ) {
       printf("ERROR: Execution wait failed. ret = %d\n",ret);
       error = 1;
       break;
     }
-
+    clock_gettime(CLOCK_REALTIME,&tp1_local);
     ret = NCC_offload_in(&NCC_instance,  foreground.data);
+    clock_gettime(CLOCK_REALTIME,&tp2_local);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
      if ( ret ) {
-      printf("ERROR: Offload in failed. ret = %d\n",ret);
-      error = 1;
-      break;
+       printf("ERROR: Offload in failed. ret = %d\n",ret);
+       error = 1;
+       break;
     } 
     
     if (DEBUG_LEVEL > 0) printf("\n###########################################################################\n");
@@ -244,13 +245,12 @@ int main(int argc, char *argv[]) {
     zynq_pmm_parse(proc_text, counter_values, 1); // accumulate cache counter values
 #endif
 
-    pulp_stdout_print(pulp,0);
-    pulp_stdout_print(pulp,1);
-    pulp_stdout_print(pulp,2);
-    pulp_stdout_print(pulp,3);
+    //pulp_stdout_print(pulp,0);
+    //pulp_stdout_print(pulp,1);
+    //pulp_stdout_print(pulp,2);
+    //pulp_stdout_print(pulp,3);
 
-    sleep(20);
-
+    //sleep(20);
   }
   printf("\n[APP ] Write image output\n");
   writePgmOrPpm("samples/test_out.pgm", &foreground);
@@ -350,13 +350,13 @@ int main(int argc, char *argv[]) {
   clock_gettime(CLOCK_REALTIME,&tp2);
   accumulate_time(&tp1,&tp2,&s_duration,&ns_duration,ACC_CTRL);
   
-  //// print time measurements
-  //printf("\n###########################################################################\n");
-  //printf("Total Offload Time \t : %u.%09lu seconds\n",s_duration1,ns_duration1);
-  //printf("Total Host Wait Time \t : %u.%09lu seconds\n",s_duration3,ns_duration3);
-  //printf("Total Host Kernel Time \t : %u.%09lu seconds\n",s_duration2,ns_duration2);
-  //printf("Total Execution Time \t : %u.%09lu seconds\n",s_duration,ns_duration);
-  //printf("\n######################################################################\n");
+  // print time measurements
+  printf("\n###########################################################################\n");
+  printf("Total Offload Time \t : %u.%09lu seconds\n",s_duration1,ns_duration1);
+  printf("Total Host Wait Time \t : %u.%09lu seconds\n",s_duration3,ns_duration3);
+  printf("Total Host Kernel Time \t : %u.%09lu seconds\n",s_duration2,ns_duration2);
+  printf("Total Execution Time \t : %u.%09lu seconds\n",s_duration,ns_duration);
+  printf("\n######################################################################\n");
   //double dma_time = (double)pulp_read32(pulp->mb_mem.v_addr,DMA_TIME_REG_OFFSET_B,'b')/(MB_CLK_FREQ_MHZ * 1000000);
   //printf("Total DMA Time \t\t : %.9f seconds\n", dma_time);
   //double pmca_time = (double)(REPETITIONS*N_STRIPES*KERNEL_CYCLES_PER_STRIPE)/(STHORM_CLK_FREQ_MHZ * 1000000);
@@ -407,6 +407,8 @@ int main(int argc, char *argv[]) {
 #ifdef ZYNQ_PMM  
  zynq_pmm_close(zynq_pmm_fd);
 #endif
+
+ pulp_rab_free_striped(pulp);
  pulp_rab_free(pulp,0);
  pulp_free_v_addr(pulp);
  sleep(1);
@@ -425,12 +427,12 @@ int NCC_init(NCC_kernel_t *nccInstance, int width, int height){
   // vogelpi -- allocate memory in contigous L3
   //nccInstance->bg       = (uint8_t *)p2012_socmem_alloc(nccInstance->w*nccInstance->h*sizeof(uint8_t),
   //							&nccInstance->Fbg);
-#if (MEM_SHARING == 1) 
-  nccInstance->bg         = (uint8_t *)pulp_l3_malloc(pulp, nccInstance->w*nccInstance->h*sizeof(uint8_t),
-						      &nccInstance->Fbg);
-#else // 2
+  //#if (MEM_SHARING == 1) 
+  //nccInstance->bg         = (uint8_t *)pulp_l3_malloc(pulp, nccInstance->w*nccInstance->h*sizeof(uint8_t),
+  //						      &nccInstance->Fbg);
+  //#else // 2
   nccInstance->bg         = (uint8_t *)malloc(nccInstance->w*nccInstance->h*sizeof(uint8_t));
-#endif // MEM_SHARING  
+  //#endif // MEM_SHARING  
   nccInstance->out        = (uint8_t *)malloc(nccInstance->w*nccInstance->h*sizeof(uint8_t));
 #ifdef PROFILE
   nccInstance->data_desc  = (DataDesc *)malloc(9*sizeof(DataDesc));
@@ -441,7 +443,7 @@ int NCC_init(NCC_kernel_t *nccInstance, int width, int height){
   return 0;
 }
 
-inline void NCC_offload_out(NCC_kernel_t *nccInstance, uint8_t *frame, int offload_id){
+inline void NCC_offload_out(NCC_kernel_t *nccInstance, uint8_t *frame, int offload_id) {
   nccInstance->data_desc[0].ptr  = (void *) frame;
   nccInstance->data_desc[0].size = nccInstance->w*nccInstance->h*sizeof(uint8_t);
   nccInstance->data_desc[0].type = 1;
@@ -488,7 +490,7 @@ inline void NCC_offload_out(NCC_kernel_t *nccInstance, uint8_t *frame, int offlo
   nccInstance->desc->task_id     = offload_id;
   
 #if (MEM_SHARING == 1)
-  pulp_offload_out(pulp, nccInstance->desc, &nccInstance->offload, &nccInstance->foffload);
+  pulp_offload_out_contiguous(pulp, nccInstance->desc, &nccInstance->fdesc);
 #else // 2
   pulp_offload_out(pulp, nccInstance->desc);
 #endif // MEM_SHARING
@@ -512,7 +514,7 @@ inline int NCC_offload_in(NCC_kernel_t *nccInstance, uint8_t *frame) {
   //inline void NCC_offload_in(NCC_kernel_t *nccInstance, uint8_t *frame) {
   int ret;
 #if (MEM_SHARING == 1)
-  ret = pulp_offload_in(pulp, nccInstance->offload, nccInstance->foffload);
+  ret = pulp_offload_in_contiguous(pulp, nccInstance->desc, &nccInstance->fdesc);
 #else // 2
   ret = pulp_offload_in(pulp, nccInstance->desc); 
 #endif // MEM_SHARING
@@ -713,14 +715,13 @@ void classify_roi(uint8_t *image, uint8_t* C, uint8_t* I, int w, int h, Rois *ro
             
       if(sum_d > CLASS_TH){
 	roi->classification[n] = 1; //ABBANDONATO
-	printf("[APP ] ABANDONED item at %d,%d\n", roi->Y1[n], roi->X1[n]);
-                
+	if (DEBUG_LEVEL > 0) printf("[APP ] ABANDONED item at %d,%d\n", roi->Y1[n], roi->X1[n]);       
 	drawROI (image, 0, w, h, roi->X1[n], roi->Y1[n], roi->X2[n], roi->Y2[n], red );
                 
       }
       else{
 	roi->classification[n] = 0; //RIMOSSO
-	printf("[APP ] REMOVED item at %d,%d\n", roi->Y1[n], roi->X1[n]);
+	if (DEBUG_LEVEL > 0) printf("[APP ] REMOVED item at %d,%d\n", roi->Y1[n], roi->X1[n]);
 	drawROI (image, 0, w, h, roi->X1[n], roi->Y1[n], roi->X2[n], roi->Y2[n], blue );
       }
     }//nrois + isValid

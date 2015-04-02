@@ -413,6 +413,9 @@ int pulp_init(PulpDev *pulp)
   // enable mailbox interrupts
   pulp_write32(pulp->mailbox.v_addr,MAILBOX_IE_OFFSET_B,'b',0x6);
  
+  // reset the l3_offset pointer
+  pulp->l3_offset = 0;
+
   return 0;
 }
 
@@ -551,6 +554,31 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   overlap = sizeof(unsigned char)*(R * w);
   n_stripes = n_bands;
 
+#elif defined(CT)
+  
+  // max sizes hardcoded
+  max_stripe_size_b[0] = 0x3000;
+
+  // extracted from accelerator code
+  unsigned width, height, bHeight, nbBands;
+  unsigned band_size_1ch, band_size_3ch;
+  
+  width = *(unsigned *)(task->data_desc[1].ptr);
+  height = *(unsigned *)(task->data_desc[2].ptr);
+  bHeight = *(unsigned *)(task->data_desc[3].ptr);
+
+  nbBands = (height / bHeight);
+  band_size_1ch = (width*bHeight);
+  band_size_3ch = (width*bHeight*3);  
+  //printf("buffer size = %#x \n",(band_size_3ch*2+band_size_1ch)*sizeof(unsigned char));
+
+  n_stripes = nbBands;
+
+#elif defined(JPEG)
+  // max sizes hardcoded
+  max_stripe_size_b[0] = 0x1000;
+  n_stripes = 18;
+
 #endif   
 
   i = -1;
@@ -562,7 +590,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
     i++;
     
     if (DEBUG_LEVEL > 2) {
-      printf("size_b[%d] = %#x\n",i,task->data_desc[0].size);
+      printf("size_b[%d] = %#x\n",i,task->data_desc[k].size);
       printf("max_stripe_size_b[%d] = %#x\n",i,max_stripe_size_b[i]);
     }
      
@@ -613,6 +641,17 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
 	  else
     	    size_b = tx_band_size_out;
 	}
+
+#elif defined(CT)
+	
+	tx_band_start = j*band_size_3ch;
+	size_b = band_size_3ch;
+
+#elif defined(JPEG)
+	
+	tx_band_start = j*max_stripe_size_b[0];
+	size_b = max_stripe_size_b[0];
+
 #endif
 	addr_start += tx_band_start;
 	addr_end = addr_start + size_b;
@@ -653,7 +692,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   
   // make the request
   ioctl(pulp->fd,PULP_IOCTL_RAB_REQ_STRIPED,request);
-  
+
   // free memory
   free(max_stripe_size_b);
   for (i=0; i<n_elements; i++) {
@@ -948,7 +987,7 @@ unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr)
   
   v_addr = (unsigned int)pulp->l3_mem.v_addr + pulp->l3_offset;
   *p_addr = L3_MEM_BASE_ADDR + pulp->l3_offset;
-  
+ 
   pulp->l3_offset += size_b;
 
   if (DEBUG_LEVEL > 2) {
@@ -1039,6 +1078,17 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   (*data_idxs)[1] = 2;
   (*data_idxs)[2] = 3; // shifted
   n_idxs -= 3;
+
+#elif defined(CT)
+  // valid for CT only
+  (*data_idxs)[0] = 2;
+  n_idxs -= 1;
+
+#elif defined(JPEG)
+  // valid for CT only
+  (*data_idxs)[3] = 2; // 2 and 3 since INOUT -> TODO: handle this case in driver for efficiency 
+  n_idxs -= 1;
+
 #endif  
 
   // !!!!TO DO: check type and set protections!!!
@@ -1124,6 +1174,10 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port);
 #elif defined(ROD)
   pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port);
+#elif defined(CT)
+  pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
+#elif defined(JPEG)
+  pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
 #endif
 
   // free memory
@@ -1154,6 +1208,7 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
   }
 
   for (i=0;i<n_data;i++) {
+
     // check if mailbox is full
     if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x2 ) {
       timeout = 1000;
@@ -1169,7 +1224,7 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
 	return i;
       } 
     }
-    
+
     // mailbox is ready to receive
     if ( (*data_idxs)[i] ) {
       // pass data element by reference
@@ -1317,7 +1372,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   date_cur = (unsigned char)(task->task_id + 4);
   pulp_rab_free(pulp, date_cur);
 
-#if defined(PROFILE_TAB) || defined(ROD)
+#if defined(PROFILE_RAB) || defined(ROD) || defined(CT) || defined(JPEG)
   // free striped RAB slices
   pulp_rab_free_striped(pulp);
 #endif
@@ -1370,6 +1425,8 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
   
   // read status
   status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
+  //printf("PULP status = %#x.\n",status);
+
   // clear mailbox interrupt
   pulp_mailbox_clear_is(pulp);
   if ( status != PULP_READY ) {
@@ -1377,14 +1434,14 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
     return -EBUSY;
   }
 
-  //// check mailbox is full
-  //if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x2 ) {
-  //  printf("ERROR: PULP mailbox full.\n");
-  //  return -EXFULL;
-  //} 
-  //
-  //// start execution
-  //pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', PULP_START);
+  // check if mailbox is full
+  if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x2 ) {
+    printf("ERROR: PULP mailbox full.\n");
+    return -EXFULL;
+  } 
+  
+  // start execution
+  pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', PULP_START);
 
   return 0;
 }
@@ -1402,6 +1459,12 @@ int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
 
   //us_delay = 10;
   us_delay = 100;
+
+  // check if sync = 0x1
+  status = 0;
+  while ( status != PULP_DONE ) {
+    status = pulp_read32(pulp->l2_mem.v_addr, SYNC_OFFSET_B,'b');
+  }
 
   // check if mailbox is empty
   if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1 ) {
@@ -1433,142 +1496,182 @@ int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
   return 0;
 }
 
-////
-//int pulp_offload_out_contiguous(PulpDev *pulp,
-//				TaskDesc *desc, omp_offload_t **omp_offload, uint32_t *fomp_offload)
-//// ompOffload_desc_t *desc, omp_offload_t **omp_offload, uint32_t *fomp_offload)
-//{
-//  int i;
 //
-//  omp_offload_t *new_offload = (omp_offload_t *)pulp_l3_malloc(pulp, sizeof(omp_offload_t), fomp_offload);
-//  
-//  /* --- Prepare the Kernel Command --- */
-//  /* Resolve shared variables pointers to pass as argument */
-//  new_offload->kernelInfo.n_data = desc->n_data;
-//    
-//  if(new_offload->kernelInfo.n_data) {
-//    uint32_t fabricArgs;
-//
-//    //Host array for fabric args
-//    new_offload->kernelInfo.host_args_ptr 
-//      = (unsigned int *) pulp_l3_malloc(pulp, new_offload->kernelInfo.n_data*sizeof(unsigned int), &fabricArgs);
-//    //Host array for host data pointers
-//    new_offload->kernelInfo.hdata_ptrs    
-//      = (unsigned int *) malloc(new_offload->kernelInfo.n_data*sizeof(unsigned int));
-//    //Fabric Args
-//    new_offload->kernelInfo.args = (unsigned int *) fabricArgs;
-//      
-//    data_desc_t *datad = (data_desc_t *) desc->data;
-//    new_offload->kernelInfo.data = (data_desc_t *) desc->data;
-//      
-//    // memory allocation in contiguous L3 memory for IN and OUT
-//    // copy to contiguous L3 memory for IN 
-//    for (i = 0; i < new_offload->kernelInfo.n_data; i++) {
-//      
-//      int data_size, data_ptr, data_type;
-//      uint32_t fabricCpy;
-//            
-//      data_type = datad[i].type;
-//      data_size = datad[i].size;
-//      data_ptr  = (uint32_t) datad[i].ptr;
-//
-//      switch(data_type)	{
-//      case 0:
-//	//INOUT
-//	// vogelpi
-//	//new_offload->kernelInfo.hdata_ptrs[i] = (unsigned int)p2012_socmem_alloc(data_size, &fabricCpy);
-//	new_offload->kernelInfo.hdata_ptrs[i] = (unsigned int)pulp_l3_malloc(pulp, data_size, &fabricCpy);
-//	new_offload->kernelInfo.host_args_ptr[i]  = fabricCpy;
-//	memcpy((void *) new_offload->kernelInfo.hdata_ptrs[i], (void *) data_ptr ,data_size);
-//	break;
-//                    
-//      case 1:
-//	//IN
-//	// vogelpi
-//	//new_offload->kernelInfo.hdata_ptrs[i] = (unsigned int)p2012_socmem_alloc(data_size, &fabricCpy);
-//	new_offload->kernelInfo.hdata_ptrs[i] = (unsigned int)pulp_l3_malloc(pulp, data_size, &fabricCpy);
-//	new_offload->kernelInfo.host_args_ptr[i]  = fabricCpy;
-//	memcpy((void *) new_offload->kernelInfo.hdata_ptrs[i], (void *) data_ptr ,data_size);
-//	break;
-//                    
-//      case 2:
-//	//OUT
-//	// vogelpi
-//	//new_offload->kernelInfo.hdata_ptrs[i] = (unsigned int)p2012_socmem_alloc(data_size, &fabricCpy);
-//	new_offload->kernelInfo.hdata_ptrs[i] = (unsigned int)pulp_l3_malloc(pulp, data_size, &fabricCpy);
-//	new_offload->kernelInfo.host_args_ptr[i]  = fabricCpy;
-//	break;
-//                    
-//      default:
-//	//NONE
-//	new_offload->kernelInfo.host_args_ptr[i] = (unsigned int) datad[i].ptr;
-//	break;
-//      }
-//    }
-//  }
-//  else {
-//    new_offload->kernelInfo.host_args_ptr = 0x0;
-//    new_offload->kernelInfo.args          = 0x0;
-//  }
-//
-//  /* Attach Kernel Binary */
-//  new_offload->kernelInfo.binaryHandle = (int) desc->name;
-//    
-//  /* Set the number of clusters requested */
-//  new_offload->kernelInfo.n_clusters = desc->n_clusters;
-//    
-//  /* Update some more information */
-//  //new_offload->hostUserPid         = (unsigned int ) new_offload | p2012_get_fabric_pid() | HOST_RT_PM_OMP_REQ_ID;
-//  new_offload->host_ptr            = (uint32_t ) new_offload;    
-//    
-//  *omp_offload = new_offload;
-//  
-//  return 0;
-//}
-//  
-//  // vogelpi -- trigger PMCA operation
-//  //gomp_enqueue_offload(fomp_offload);
-//  // poll status
-//  while (1) {
-//#ifndef PIPELINE // avoid race condition when accelerator is setting DONE and host is resetting it
-//    if ( (pulp_read32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_1_REG_OFFSET_B, 'b') == READY) | (pulp_read32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_1_REG_OFFSET_B, 'b') == DONE) ) {
-//#else    
-//      if (pulp_read32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_1_REG_OFFSET_B, 'b') == READY) {
-//#endif
-//	pulp_write32(pulp->mb_mem.v_addr, DMA_IN_ADDR_1_REG_OFFSET_B, 'b', new_offload->kernelInfo.host_args_ptr[i_start] );
-//#if (DMA_OUT_SIZE_B > 0)
-//	pulp_write32(pulp->mb_mem.v_addr, DMA_OUT_ADDR_1_REG_OFFSET_B ,'b', new_offload->kernelInfo.host_args_ptr[i_start+1] );
-//#endif
-//	pulp_write32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_1_REG_OFFSET_B ,'b', START);
-//	new_offload->hostUserPid = 1; // specify which buffer to use in MB
-//	break;
-//      }
-//#ifndef PIPELINE // avoid race condition when accelerator is setting DONE and host is resetting it
-//      else if ( ( pulp_read32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_2_REG_OFFSET_B, 'b') == READY) | (pulp_read32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_2_REG_OFFSET_B, 'b') == DONE) ) {
-//#else
-//    else if ( pulp_read32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_2_REG_OFFSET_B, 'b') == READY) {
-//#endif     
-//      pulp_write32(pulp->mb_mem.v_addr, DMA_IN_ADDR_2_REG_OFFSET_B, 'b', new_offload->kernelInfo.host_args_ptr[i_start] );
-//#if (DMA_OUT_SIZE_B > 0)
-//      pulp_write32(pulp->mb_mem.v_addr, DMA_OUT_ADDR_2_REG_OFFSET_B ,'b', new_offload->kernelInfo.host_args_ptr[i_start+1] );
-//#endif
-//      pulp_write32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_2_REG_OFFSET_B ,'b', START);
-//      new_offload->hostUserPid = 2; // specify which buffer to use in MB
-//      break;
-//    }
-//    else {
-//      if (DEBUG_LEVEL > 2) {
-//	printf("-- Status 1 = %u \t",pulp_read32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_1_REG_OFFSET_B, 'b') );
-//	printf("Status 2 = %u \n",pulp_read32(pulp->mb_mem.v_addr, OFFLOAD_STATUS_2_REG_OFFSET_B, 'b') );
-//	sleep(1);
-//      }
-//      usleep(1000);
-//    }
-//      }
-//      return 0;
-//    }
-//  }
-//}
+int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
+{
+  // similar to pulp_offload_out() but without RAB setup
+  int err, n_idxs;
+  unsigned *data_idxs;
+  data_idxs = (unsigned *)malloc(task->n_data*sizeof(unsigned));
+  if ( data_idxs == NULL ) {
+    printf("ERROR: Malloc failed for data_idxs.\n");
+    return -ENOMEM;
+  }
+
+  // only remap addresses belonging to data elements larger than 32 bit  
+  n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
+
+  int i;
+  int data_size, data_ptr, data_type;
+
+  *ftask = (TaskDesc *)malloc(sizeof(TaskDesc));
+  if ( *ftask == NULL ) {
+    printf("ERROR: Malloc failed for ftask.\n");
+    return -ENOMEM;
+  }
+
+  (*ftask)->task_id = task->task_id;
+  (*ftask)->name = task->name;
+  (*ftask)->n_clusters = task->n_clusters;
+  (*ftask)->n_data = task->n_data;
+#if defined(ROD)
+#ifdef PROFILE   
+  (*ftask)->data_desc  = (DataDesc *)malloc(9*sizeof(DataDesc));
+#else
+  (*ftask)->data_desc  = (DataDesc *)malloc(6*sizeof(DataDesc));
+#endif // PROFILE
+#elif defined(CT)
+#ifdef PROFILE   
+  (*ftask)->data_desc  = (DataDesc *)malloc(8*sizeof(DataDesc));
+#else
+  (*ftask)->data_desc  = (DataDesc *)malloc(6*sizeof(DataDesc));
+#endif // PROFILE
+#elif defined(JPEG)
+#ifdef PROFILE   
+  (*ftask)->data_desc  = (DataDesc *)malloc(10*sizeof(DataDesc));
+#else
+  (*ftask)->data_desc  = (DataDesc *)malloc(7*sizeof(DataDesc));
+#endif // PROFILE
+#endif // ROD / CT / JPEG
+
+  // memory allocation in contiguous L3 memory for IN and OUT
+  // copy to contiguous L3 memory for IN 
+  for (i = 0; i < (*ftask)->n_data; i++) {
+    
+    data_size = task->data_desc[i].size;
+    data_ptr  = (int)task->data_desc[i].ptr;
+
+    // data element to pass by reference, allocate contiguous L3 memory
+    if (data_idxs[i] > 0) {
+                  
+      data_type = task->data_desc[i].type;
+     
+      // we are going to abuse type to store the virtual host address and
+      // ptr to store the physical address in contiguous L3 used by PULP
+
+      switch(data_type)	{
+      case 0:
+	//INOUT
+	(*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
+							  (unsigned *)&((*ftask)->data_desc[i].ptr));
+	memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
+	break;
+                    
+      case 1:
+	//IN
+	(*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
+							  (unsigned *)&((*ftask)->data_desc[i].ptr));
+	memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
+	break;
+                    
+      case 2:
+	//OUT
+	(*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
+							  (unsigned *)&((*ftask)->data_desc[i].ptr));
+	break;
+                    
+      default:
+	//NONE
+	break;
+      }
+    }
+    
+    // data element to pass by value (just copy descriptor)
+    else  {
+      (*ftask)->data_desc[i].ptr = (void *)data_ptr;
+    }
+
+    (*ftask)->data_desc[i].size = data_size;
+  }
+
+  // Pass data descriptor to PULP
+  err = pulp_offload_pass_desc(pulp, *ftask, &data_idxs);
+  if ( err != task->n_data ) {
+    printf("ERROR: pulp_offload_pass_desc failed.\n");
+    return err;
+  }
+
+  // free memory
+  free(data_idxs);
+  
+  return 0;
+}
+
+int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
+{
+  int i;
+
+  // similar to pulp_offload_in() but without RAB stuff 
+  int err, n_idxs;
+  unsigned *data_idxs;
+  data_idxs = (unsigned *)malloc(task->n_data*sizeof(unsigned));
+  if ( data_idxs == NULL ) {
+    printf("ERROR: Malloc failed for data_idxs.\n");
+    return -ENOMEM;
+  }
+
+  // read back data elements with sizes up to 32 bit from mailbox
+  n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
+
+  // fetch values of data elements passed by value
+  err = pulp_offload_get_desc(pulp, task, &data_idxs, n_idxs);
+  if ( err != (task->n_data - n_idxs) ) {
+    printf("ERROR: pulp_offload_get_desc failed.\n");
+    return err;
+  }
+
+  // copy back result to virtual paged memory
+  for (i = 0; i < (*ftask)->n_data; i++) {
+
+    //if not passed by value 
+    if (data_idxs[i] > 0) {
+  
+      // we are abusing type of ftask->dta_desc  to store the virtual host address and
+      // ptr to store the physical address in contiguous L3 used by PULP
+
+      switch(task->data_desc[i].type) {
+      case 0:
+	//INOUT
+	memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
+	pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
+	break;
+                    
+      case 1:
+	//IN                    
+	pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
+	break;
+
+      case 2:
+	//OUT
+	memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
+	pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
+	break;
+                    
+      default:
+	//NONE
+	break;
+      }
+    }
+  }
+
+  // free memory
+  free(*ftask);
+  free(data_idxs);
+
+  return 0;
+}
+
+/****************************************************************************************/
 
 // qprintf stuff
 #define ANSI_RESET   "\x1b[0m"
