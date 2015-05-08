@@ -18,7 +18,7 @@ if [ -d "../"${Tools} ]; then
     cd ${CurrentPath}
 else
     echo "ERROR: U-Boot tools not found"
-    echo "Check for the folder ../"${tools}
+    echo "Check for the folder ../"${Tools}
     exit 1
 fi
 
