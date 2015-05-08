@@ -535,6 +535,7 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
   // check interrupt status
   mailbox_is = 0x7 & ioread32(my_dev.mailbox+MAILBOX_IS_OFFSET_B);
   
+  // mailbox error
   if (mailbox_is & 0x4) {
     // clear the interrupt
     iowrite32(0x4,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
@@ -548,9 +549,9 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
   }
 
   // read mailbox
-    mailbox_data = ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
+  mailbox_data = ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
 
-    if (mailbox_data == RAB_UPDATE) {
+  if (mailbox_data == RAB_UPDATE) {
 
 #ifdef PROFILE_RAB 
     // stop the PULP timer  
@@ -568,7 +569,6 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
     }
 
 #if !defined(MEM_SHARING) || (MEM_SHARING != 1) 
-
     rab_stripe_req[offload_id].stripe_idx++;
     idx = rab_stripe_req[offload_id].stripe_idx;
 
@@ -600,6 +600,10 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
       }
     }
 #endif
+
+    if (DEBUG_LEVEL_RAB > 0) {
+      printk(KERN_INFO "PULP: RAB update complete.\n");
+    }
 
     // signal ready to PULP
     iowrite32(HOST_READY,my_dev.mailbox+MAILBOX_WRDATA_OFFSET_B);

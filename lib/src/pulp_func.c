@@ -799,18 +799,19 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   // for now: simple binary offload
   // prepare binary
   char * bin_name;
-  bin_name = (char *)malloc((strlen(task->name)+4)*sizeof(char));
+  bin_name = (char *)malloc((strlen(task->name)+4+1)*sizeof(char));
   if (!bin_name) {
     printf("ERROR: Malloc failed for bin_name.\n");
     return -ENOMEM;
   }
   strcpy(bin_name,task->name);
   strcat(bin_name,".bin");
-  
+
   // read in binary
   FILE *fp;
   if((fp = fopen(bin_name, "r")) == NULL) {
     printf("BIN ERROR\n");
+    printf("%s\n",bin_name);
     return 1;
   }
   int sz, nsz;
@@ -819,11 +820,19 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   sz = ftell(fp);
   fseek(fp, 0L, SEEK_SET);
   bin = (unsigned *) malloc(sz*sizeof(char));
+  if (!bin) {
+    printf("ERROR: Malloc failed for bin.\n");
+    return -ENOMEM;
+  }
   bin_rv = (unsigned *) malloc(sz*sizeof(char));
+  if (!bin_rv) {
+    printf("ERROR: Malloc failed for bin_rv.\n");
+    return -ENOMEM;
+  }
   if((nsz = fread(bin, sizeof(char), sz, fp)) != sz)
     printf("Read only %d bytes in binary.\n", nsz);
   fclose(fp);
-  
+
   // reverse endianness (PULPv2 is big-endian)
   for(i=0; i<nsz/4; i++) {
     bin_rv[i] = ((bin[i] & 0x000000ff) << 24 ) |
@@ -974,7 +983,7 @@ unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr)
 {
   unsigned v_addr;
 
-  // round l3_offset to next higher 64-bit word -> required for 64-bit PULP DMA
+  // round l3_offset to next higher 64-bit word -> required for PULP DMA
   if (pulp->l3_offset & 0x7) {
     pulp->l3_offset = (pulp->l3_offset & 0xFFFFFFF8) + 0x8;
   }
@@ -1425,12 +1434,16 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
   
   // read status
   status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
-  //printf("PULP status = %#x.\n",status);
+  printf("PULP status = %#x.\n",status);
 
   // clear mailbox interrupt
   pulp_mailbox_clear_is(pulp);
   if ( status != PULP_READY ) {
     printf("ERROR: PULP status not ready. PULP status = %#x.\n",status);
+
+status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
+  printf("PULP status = %#x.\n",status);
+
     return -EBUSY;
   }
 
@@ -1665,6 +1678,7 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   }
 
   // free memory
+  free((*ftask)->data_desc);
   free(*ftask);
   free(data_idxs);
 

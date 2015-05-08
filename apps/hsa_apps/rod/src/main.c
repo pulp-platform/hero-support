@@ -19,9 +19,9 @@
 #include "Removal-Object.h"
 
 #define PULP_CLK_FREQ_MHZ 75
-//#define PULP_CLK_FREQ_MHZ 65
-//#define REPETITIONS 2
-#define REPETITIONS 10
+//#define PULP_CLK_FREQ_MHZ 50
+#define REPETITIONS 2
+//#define REPETITIONS 10
 //#define PIPELINE
 
 int  NCC_init   (NCC_kernel_t *, int, int);
@@ -154,7 +154,6 @@ int main(int argc, char *argv[]) {
 
   //printf("background.width  = %d\n", background.width);
   //printf("background.height = %d\n", background.height);
-  
     
   tmp = (uint8_t *)malloc(sizeof(uint8_t)*background.width*background.height);
     
@@ -181,6 +180,13 @@ int main(int argc, char *argv[]) {
     ret = NCC_exe_start(&NCC_instance);
     if ( ret ) {
       printf("ERROR: Execution start failed. ret = %d\n",ret);
+
+      pulp_stdout_print(pulp,0);
+      pulp_stdout_print(pulp,1);
+      pulp_stdout_print(pulp,2);
+      pulp_stdout_print(pulp,3);
+
+
       error = 1;
       break;
     }
@@ -245,16 +251,19 @@ int main(int argc, char *argv[]) {
     zynq_pmm_parse(proc_text, counter_values, 1); // accumulate cache counter values
 #endif
 
-    //pulp_stdout_print(pulp,0);
-    //pulp_stdout_print(pulp,1);
-    //pulp_stdout_print(pulp,2);
-    //pulp_stdout_print(pulp,3);
-
+    if (DEBUG_LEVEL > 0) {
+      pulp_stdout_print(pulp,0);
+      pulp_stdout_print(pulp,1);
+      pulp_stdout_print(pulp,2);
+      pulp_stdout_print(pulp,3);
+    }
+ 
     //sleep(20);
   }
+  
   printf("\n[APP ] Write image output\n");
   writePgmOrPpm("samples/test_out.pgm", &foreground);
-  printf("\n###########################################################################\n"); 
+  printf("\n###########################################################################\n");
 
   NCC_destroy(&NCC_instance);
 
@@ -526,8 +535,12 @@ void NCC_destroy(NCC_kernel_t *nccInstance){
   // vogelpi -- free contiguous L3 memory
   //p2012_socmem_free((uint32_t)nccInstance->bg, (uint32_t)nccInstance->Fbg);
   //acc_l3_free(acc, (uint32_t)nccInstance->bg, (uint32_t)nccInstance->Fbg);
+#if (MEM_SHARING == 1)
+  //free(nccInstance->fdesc);
+#endif
   free(nccInstance->data_desc);
   free(nccInstance->out);
+  free(nccInstance->bg);
 }
 
 //void NCC_wait(NCC_kernel_t *nccInstance){
