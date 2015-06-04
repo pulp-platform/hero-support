@@ -406,7 +406,7 @@ int pulp_init(PulpDev *pulp)
   pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,0xFF,0xFF);     // L2
   //pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B,0x7,0,0xFF,0xFF); // Mailbox, Interface 0
   pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B*2,0x7,0,0xFF,0xFF); // Mailbox, Interface 0 and Interface 1
-  pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,0xFF,0xFF);             // TCDM + Cluster Peripherals
+  pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,0xFF,0xFF);     // TCDM + Cluster Peripherals
   // port 1: PULP -> Host
   pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,0xFF,0xFF);       // L3 memory (contiguous)
   
@@ -420,6 +420,35 @@ int pulp_init(PulpDev *pulp)
 }
 
 /**
+ * Read n_words words from mailbox, can block if the mailbox does not
+ * contain enough data.
+ *
+ * @pulp      : pointer to the PulpDev structure
+ * @buffer    : pointer to read buffer
+ * @n_words   : number of words to read
+ */
+int pulp_mailbox_read(PulpDev *pulp, unsigned *buffer, unsigned n_words)
+{
+  int n_char, n_char_left, ret;
+  ret = 1;
+  n_char = 0;
+  n_char_left = n_words*sizeof(buffer[0]);
+
+  // read n_words words or until error
+  while (n_char_left) {
+    ret = read(pulp->fd, (char *)&buffer[n_char],n_char_left*sizeof(char));
+    if (ret < 0) {
+      printf("ERROR: Could not read mailbox.\n");
+      return ret;
+    }
+    n_char += ret;
+    n_char_left -= ret;
+  }
+
+  return 0;
+}
+
+/**
  * Clear interrupt status flag in mailbox. The next write of PULP will
  * again be handled by the PULP driver.
  *
@@ -427,9 +456,6 @@ int pulp_init(PulpDev *pulp)
  */
 void pulp_mailbox_clear_is(PulpDev *pulp)
 {
-  //unsigned mailbox_is;
-  //mailbox_is = 0x7 & pulp_read32(pulp->mailbox.v_addr,MAILBOX_IS_OFFSET_B,'b');
- 
   pulp_write32(pulp->mailbox.v_addr,MAILBOX_IS_OFFSET_B,'b',0x7);
 }
 
@@ -842,8 +868,10 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   } 
 
   // write binary to L2
-  for (i=0; i<nsz/4; i++)
-    pulp->l2_mem.v_addr[i] = bin_rv[i];
+  for (i=0; i<nsz/4; i++) {
+    //pulp->l2_mem.v_addr[i] = bin_rv[i];
+    pulp->l2_mem.v_addr[i] = bin[i];
+  }
 
   // reset sync address
   pulp_write32(pulp->l2_mem.v_addr,0xFFF8,'b',0);
@@ -940,27 +968,29 @@ int pulp_boot(PulpDev *pulp, TaskDesc *task)
     return -ENOENT;
   }
   int sz, nsz;
-  unsigned *bin, *bin_rv;
+  unsigned *bin;//, *bin_rv;
   fseek(fp, 0L, SEEK_END);
   sz = ftell(fp);
   fseek(fp, 0L, SEEK_SET);
   bin = (unsigned *) malloc(sz*sizeof(char));
-  bin_rv = (unsigned *) malloc(sz*sizeof(char));
+  //bin_rv = (unsigned *) malloc(sz*sizeof(char));
   if((nsz = fread(bin, sizeof(char), sz, fp)) != sz)
     printf("ERROR: Red only %d bytes in binary.\n", nsz);
   fclose(fp);
   
-  // reverse endianness (PULPv2 is big-endian)
-  for(i=0; i<nsz/4; i++) {
-    bin_rv[i] = ((bin[i] & 0x000000ff) << 24 ) |
-                ((bin[i] & 0x0000ff00) <<  8 ) |
-                ((bin[i] & 0x00ff0000) >>  8 ) |
-                ((bin[i] & 0xff000000) >> 24 );
-  } 
+  //// reverse endianness (PULPv2 is big-endian)
+  //for(i=0; i<nsz/4; i++) {
+  //  bin_rv[i] = ((bin[i] & 0x000000ff) << 24 ) |
+  //              ((bin[i] & 0x0000ff00) <<  8 ) |
+  //              ((bin[i] & 0x00ff0000) >>  8 ) |
+  //              ((bin[i] & 0xff000000) >> 24 );
+  //} 
 
   // write binary to L2
-  for (i=0; i<nsz/4; i++)
-    pulp->l2_mem.v_addr[i] = bin_rv[i];
+  for (i=0; i<nsz/4; i++) {
+    //pulp->l2_mem.v_addr[i] = bin_rv[i];
+    pulp->l2_mem.v_addr[i] = bin[i];
+  }
 
   // start execution
   printf("Starting program execution.\n");
@@ -1036,7 +1066,6 @@ int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs) {
   n_idxs = 0;
   size_b = sizeof(unsigned);
 
-
   for (i=0; i<n_data; i++) {
     if ( task->data_desc[i].size > size_b ) {
       (*data_idxs)[i] = 1;
@@ -1105,7 +1134,6 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   port = 1;   // PULP -> Host
   
   n_data = task->n_data;
-  
 
   date_cur = (unsigned char)(task->task_id + 1);
   date_exp = (unsigned char)(task->task_id + 3);
@@ -1264,54 +1292,48 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
  * @pulp:      pointer to the PulpDev structure
  * @task:      pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
+ * @n_idxs:    number of shared data elements passed by reference
  */
 int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs)
 {
-  int i,j, timeout, us_delay, n_data;
-  unsigned status;
+  int i,j, n_data;
+  unsigned *buffer;
 
-  us_delay = 10;
   j = 0;
-
-  if (DEBUG_LEVEL > 2) {
-    printf("Mailbox status = %#x.\n",pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b'));
-  }
-
   n_data = task->n_data;
+
+  buffer = (unsigned *)malloc((n_data-n_idxs)*sizeof(unsigned));
+  if ( data_idxs == NULL ) {
+    printf("ERROR: Malloc failed for buffer.\n");
+    return -ENOMEM;
+  }
+  
+  // read from mailbox
+  pulp_mailbox_read(pulp, buffer, n_data-n_idxs);
 
   for (i=0; i<n_data; i++) {
     // check if argument has been passed by value
     if ( (*data_idxs)[i] == 0 ) {
-      // check if mailbox is empty
-      if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1 ) {
-	timeout = 100000;
-	status = 1;
-	// wait for not empty or timeout
-	while ( status && (timeout > 0) ) {
-	  usleep(us_delay);
-	  timeout--;
-	  status = (pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1);
-	}
-	if ( status ) {
-	  printf("ERROR: mailbox timeout.\n");
-	  if (DEBUG_LEVEL > 1) {
-	    printf("Got back %d of %d data elements from PULP.\n",j,n_data-n_idxs);
-	  }
-	  return j;
-	} 
-      }
-     
-      // mailbox contains data
-      *(unsigned *)(task->data_desc[i].ptr) = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+      // read from buffer
+      *(unsigned *)(task->data_desc[i].ptr) = buffer[j];
       j++;
     }
   }
-  // clear mailbox interrupt
-  pulp_mailbox_clear_is(pulp);
+  
+  //for (i=0; i<n_data; i++) {
+  //  // check if argument has been passed by value
+  //  if ( (*data_idxs)[i] == 0 ) {
+  //    // read from mailbox
+  //    pulp_mailbox_read(pulp, task->data_desc[i].ptr, 1);
+  //    j++;
+  //  }
+  //}
   
   if (DEBUG_LEVEL > 1) {
     printf("Got back %d of %d data elements from PULP.\n",j,n_data-n_idxs);
   }
+
+  free(buffer);
 
   return j;
 }
@@ -1407,43 +1429,16 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
  */
 int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
 {
-  int timeout, us_delay;
   unsigned status;
 
-  us_delay = 100;
-  
   if (DEBUG_LEVEL > 2) {
     printf("Mailbox status = %#x.\n",pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b'));
   }
   
-  // check if mailbox is empty
-  if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1 ) {
-    timeout = 100000;
-    status = 1;
-    // wait for not empty or timeout
-    while ( status && (timeout > 0) ) {
-      usleep(us_delay);
-      timeout--;
-      status = (pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1);
-    }
-    if ( status ) {
-      printf("ERROR: mailbox timeout.\n");
-      return -ETIMEDOUT;
-    } 
-  }
-  
   // read status
-  status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
-  printf("PULP status = %#x.\n",status);
-
-  // clear mailbox interrupt
-  pulp_mailbox_clear_is(pulp);
+  pulp_mailbox_read(pulp, &status, 1);
   if ( status != PULP_READY ) {
     printf("ERROR: PULP status not ready. PULP status = %#x.\n",status);
-
-status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
-  printf("PULP status = %#x.\n",status);
-
     return -EBUSY;
   }
 
@@ -1467,11 +1462,7 @@ status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
  */
 int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
 {
-  int timeout, us_delay;
   unsigned status;
-
-  //us_delay = 10;
-  us_delay = 100;
 
   // check if sync = 0x1
   status = 0;
@@ -1479,28 +1470,8 @@ int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
     status = pulp_read32(pulp->l2_mem.v_addr, SYNC_OFFSET_B,'b');
   }
 
-  // check if mailbox is empty
-  if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1 ) {
-    //timeout = 100000;
-    timeout = 100000;
-    status = 1;
-    // wait for not empty or timeout
-    while ( status && (timeout > 0) ) {
-      usleep(us_delay);
-      //printf("%d\n",usleep(us_delay));
-      timeout--;
-      status = (pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x1);
-    }
-    if ( status ) {
-      printf("ERROR: mailbox timeout.\n");
-      return -ETIMEDOUT;
-    } 
-  }
-
   // read status
-  status = pulp_read32(pulp->mailbox.v_addr, MAILBOX_RDDATA_OFFSET_B, 'b');
-  // clear mailbox interrupt
-  pulp_mailbox_clear_is(pulp);
+  pulp_mailbox_read(pulp, &status, 1);
   if ( status != PULP_DONE ) {
     printf("ERROR: PULP status not done. PULP status = %#x.\n",status);
     return -EBUSY;
@@ -1513,7 +1484,7 @@ int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
 int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 {
   // similar to pulp_offload_out() but without RAB setup
-  int err, n_idxs;
+  int err;
   unsigned *data_idxs;
   data_idxs = (unsigned *)malloc(task->n_data*sizeof(unsigned));
   if ( data_idxs == NULL ) {
@@ -1522,7 +1493,7 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   }
 
   // only remap addresses belonging to data elements larger than 32 bit  
-  n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
+  pulp_offload_get_data_idxs(task, &data_idxs);
 
   int i;
   int data_size, data_ptr, data_type;
@@ -1603,7 +1574,6 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
     else  {
       (*ftask)->data_desc[i].ptr = (void *)data_ptr;
     }
-
     (*ftask)->data_desc[i].size = data_size;
   }
 

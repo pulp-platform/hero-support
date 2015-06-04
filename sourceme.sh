@@ -16,7 +16,8 @@ export ARM_LIB_DIR1=/home/vogelpi/pulp_on_fpga/software/arm/lib
 export ARM_INC_DIR1=${ARM_LIB_DIR1}/inc
 
 # directory containing PULP header files
-export PULP_INC_DIR1=/home/vogelpi/pulp_on_fpga/hardware/git/pulpemu/pulp2/sw/libs/sys_lib/inc
+#export PULP_INC_DIR1=/home/vogelpi/pulp_on_fpga/hardware/git/pulpemu/pulp2/sw/libs/sys_lib/inc
+export PULP_INC_DIR1=/home/vogelpi/pulp_on_fpga/software/pulp/sw/libs/sys_lib/inc
 
 # machine to which the make_and_copy.sh scripts transfer the compiled stuff
 export SCP_TARGET_MACHINE="pirmin@iis-ubuntu2.ee.ethz.ch"
@@ -29,3 +30,6 @@ if [ ! -d ${ARM_LIB_DIR1}/lib ]
 then
     mkdir ${ARM_LIB_DIR1}/lib
 fi    
+
+# cmake path, i.e., where the compiled accelerator binaries can be found
+export CMAKE_PATH="/scratch/vogelpi/cmake"

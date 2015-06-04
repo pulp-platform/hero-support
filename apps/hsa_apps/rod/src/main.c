@@ -20,20 +20,16 @@
 
 #define PULP_CLK_FREQ_MHZ 75
 //#define PULP_CLK_FREQ_MHZ 50
-#define REPETITIONS 2
-//#define REPETITIONS 10
+//#define REPETITIONS 2
+#define REPETITIONS 5
 //#define PIPELINE
 
-int  NCC_init   (NCC_kernel_t *, int, int);
+int NCC_init(NCC_kernel_t *, int, int);
 inline void NCC_offload_out(NCC_kernel_t *nccInstance, uint8_t *frame, int offload_id);
-//inline void NCC_exe_start(NCC_kernel_t *nccInstance);
 inline int NCC_exe_start(NCC_kernel_t *nccInstance);
-//inline void NCC_exe_wait(NCC_kernel_t *nccInstance);
 inline int NCC_exe_wait(NCC_kernel_t *nccInstance);
-//inline void NCC_offload_in(NCC_kernel_t *nccInstance, uint8_t *frame);
 inline int NCC_offload_in(NCC_kernel_t *nccInstance, uint8_t *frame);
 void NCC_destroy(NCC_kernel_t *);
-//void NCC_wait   (NCC_kernel_t *);
 void drawROI ( uint8_t *image, int type, int width, int height, int x_1, int y_1, int x_2, int y_2, int color[] );
 
 double GetTimeMs()
@@ -79,7 +75,7 @@ int main(int argc, char *argv[]) {
 #endif
   int nclass = 0;
   Rois roi;
-  uint8_t *tmp;
+  uint8_t *tmp, *tmp2;
   int i;
   int error = 0;
   
@@ -89,9 +85,6 @@ int main(int argc, char *argv[]) {
   TaskDesc task_desc;
   task_desc.name = &name[0];
 
-  /* Init the runtime */
-  //sthorm_omp_rt_init();
-  // vogelpi
   /*
    * Initialization
    */ 
@@ -153,24 +146,30 @@ int main(int argc, char *argv[]) {
   readPgmOrPpm("samples/ippo2_256x384.pgm", &foreground);
 
   //printf("background.width  = %d\n", background.width);
-  //printf("background.height = %d\n", background.height);
-    
-  tmp = (uint8_t *)malloc(sizeof(uint8_t)*background.width*background.height);
-    
+  //printf("background.height = %d\n", background.height);    
+  tmp  = (uint8_t *)malloc(sizeof(uint8_t)*background.width*background.height);
+
+  tmp2 = (uint8_t *)malloc(sizeof(uint8_t)*background.width*background.height);
+  memcpy(tmp2, foreground.data, sizeof(uint8_t)*background.width*background.height);
+
 #ifndef PIPELINE
 
   NCC_init(&NCC_instance, background.width, background.height);
   memcpy(NCC_instance.bg, background.data, sizeof(uint8_t)*background.width*background.height);
 
   for (i = 0; i < REPETITIONS; ++i){
-
     if (DEBUG_LEVEL > 0) printf("\n[APP ] Execute offload nbclusters %d\n", NCC_instance.n_clusters);
     
     // write command to make PULP continue
     pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',PULP_START);
-    //pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',PULP_STOP);
+ 
+    //memcpy(foreground.data, NCC_instance.out, sizeof(uint8_t)*background.width*background.height);
+    //writePgmOrPpm("samples/test.pgm", &foreground);
+    //printf("written\n");
+    //memcpy(foreground.data, tmp2, sizeof(uint8_t)*background.width*background.height);
+    //sleep(10);
 
-    // offload 
+    // offload out
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     NCC_offload_out(&NCC_instance, foreground.data, i);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
@@ -180,19 +179,13 @@ int main(int argc, char *argv[]) {
     ret = NCC_exe_start(&NCC_instance);
     if ( ret ) {
       printf("ERROR: Execution start failed. ret = %d\n",ret);
-
-      pulp_stdout_print(pulp,0);
-      pulp_stdout_print(pulp,1);
-      pulp_stdout_print(pulp,2);
-      pulp_stdout_print(pulp,3);
-
-
       error = 1;
       break;
     }
 
     if (DEBUG_LEVEL > 0) printf("[APP ] Offload %d scheduled\n", i);
 
+    // wait
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     ret = NCC_exe_wait(&NCC_instance);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
@@ -202,14 +195,16 @@ int main(int argc, char *argv[]) {
       error = 1;
       break;
     }
+
+    // offload in
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     ret = NCC_offload_in(&NCC_instance,  foreground.data);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
     accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
-     if ( ret ) {
-       printf("ERROR: Offload in failed. ret = %d\n",ret);
-       error = 1;
-       break;
+    if ( ret ) {
+      printf("ERROR: Offload in failed. ret = %d\n",ret);
+      error = 1;
+      break;
     } 
     
     if (DEBUG_LEVEL > 0) printf("\n###########################################################################\n");
@@ -226,23 +221,29 @@ int main(int argc, char *argv[]) {
     zynq_pmm_read(zynq_pmm_fd,proc_text); // reset cache counters
 #endif
     clock_gettime(CLOCK_REALTIME,&tp1_local);
-  
-    if (DEBUG_LEVEL > 0) printf("\n[APP ] Erode\n");
+
+    if (DEBUG_LEVEL > 0) printf("[APP ] Erode %d\n",i);
     erode(NCC_instance.out, tmp, background.width, background.height, 2);
-        
-    if (DEBUG_LEVEL > 0) printf("\n[APP ] Labeling\n");
+
+    if (DEBUG_LEVEL > 0) printf("\n[APP ] Labeling %d\n",i);
     labeling(NCC_instance.out, background.width, background.height, &nclass);
         
     if(nclass < MAX_ROI)
       roi.nrois = nclass;
     else
-      roi.nrois = MAX_ROI;
-        
-    if (DEBUG_LEVEL > 0) printf("\n[APP ] Compute Region of Interest %d\n", roi.nrois);
+      roi.nrois = MAX_ROI;    
+    if (DEBUG_LEVEL > 0) printf("roi.nrois = %d\n",roi.nrois);
+
+    if (DEBUG_LEVEL > 0) printf("\n[APP ] Compute Region of Interest %d\n", i);
     compute_rois(NCC_instance.out, background.width, background.height, &roi);
         
-    if (DEBUG_LEVEL > 0) printf("\n[APP ] Classify Roi\n");
-    classify_roi(foreground.data, NCC_instance.out, foreground.data, background.width, background.height, &roi);
+    if (DEBUG_LEVEL > 0) printf("\n[APP ] Classify Roi %d\n",i);
+    //// change foreground.data
+    //classify_roi(foreground.data, NCC_instance.out, foreground.data, background.width, background.height, &roi);
+    // change tmp2
+    classify_roi(tmp2, NCC_instance.out, foreground.data, background.width, background.height, &roi);
+
+     if (DEBUG_LEVEL > 0) printf("\n###########################################################################\n");
 
     clock_gettime(CLOCK_REALTIME,&tp2_local);
     accumulate_time(&tp1_local,&tp2_local,&s_duration2,&ns_duration2,ACC_CTRL);
@@ -250,18 +251,17 @@ int main(int argc, char *argv[]) {
     zynq_pmm_read(zynq_pmm_fd, proc_text);
     zynq_pmm_parse(proc_text, counter_values, 1); // accumulate cache counter values
 #endif
-
-    if (DEBUG_LEVEL > 0) {
+    if (DEBUG_LEVEL > 2) {
       pulp_stdout_print(pulp,0);
       pulp_stdout_print(pulp,1);
       pulp_stdout_print(pulp,2);
       pulp_stdout_print(pulp,3);
     }
- 
-    //sleep(20);
   }
   
   printf("\n[APP ] Write image output\n");
+  // change tmp2
+  memcpy(foreground.data, tmp2, sizeof(uint8_t)*background.width*background.height);
   writePgmOrPpm("samples/test_out.pgm", &foreground);
   printf("\n###########################################################################\n");
 
@@ -495,11 +495,11 @@ inline void NCC_offload_out(NCC_kernel_t *nccInstance, uint8_t *frame, int offlo
 
   nccInstance->desc->data_desc   = nccInstance->data_desc;
   nccInstance->desc->n_clusters  = nccInstance->n_clusters;
-  nccInstance->desc->name        = (void *) 2;
+  nccInstance->desc->name        = NULL;
   nccInstance->desc->task_id     = offload_id;
   
 #if (MEM_SHARING == 1)
-  pulp_offload_out_contiguous(pulp, nccInstance->desc, &nccInstance->fdesc);
+  pulp_offload_out_contiguous(pulp, nccInstance->desc, &(nccInstance->fdesc));
 #else // 2
   pulp_offload_out(pulp, nccInstance->desc);
 #endif // MEM_SHARING

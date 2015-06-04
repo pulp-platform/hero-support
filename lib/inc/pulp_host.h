@@ -4,7 +4,7 @@
 #include "pulp.h"
 #include "pulpemu.h"
 
-#define DEBUG_LEVEL 0
+#define DEBUG_LEVEL 3
 
 #define ZEDBOARD 1
 #define ZC706    2
@@ -106,7 +106,10 @@
 #define PULP_IOCTL_RAB_REQ_STRIPED  _IOR(PULP_IOCTL_MAGIC,0xB2,int)
 #define PULP_IOCTL_RAB_FREE_STRIPED _IOR(PULP_IOCTL_MAGIC,0xB3,int)
 
-#define PULP_IOCTL_DMAC_XFER _IOR(PULP_IOCTL_MAGIC,0xB4,int)
+#define PULP_IOCTL_RAB_MH_ENA  _IOR(PULP_IOCTL_MAGIC,0xB4,int)
+#define PULP_IOCTL_RAB_MH_DIS  _IOR(PULP_IOCTL_MAGIC,0xB5,int)
+
+#define PULP_IOCTL_DMAC_XFER _IOR(PULP_IOCTL_MAGIC,0xB6,int)
 
 #define L3_MEM_BASE_ADDR 0x80000000
 
@@ -138,6 +141,7 @@
 // PULP system address map
 #define PULP_H_BASE_ADDR 0x40000000 // Address at which the host sees PULP
 #define N_CLUSTERS 1
+#define N_CORES 4
 #define L2_MEM_SIZE_KB 64
 
 #endif // BOARD
@@ -180,7 +184,14 @@
 
 #define SOC_PERIPHERALS_SIZE_B 0x50000
 
-#define MAILBOX_SIZE_B 0x1000 // Interface 0 only
+#define MAILBOX_SIZE_B          0x1000 // Interface 0 only
+#define MAILBOX_FIFO_DEPTH      16
+#define MAILBOX_WRDATA_OFFSET_B 0x0 
+#define MAILBOX_RDDATA_OFFSET_B 0x8 
+#define MAILBOX_STATUS_OFFSET_B 0x10
+#define MAILBOX_ERROR_OFFSET_B  0x14
+#define MAILBOX_IS_OFFSET_B     0x20
+#define MAILBOX_IE_OFFSET_B     0x24
 
 #define END_OF_COMPUTATION_IRQ 61
 #define MAILBOX_IRQ            62
@@ -221,17 +232,12 @@
 //#define PULP_CLUSTER_OFFSET  (PULP_P_BASE_ADDR>>28)
 
 // RAB
+#define RAB_N_MHRS   (N_CLUSTERS*N_CORES)
 #define RAB_MAX_DATE BIT_MASK_GEN(RAB_CONFIG_N_BITS_DATE)
 
 // mailbox
 #define MAILBOX_H_BASE_ADDR \
   (PULP_H_BASE_ADDR - PULP_BASE_ADDR + MAILBOX_BASE_ADDR - MAILBOX_SIZE_B) // Interface 0
-#define MAILBOX_WRDATA_OFFSET_B 0x0 
-#define MAILBOX_RDDATA_OFFSET_B 0x8 
-#define MAILBOX_STATUS_OFFSET_B 0x10
-#define MAILBOX_ERROR_OFFSET_B  0x14
-#define MAILBOX_IS_OFFSET_B     0x20
-#define MAILBOX_IE_OFFSET_B     0x24
 
 // cluster peripherals, offsets compared to TCDM/clusters address
 #define TIMER_H_OFFSET_B           (TIMER_BASE_ADDR - PULP_BASE_ADDR)
@@ -250,12 +256,12 @@
 #define SYNC_OFFSET_B 0xB000
 
 // needed for ROD, CT, JPEG
-#define ROD
+//#define ROD
 //#define CT
 //#define JPEG
-#define MEM_SHARING 2
-#define ZYNQ_PMM
-#define PROFILE
+//#define MEM_SHARING 2
+//#define ZYNQ_PMM
+//#define PROFILE
 
 // needed for profile_rab, dma_test
 //#define MEM_SHARING 2

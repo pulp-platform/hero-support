@@ -40,7 +40,9 @@
 #define SLCR_BASE_ADDR              0xF8000000
 #define SLCR_SIZE_B                 0x1000
 #define SLCR_FPGA_RST_CTRL_OFFSET_B 0x240
-#define SLCR_FPGA_OUT_RST           0
+#define SLCR_FPGA_OUT_RST           1
+#define SLCR_FPGA0_THR_CNT_OFFSET_B 0x178
+#define SLCR_FPGA0_THR_STA_OFFSET_B 0x17C
 
 // Performance Monitor Unit
 // ARM Architecture Reference Manual ARMv7, Appendix D3.1
