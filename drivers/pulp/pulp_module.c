@@ -2,6 +2,9 @@
 #include <linux/kernel.h>	/* KERN_ALERT, container_of */
 #include <linux/kdev_t.h>	/* major, minor */
 #include <linux/interrupt.h>    /* interrupt handling */
+#include <linux/workqueue.h>    /* schedule non-atomic work */
+#include <linux/spinlock.h>     /* locking in interrupt context*/
+#include <linux/wait.h>         /* wait_queue */
 #include <asm/io.h>		/* ioremap, iounmap, iowrite32 */
 #include <linux/cdev.h>		/* cdev struct */
 #include <linux/fs.h>		/* file_operations struct */
@@ -36,14 +39,20 @@
 #endif
 
 // methods declarations
-static int     pulp_open   (struct inode *inode, struct file *filp);
-static int     pulp_release(struct inode *p_inode, struct file *filp);
-static int     pulp_mmap   (struct file *filp, struct vm_area_struct *vma);
-static long    pulp_ioctl  (struct file *filp, unsigned int cmd, unsigned long arg);
+static int     pulp_open        (struct inode *inode, struct file *filp);
+static int     pulp_release     (struct inode *p_inode, struct file *filp);
+static int     pulp_mmap        (struct file *filp, struct vm_area_struct *vma);
+static long    pulp_ioctl       (struct file *filp, unsigned int cmd, unsigned long arg);
+static ssize_t pulp_mailbox_read(struct file *filp, char __user *buf, size_t count, loff_t *offp);
 
 static irqreturn_t pulp_isr_eoc    (int irq, void *ptr);
 static irqreturn_t pulp_isr_mailbox(int irq, void *ptr);
 static irqreturn_t pulp_isr_rab    (int irq, void *ptr);
+
+//#define RAB_MH 1
+#ifdef RAB_MH
+static void pulp_rab_handle_miss(unsigned unused);
+#endif
 
 // important structs
 struct file_operations pulp_fops = {
@@ -52,6 +61,7 @@ struct file_operations pulp_fops = {
   .release        = pulp_release,
   .mmap           = pulp_mmap,
   .unlocked_ioctl = pulp_ioctl,
+  .read           = pulp_mailbox_read,
 };
 
 // static variables
@@ -64,7 +74,16 @@ static struct timeval time;
 static unsigned slcr_value;
 static unsigned mailbox_data;
 static unsigned mailbox_is;
+static unsigned long flags;
 static char rab_interrupt_type[6];
+
+// for mailbox
+static unsigned mailbox_fifo[MAILBOX_FIFO_DEPTH*2];
+static unsigned mailbox_fifo_full = 0;
+static unsigned * mailbox_fifo_rd = mailbox_fifo;
+static unsigned * mailbox_fifo_wr = mailbox_fifo;
+DEFINE_SPINLOCK(mailbox_fifo_lock);
+DECLARE_WAIT_QUEUE_HEAD(mailbox_wq);
 
 // for RAB
 static RabStripeElem * elem_cur;
@@ -85,6 +104,14 @@ static unsigned n_pages_setup = 0;
 static unsigned n_updates = 0;
 static unsigned n_cleanups = 0;            
 #endif
+
+// for RAB miss handling
+static char rab_mh_wq_name[10] = "RAB_MH_WQ";
+static struct workqueue_struct *rab_mh_wq;
+static struct work_struct rab_mh_w;
+static struct task_struct *user_task;
+static struct mm_struct *user_mm;
+static unsigned rab_mh = 0;
 
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
@@ -153,8 +180,16 @@ static int __init pulp_init(void)
  
   my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
   printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
-	 (long unsigned int) my_dev.slcr); 
-
+	 (long unsigned int) my_dev.slcr);
+  // make sure to enable the PL clock
+  if ( !BF_GET(ioread32(my_dev.slcr+SLCR_FPGA0_THR_STA_OFFSET_B),16,1) ) {
+    iowrite32(0x0,my_dev.slcr+SLCR_FPGA0_THR_CNT_OFFSET_B);
+    if ( !BF_GET(ioread32(my_dev.slcr+SLCR_FPGA0_THR_STA_OFFSET_B),16,1) ) {
+      printk(KERN_WARNING "PULP: Could not enable reference clock for PULP.\n");
+      goto fail_ioremap;
+    }
+  }
+    
   my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
   printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
 	 (long unsigned int) my_dev.mpcore); 
@@ -213,7 +248,6 @@ static int __init pulp_init(void)
     
   mpcore_icdicfr4 &= 0xFFFFFFF0; // delete bits 3 - 0
   mpcore_icdicfr4 |= 0x0000000F; // set bits 3 - 0: 11 11
-
      
   // write configuration
   iowrite32(mpcore_icdicfr3,my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B);
@@ -317,7 +351,8 @@ fail_request_dma:
 }
 module_init(pulp_init);
 
-static void __exit pulp_exit(void) {
+static void __exit pulp_exit(void)
+{
   printk(KERN_ALERT "PULP: Unloading device driver.\n");
   // undo __init pulp_init
   pulp_dma_chan_clean(pulp_dma_chan[1]);
@@ -343,7 +378,8 @@ static void __exit pulp_exit(void) {
 }
 module_exit(pulp_exit);
 
-int pulp_open(struct inode *inode, struct file *filp) {
+int pulp_open(struct inode *inode, struct file *filp)
+{
   // get a pointer to the PulpDev structure 
   PulpDev *dev;
   dev = container_of(inode->i_cdev, PulpDev, cdev);
@@ -353,15 +389,30 @@ int pulp_open(struct inode *inode, struct file *filp) {
   // if ((filp->f_flags & O_ACCMODE) == O_WRONLY) {
   // 
   // }
-  
+
   printk(KERN_INFO "PULP: Device opened.\n");
   
   return 0;
 }
 
-int pulp_release(struct inode *p_inode, struct file *filp) {
+int pulp_release(struct inode *p_inode, struct file *filp)
+{
+  int i;
+  
+  // empty mailbox_fifo
+  if ( (mailbox_fifo_wr != mailbox_fifo_rd) || mailbox_fifo_full) {
+    for (i=0; i<2*MAILBOX_FIFO_DEPTH; i++) {
+      printk(KERN_INFO "mailbox_fifo[%d]: %d %d %#x \n",i,
+	     (&mailbox_fifo[i] == mailbox_fifo_wr) ? 1:0,
+	     (&mailbox_fifo[i] == mailbox_fifo_rd) ? 1:0,
+	     mailbox_fifo[i]);
+    }
+  }
+  mailbox_fifo_wr = mailbox_fifo;
+  mailbox_fifo_rd = mailbox_fifo;
 
   printk(KERN_INFO "PULP: Device released.\n");
+ 
   return 0;
 }
 
@@ -370,8 +421,8 @@ int pulp_release(struct inode *p_inode, struct file *filp) {
  * mmap 
  *
  ***********************************************************************************/
-int pulp_mmap(struct file *filp, struct vm_area_struct *vma) {
-
+int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
+{
   unsigned long base_addr; // base address to use for the remapping
   unsigned long size_b; // size for the remapping
   unsigned long off; // address offset in VMA
@@ -516,8 +567,8 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma) {
  * interrupt service routines 
  *
  ***********************************************************************************/
-irqreturn_t pulp_isr_eoc(int irq, void *ptr) {
-   
+irqreturn_t pulp_isr_eoc(int irq, void *ptr)
+{  
   // do something
   do_gettimeofday(&time);
   printk(KERN_INFO "PULP: End of Computation: %02li:%02li:%02li.\n",
@@ -527,125 +578,175 @@ irqreturn_t pulp_isr_eoc(int irq, void *ptr) {
   return IRQ_HANDLED;
 }
  
-irqreturn_t pulp_isr_mailbox(int irq, void *ptr) {
-  
+irqreturn_t pulp_isr_mailbox(int irq, void *ptr)
+{
   int i,j;
-  unsigned idx, n_slices, n_fields, offset;
+  unsigned idx, n_slices, n_fields, offset, read;
   
+  if (DEBUG_LEVEL_MBOX > 0) {
+    printk(KERN_INFO "PULP: Mailbox interrupt.\n");
+  }
+
   // check interrupt status
   mailbox_is = 0x7 & ioread32(my_dev.mailbox+MAILBOX_IS_OFFSET_B);
   
-  // mailbox error
-  if (mailbox_is & 0x4) {
+  if (mailbox_is & 0x2) { // mailbox receive threshold interrupt
     // clear the interrupt
-    iowrite32(0x4,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
-
-    // do something
-    do_gettimeofday(&time);
-    printk(KERN_INFO "PULP: Mailbox Error handled: %02li:%02li:%02li.\n",
-	   (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-
-    return IRQ_HANDLED;
-  }
-
-  // read mailbox
-  mailbox_data = ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
-
-  if (mailbox_data == RAB_UPDATE) {
-
-#ifdef PROFILE_RAB 
-    // stop the PULP timer  
-    iowrite32(0x1,my_dev.clusters+TIMER_STOP_OFFSET_B);
-    
-    // read the PULP timer
-    clk_cntr_response += ioread32(my_dev.clusters+TIMER_GET_TIME_LO_OFFSET_B);
-
-    // reset the ARM clock counter
-    asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
-#endif
-    
-    if (DEBUG_LEVEL_RAB > 0) {
-      printk(KERN_INFO "PULP: RAB update requested.\n");
-    }
-
-#if !defined(MEM_SHARING) || (MEM_SHARING != 1) 
-    rab_stripe_req[offload_id].stripe_idx++;
-    idx = rab_stripe_req[offload_id].stripe_idx;
-
-    // process every data element independently
-    for (i=0; i<rab_stripe_req[offload_id].n_elements; i++) {
-      elem_cur = rab_stripe_req[offload_id].elements[i];
-      n_slices = (elem_cur->n_slices>>1);
-      n_fields = 1+elem_cur->n_slices;
-
-      // process every slice independently
-      for (j=0; j<n_slices; j++) {
-	offset = 0x10*(elem_cur->rab_port*RAB_N_SLICES+elem_cur->slices[(idx & 0x1)*n_slices+j]);
-	
-	// deactivate slices
-	iowrite32(0x0,my_dev.rab_config+offset+0x1c);
-     
-	// set up new translations rules
-	if ( elem_cur->rab_stripes[idx*n_fields+j*2+1] ) { // offset != 0
-	  // set up the slice
-	  iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],my_dev.rab_config+offset+0x10);   // start_addr
-	  iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+2],my_dev.rab_config+offset+0x14); // end_addr
- 	  iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+1],my_dev.rab_config+offset+0x18); // offset  
-	  // activate the slice
-	  iowrite32(elem_cur->prot,my_dev.rab_config+offset+0x1c);
-#ifdef PROFILE_RAB 
-	  n_slices_updated++;
-#endif
-	}
-      }
-    }
-#endif
-
-    if (DEBUG_LEVEL_RAB > 0) {
-      printk(KERN_INFO "PULP: RAB update complete.\n");
-    }
-
-    // signal ready to PULP
-    iowrite32(HOST_READY,my_dev.mailbox+MAILBOX_WRDATA_OFFSET_B);
-
-    // clear the interrupt
-    mailbox_is = 0x7 & ioread32(my_dev.mailbox+MAILBOX_IS_OFFSET_B);
     iowrite32(0x2,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
 
+    read = 0;
+
+    spin_lock(&mailbox_fifo_lock);
+    // while mailbox not empty and FIFO buffer not full
+    while ( !(0x1 & ioread32(my_dev.mailbox+MAILBOX_STATUS_OFFSET_B)) && !mailbox_fifo_full ) {
+      spin_unlock(&mailbox_fifo_lock);
+
+      // read mailbox
+      mailbox_data = ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
+
+      if (mailbox_data == RAB_UPDATE) {
+	if (DEBUG_LEVEL_RAB > 0) {
+	  printk(KERN_INFO "PULP: RAB update requested.\n");
+	}
+
 #ifdef PROFILE_RAB 
-    // read the ARM clock counter
-    asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
-    clk_cntr_update += arm_clk_cntr_value;
+	// stop the PULP timer  
+	iowrite32(0x1,my_dev.clusters+TIMER_STOP_OFFSET_B);
+    
+	// read the PULP timer
+	clk_cntr_response += ioread32(my_dev.clusters+TIMER_GET_TIME_LO_OFFSET_B);
 
-    n_updates++;
+	// reset the ARM clock counter
+	asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
+#endif
 
-    // update counters in shared memory
-    iowrite32(clk_cntr_response,my_dev.l3_mem+CLK_CNTR_RESPONSE_OFFSET_B);
-    iowrite32(clk_cntr_update,my_dev.l3_mem+CLK_CNTR_UPDATE_OFFSET_B);
-    iowrite32(n_slices_updated,my_dev.l3_mem+N_SLICES_UPDATED_OFFSET_B);
-    iowrite32(n_updates,my_dev.l3_mem+N_UPDATES_OFFSET_B);
+#if !defined(MEM_SHARING) || (MEM_SHARING != 1) 
+	rab_stripe_req[offload_id].stripe_idx++;
+	idx = rab_stripe_req[offload_id].stripe_idx;
+
+	// process every data element independently
+	for (i=0; i<rab_stripe_req[offload_id].n_elements; i++) {
+	  elem_cur = rab_stripe_req[offload_id].elements[i];
+	  n_slices = (elem_cur->n_slices>>1);
+	  n_fields = 1+elem_cur->n_slices;
+
+	  // process every slice independently
+	  for (j=0; j<n_slices; j++) {
+	    offset = 0x10*(elem_cur->rab_port*RAB_N_SLICES+elem_cur->slices[(idx & 0x1)*n_slices+j]);
+	
+	    // deactivate slices
+	    iowrite32(0x0,my_dev.rab_config+offset+0x1c);
+     
+	    // set up new translations rules
+	    if ( elem_cur->rab_stripes[idx*n_fields+j*2+1] ) { // offset != 0
+	      // set up the slice
+	      iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],my_dev.rab_config+offset+0x10);   // start_addr
+	      iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+2],my_dev.rab_config+offset+0x14); // end_addr
+	      iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+1],my_dev.rab_config+offset+0x18); // offset  
+	      // activate the slice
+	      iowrite32(elem_cur->prot,my_dev.rab_config+offset+0x1c);
+#ifdef PROFILE_RAB 
+	      n_slices_updated++;
+#endif
+	    }
+	  }
+	}
+#endif
+	// signal ready to PULP
+	iowrite32(HOST_READY,my_dev.mailbox+MAILBOX_WRDATA_OFFSET_B);
+      
+#ifdef PROFILE_RAB 
+	// read the ARM clock counter
+	asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
+	clk_cntr_update += arm_clk_cntr_value;
+
+	n_updates++;
+
+	// update counters in shared memory
+	iowrite32(clk_cntr_response,my_dev.l3_mem+CLK_CNTR_RESPONSE_OFFSET_B);
+	iowrite32(clk_cntr_update,my_dev.l3_mem+CLK_CNTR_UPDATE_OFFSET_B);
+	iowrite32(n_slices_updated,my_dev.l3_mem+N_SLICES_UPDATED_OFFSET_B);
+	iowrite32(n_updates,my_dev.l3_mem+N_UPDATES_OFFSET_B);
 #endif    
 
 #if defined(PROFILE_RAB) || defined(JPEG) 
-    if (idx == rab_stripe_req[offload_id].n_stripes) {
-      rab_stripe_req[offload_id].stripe_idx = 0;
-      //printk(KERN_INFO "PULP: RAB stripe table wrap around.\n");
-    }
-#endif    
+	if (idx == rab_stripe_req[offload_id].n_stripes) {
+	  rab_stripe_req[offload_id].stripe_idx = 0;
+	  if (DEBUG_LEVEL_RAB > 0) {
+	    printk(KERN_INFO "PULP: RAB stripe table wrap around.\n");
+	  }
+	}
+#endif
+	if (DEBUG_LEVEL_RAB > 0) {
+	  printk(KERN_INFO "PULP: RAB update complete.\n");
+	}
+      }
+      else { // Read to mailbox FIFO buffer
+	if (mailbox_data == TO_RUNTIME) { // don't write to FIFO
+	  spin_lock(&mailbox_fifo_lock);
+	  continue;
+	}
+	// write to mailbox_fifo
+	*mailbox_fifo_wr = mailbox_data;
 
-    // do something
-    if (DEBUG_LEVEL_PULP > 0) {
-      do_gettimeofday(&time);
-      printk(KERN_INFO "PULP: Mailbox interrupt status: %#x. Interrupt handled at: %02li:%02li:%02li.\n",
-	     mailbox_is,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+	spin_lock(&mailbox_fifo_lock);
+	// update write pointer
+	mailbox_fifo_wr++;
+	// wrap around?
+	if ( mailbox_fifo_wr >= (mailbox_fifo + 2*MAILBOX_FIFO_DEPTH) )
+	  mailbox_fifo_wr = mailbox_fifo;
+	// full?
+	if ( mailbox_fifo_wr == mailbox_fifo_rd )
+	  mailbox_fifo_full = 1;
+	if (DEBUG_LEVEL_MBOX > 0) {
+	  printk(KERN_INFO "PULP: Written %#x to mailbox_fifo.\n",mailbox_data);
+	  printk(KERN_INFO "PULP: mailbox_fifo_wr: %d\n",(unsigned)(mailbox_fifo_wr-mailbox_fifo));
+	  printk(KERN_INFO "PULP: mailbox_fifo_rd: %d\n",(unsigned)(mailbox_fifo_rd-mailbox_fifo));
+	  printk(KERN_INFO "PULP: mailbox_fifo_full %d\n",mailbox_fifo_full);
+	  if (DEBUG_LEVEL_MBOX > 1) {
+	    for (i=0; i<2*MAILBOX_FIFO_DEPTH; i++) {
+	      printk(KERN_INFO "mailbox_fifo[%d]: %d %d %#x\n",i,
+		     (&mailbox_fifo[i] == mailbox_fifo_wr) ? 1:0,
+		     (&mailbox_fifo[i] == mailbox_fifo_rd) ? 1:0,
+		     mailbox_fifo[i]);
+	    }
+	  }
+	}
+	spin_unlock(&mailbox_fifo_lock);
+
+	read++;
+      }
+      spin_lock(&mailbox_fifo_lock);
     }
+    spin_unlock(&mailbox_fifo_lock);    
+
+    // wake up user space process
+    if ( read ) {
+      wake_up_interruptible(&mailbox_wq);
+      if (DEBUG_LEVEL_MBOX > 0)
+	printk(KERN_INFO "PULP: Read %d words from mailbox.\n",read);
+    }
+    // adjust receive interrupt threshold of mailbox interface
+    else if ( mailbox_fifo_full ) {
+
+    }
+  }
+  else if (mailbox_is & 0x4) // mailbox error
+    iowrite32(0x4,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
+  else // mailbox send interrupt threshold - not used
+    iowrite32(0x1,my_dev.mailbox+MAILBOX_IS_OFFSET_B);
+
+  if (DEBUG_LEVEL_MBOX > 0) {
+    do_gettimeofday(&time);
+    printk(KERN_INFO "PULP: Mailbox interrupt status: %#x. Interrupt handled at: %02li:%02li:%02li.\n",
+	   mailbox_is,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
   }
 
   return IRQ_HANDLED;
 }
 
-irqreturn_t pulp_isr_rab(int irq, void *ptr) {
-     
+irqreturn_t pulp_isr_rab(int irq, void *ptr)
+{    
   do_gettimeofday(&time);
   
   // detect RAB interrupt type
@@ -682,7 +783,8 @@ irqreturn_t pulp_isr_rab(int irq, void *ptr) {
  * ioctl 
  *
  ***********************************************************************************/
-long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
   int err = 0, i, j, k;
   long retval = 0;
   
@@ -739,7 +841,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
    * cmds: return ENOTTY before access_ok()
    */
   if (_IOC_TYPE(cmd) != PULP_IOCTL_MAGIC) return -ENOTTY;
-  if ( (_IOC_NR(cmd) < 0xB0) | (_IOC_NR(cmd) > 0xB4) ) return -ENOTTY;
+  if ( (_IOC_NR(cmd) < 0xB0) | (_IOC_NR(cmd) > 0xB6) ) return -ENOTTY;
 
   /*
    * the direction is a bitmask, and VERIFY_WRITE catches R/W
@@ -764,7 +866,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     while (ret > 0) {
       ret = __copy_from_user(request, (void __user *)arg, n_bytes_left);
       if (ret < 0) {
-	printk(KERN_WARNING "PULP: cannot copy RAB config from user space.\n");
+	printk(KERN_WARNING "PULP: Cannot copy RAB config from user space.\n");
 	return ret;
       }
       byte += ret;
@@ -1469,7 +1571,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
 	printk(KERN_WARNING "PULP: Could not setup DMA transfer.\n");
 	return err;
       }    
-        
+  
       // set callback parameters for last transaction
       if ( i == (n_segments-1) ) {
       	descs[i]->callback = (dma_async_tx_callback)pulp_dma_xfer_cleanup;
@@ -1479,12 +1581,17 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       // submit the transaction
       descs[i]->cookie = dmaengine_submit(descs[i]);
     }
+    if (DEBUG_LEVEL_DMA > 1)
+	printk(KERN_INFO "PULP: DMA transactions for %i segments submitted.\n",n_segments);
 
 #ifdef PROFILE_DMA
       time_dma_start = ktime_get();
 #endif      
     // issue pending DMA requests and wait for callback notification
     dma_async_issue_pending(pulp_dma_chan[dma_cmd]);
+
+    if (DEBUG_LEVEL_DMA > 1)
+	printk(KERN_INFO "PULP: Pending DMA transactions issued.\n");
 
 #ifdef PROFILE_DMA 
     // wait for finish
@@ -1507,12 +1614,249 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
       
     break;
 
+#ifdef RAB_MH
+  case PULP_IOCTL_RAB_MH_ENA:
+
+    // create workqueue for RAB miss handling
+    rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
+    if (rab_mh_wq == NULL) {
+      printk(KERN_WARNING "PULP: Allocation of workqueue for RAB miss handling failed.\n");
+      return -ENOMEM;
+    }
+
+    // initialize the workqueue
+    INIT_WORK(&rab_mh_w, (void *)pulp_rab_handle_miss);
+    
+    // register information of the calling user-space process
+    user_task = current;
+    user_mm = current->mm;
+
+    // enable - protect with semaphore?
+    rab_mh = 1;
+
+    break;
+
+  case PULP_IOCTL_RAB_MH_DIS:
+
+    // disable - protect with semaphore?
+    rab_mh = 0;
+
+    // flush and destroy the workqueue
+    destroy_workqueue(rab_mh_wq);
+
+    break;
+#endif
+
   default:
     return -ENOTTY;
   }
 
   return retval;
 }
+
+/***********************************************************************************
+ *
+ * read 
+ *
+ ***********************************************************************************/
+ssize_t pulp_mailbox_read(struct file *filp, char __user *buf, size_t count, loff_t *offp)
+{
+  int i;
+  unsigned long not_copied;
+  
+  spin_lock_irqsave(&mailbox_fifo_lock, flags);
+  while ( (mailbox_fifo_wr == mailbox_fifo_rd) && !mailbox_fifo_full ) { // nothing to read
+    spin_unlock_irqrestore(&mailbox_fifo_lock, flags); // release the spinlock
+    
+    if ( filp->f_flags & O_NONBLOCK )
+      return -EAGAIN;
+    if ( wait_event_interruptible(mailbox_wq, (mailbox_fifo_wr != mailbox_fifo_rd) || mailbox_fifo_full) )
+      return -ERESTARTSYS; // signal: tell the fs layer to handle it
+   
+    spin_lock_irqsave(&mailbox_fifo_lock, flags);
+  }
+
+  // mailbox_fifo contains data to be read by user
+  if ( mailbox_fifo_wr > mailbox_fifo_rd )
+    count = min(count, (size_t)(mailbox_fifo_wr - mailbox_fifo_rd)*sizeof(mailbox_fifo[0]));
+  else // wrap, return data up to end of FIFO 
+    count = min(count, (size_t)(mailbox_fifo + 2*MAILBOX_FIFO_DEPTH - mailbox_fifo_rd)*sizeof(mailbox_fifo[0]));
+ 
+  // release the spinlock, copy_to_user can sleep
+  spin_unlock_irqrestore(&mailbox_fifo_lock, flags); 
+
+  not_copied = copy_to_user(buf, mailbox_fifo_rd, count);
+  
+  spin_lock_irqsave(&mailbox_fifo_lock, flags);
+  // update read pointer
+  mailbox_fifo_rd = mailbox_fifo_rd + (count - not_copied)/sizeof(mailbox_fifo[0]);
+  // wrap around
+  if ( mailbox_fifo_rd >= (mailbox_fifo + 2*MAILBOX_FIFO_DEPTH) )
+    mailbox_fifo_rd = mailbox_fifo;
+  // not full anymore?
+  if ( mailbox_fifo_full && ((count - not_copied)/sizeof(mailbox_fifo[0]) > 0) ) {
+    mailbox_fifo_full = 0;
+
+    // if there is data available in the mailbox, read it to mailbox_fifo (interrupt won't be triggered anymore)
+    while ( !(0x1 & ioread32(my_dev.mailbox+MAILBOX_STATUS_OFFSET_B)) && !mailbox_fifo_full ) {
+
+      // read mailbox
+      mailbox_data = ioread32(my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B);
+    
+      if (mailbox_data == RAB_UPDATE) {
+	printk(KERN_WARNING "PULP: Read RAB_UPDATE request from mailbox in pulp_mailbox_read. This request will be ignored.");
+	continue;
+      }
+      else {
+	if (mailbox_data == TO_RUNTIME) // don't write to FIFO
+	  continue;
+	
+	// write to mailbox_fifo
+	*mailbox_fifo_wr = mailbox_data;
+
+	// update write pointer
+	mailbox_fifo_wr++;
+	// wrap around?
+	if ( mailbox_fifo_wr >= (mailbox_fifo + 2*MAILBOX_FIFO_DEPTH) )
+	  mailbox_fifo_wr = mailbox_fifo;
+	// full?
+	if ( mailbox_fifo_wr == mailbox_fifo_rd )
+	  mailbox_fifo_full = 1;
+	if (DEBUG_LEVEL_MBOX > 0) {
+	  printk(KERN_INFO "PULP: Written %#x to mailbox_fifo.\n",mailbox_data);
+	  printk(KERN_INFO "PULP: mailbox_fifo_wr: %d\n",(unsigned)(mailbox_fifo_wr-mailbox_fifo));
+	  printk(KERN_INFO "PULP: mailbox_fifo_rd: %d\n",(unsigned)(mailbox_fifo_rd-mailbox_fifo));
+	  printk(KERN_INFO "PULP: mailbox_fifo_full %d\n",mailbox_fifo_full);
+	  if (DEBUG_LEVEL_MBOX > 1) {
+	    for (i=0; i<2*MAILBOX_FIFO_DEPTH; i++) {
+	      printk(KERN_INFO "mailbox_fifo[%d]: %d %d %#x \n",i,
+		     (&mailbox_fifo[i] == mailbox_fifo_wr) ? 1:0,
+		     (&mailbox_fifo[i] == mailbox_fifo_rd) ? 1:0,
+		     mailbox_fifo[i]);
+	    }
+	  }
+	}
+      }
+    }
+  }
+  if (DEBUG_LEVEL_MBOX > 0) {
+    printk(KERN_INFO "PULP: Read from mailbox_fifo.\n");
+    printk(KERN_INFO "PULP: mailbox_fifo_wr: %d\n",(unsigned)(mailbox_fifo_wr-mailbox_fifo));
+    printk(KERN_INFO "PULP: mailbox_fifo_rd: %d\n",(unsigned)(mailbox_fifo_rd-mailbox_fifo));
+    printk(KERN_INFO "PULP: mailbox_fifo_full %d\n",mailbox_fifo_full);
+  }
+  spin_unlock_irqrestore(&mailbox_fifo_lock, flags); // release the spinlock
+
+  if (DEBUG_LEVEL_MBOX > 0) {
+    printk(KERN_INFO "PULP: Read %li words from mailbox_fifo.\n",(count - not_copied)/sizeof(mailbox_fifo[0]));
+  }
+
+  if ( not_copied )
+    return -EFAULT; // bad address
+  else
+    return count;
+}
+
+#ifdef RAB_MH
+/***********************************************************************************
+ *
+ * RAB miss handling routine 
+ *
+ ***********************************************************************************/
+static void pulp_rab_handle_miss(unsigned unused)
+{
+  int err = 0, i, result;
+  unsigned addr_start, addr_phys;
+    
+  // what get_user_pages needs
+  unsigned long start;
+  struct page **pages;
+
+  // needed for RAB management
+  RabSliceReq rab_slice_request;
+  RabSliceReq *rab_slice_req = &rab_slice_request;
+
+  //
+  printk(KERN_INFO "PULP: RAB miss handling routine called.\n");
+
+  // check every miss handling register separately
+  for (i=0; i<RAB_N_MHRS; i++) {
+    
+    // read the MHR
+    //addr_start = ioread32(my_dev.rab_config+RAB_MHRS_OFFSET_B+i*4);   
+    addr_start = 0;
+    
+    // handle a miss
+    if (addr_start) {
+     
+      // what get_user_pages returns
+      pages = (struct page **)kmalloc((size_t)(sizeof(struct page *)),GFP_KERNEL);
+      if (pages == NULL) {
+	printk(KERN_WARNING "PULP: Memory allocation failed.\n");
+	return;
+      }
+
+      // align address to page border / 4kB
+      start = (unsigned long)(addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT));
+      
+      // get pointer to user-space buffer and lock it into memory, get a single page in read/write mode
+      down_read(&user_task->mm->mmap_sem);
+      result = get_user_pages(user_task, user_task->mm, start, 1, 1, 0, pages, NULL);
+      up_read(&user_task->mm->mmap_sem);
+      if (result != 1) {
+	printk(KERN_WARNING "PULP: Could not get requested user-space virtual address %#x.\n",addr_start);
+      }
+      
+      // virtual-to-physical address translation
+      addr_phys = (unsigned)page_to_phys(pages[0]);
+      if (DEBUG_LEVEL_MEM > 1) {
+	printk(KERN_INFO "PULP: Physical address = %#x\n",addr_phys);
+      }
+      
+      // fill rab_slice_req structure
+      rab_slice_req->flags = 0;
+      rab_slice_req->prot = 0x7;
+      rab_slice_req->rab_port = 1;
+      // allocate a fixed number of slices to each MHR
+      rab_slice_req->date_exp = 0; 
+      rab_slice_req->date_cur = 0;
+
+      rab_slice_req->addr_start  = (unsigned)start;
+      rab_slice_req->addr_end    = (unsigned)start + PAGE_SIZE;
+      rab_slice_req->addr_offset = addr_phys;
+      rab_slice_req->page_idx_start = 0;
+      rab_slice_req->page_idx_end   = 0;
+
+      //  check for free field in page_ptrs list
+      err = pulp_rab_page_ptrs_get_field(rab_slice_req);
+      if (err) {
+	return;
+      }
+
+      // get a free slice
+      err = pulp_rab_slice_get(rab_slice_req);
+      if (err) {
+	return;
+      }
+ 
+      // free memory of slices to be re-configured
+      pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
+
+      // setup slice
+      err = pulp_rab_slice_setup(my_dev.rab_config, rab_slice_req, pages);
+      if (err) {
+	return;
+      }
+
+      // flush the entire page from the caches
+      pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
+    
+      // clear the MHR
+      //iowrite32(0x0,my_dev.rab_config+RAB_MHRS_OFFSET_B+i*4);
+    } 
+  }
+}
+#endif
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Pirmin Vogel");

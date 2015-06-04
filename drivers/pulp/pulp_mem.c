@@ -1,7 +1,8 @@
 #include "pulp_mem.h"
 
 /**
- * Flush user-space memory pages.
+ * Flush user-space memory pages. Required when PULP reads from
+ * user-space memory.
  *
  * @page: pointer to the page struct of user-space memory page to flush.
  * @offset_start: address offset to start flushing from.
@@ -31,6 +32,43 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
 
   // clean L2 cache lines
   outer_cache.flush_range(paddr,paddr+size_b);
+
+  // destroy kernel-space mapping
+  kunmap(page);
+}
+
+/**
+ * Invalidate user-space memory pages. Required when PULP writes to
+ * user-space memory.
+ *
+ * @page: pointer to the page struct of user-space memory page to flush.
+ * @offset_start: address offset to start flushing from.
+ * @offset_end: address offset to end flushing at.
+ */
+void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offset_end) 
+{
+
+  void * kaddr;
+  unsigned size_b;
+  long unsigned int paddr;
+
+  /* create a kernel-space mapping, the L1 cache maintenance functions
+     work on kernel virtual addresses, only exist for low memory */
+  kaddr = kmap(page); 
+  
+  kaddr = kaddr + offset_start;
+  size_b = offset_end - offset_start;
+
+  /* extract the physical address, the L2 cache maintenance functions
+     work on physical addresses */
+  paddr = page_to_phys(page);
+  paddr = paddr + offset_start;
+
+  // invalidate L2 cache lines
+  outer_cache.inv_range(paddr,paddr+size_b);
+
+  // clean L1 cache lines (if lines are not dirty, just invalidate)
+  __cpuc_flush_dcache_area(kaddr,size_b);
 
   // destroy kernel-space mapping
   kunmap(page);

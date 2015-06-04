@@ -68,7 +68,7 @@ int pulp_dma_xfer_prep(struct dma_async_tx_descriptor ** desc, struct dma_chan *
   if (!last)
     flags = 0;
   else
-    flags =  DMA_PREP_INTERRUPT;
+    flags = DMA_PREP_INTERRUPT;
 
   if (DEBUG_LEVEL_DMA > 1) {
     printk("PULP - DMA: New Segment.\n");

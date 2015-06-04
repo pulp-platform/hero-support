@@ -1,4 +1,5 @@
 #include "pulp_rab.h"
+#include "pulp_mem.h" /* for cache invalidation */
 
 // global variables
 static        unsigned rab_slices[RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES];
@@ -133,16 +134,19 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
     RAB_GET_PAGE_IDX_START(page_idx_start_old,rab_slices[entry]);
     RAB_GET_PAGE_IDX_END(page_idx_end_old,rab_slices[entry]);
 
-    // unlock remapped pages
+    // unlock remapped pages and invalidate caches
     if ( !(rab_slice_req->flags & 0x2) ) { // do not unlock pages in striped mode until the last slice is freed
       for (i=page_idx_start_old;i<=page_idx_end_old;i++) {
 	if (DEBUG_LEVEL_RAB > 0) {
 	  printk(KERN_INFO "PULP - RAB: Unlocking Page %d remapped on Slice %d on Port %d.\n",
 		 i, rab_slice_req->rab_slice, rab_slice_req->rab_port);
 	}
+	// invalidate caches --- invalidates entire pages only --- really needed?
+	//pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
+	// unlock
 	if (!PageReserved(pages_old[i])) 
 	  SetPageDirty(pages_old[i]);
-	page_cache_release(pages_old[i]); 
+	page_cache_release(pages_old[i]);
       }
     }
     // lower reference counter
