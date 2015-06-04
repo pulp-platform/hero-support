@@ -13,7 +13,7 @@
 #define ARM_DMA_SIZE_B 0x10000 // 64kB = L2 Size
 //#define ARM_DMA_SIZE_B 0x8000
 //#define ARM_DMA_SIZE_B 0x1000
-#define PULP_DMA_SIZE_B 0x2000 // 8kB
+#define PULP_DMA_SIZE_B 0x4000 // 16kB
 
 #define ARM_DMA_SIZE  ARM_DMA_SIZE_B/4
 #define PULP_DMA_SIZE  PULP_DMA_SIZE_B/4
@@ -56,7 +56,7 @@ int main(){
   //pulp_print_v_addr(pulp);
   //sleep(1);  
   pulp_reset(pulp);
-  printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
+  //printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
   pulp_rab_free(pulp,0x0);
   pulp_init(pulp);
   
@@ -177,8 +177,10 @@ int main(){
   printf("Measured PULP DMA bandwidth = %.2f MB/s (includes offload and transfer setup)\n",((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
 
   int time_high, time_low;
-  time_high = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
-  time_low = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  //time_high = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  pulp_mailbox_read(pulp,&time_high,1);
+  //time_low = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  pulp_mailbox_read(pulp,&time_low,1);
 
   float time;
   time = ((2<<31)*(float)time_high + (float)time_low)/(50);
@@ -192,8 +194,9 @@ int main(){
 
 #ifdef CHECK_RESULT
   unsigned address, temp;
-  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
- 
+  //address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  pulp_mailbox_read(pulp,&address,1);
+
   address -= L2_MEM_BASE_ADDR;
 
   for (i=0; i<PULP_DMA_SIZE; i++) {
