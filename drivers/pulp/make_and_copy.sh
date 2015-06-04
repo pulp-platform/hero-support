@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Make
-vivado-2014.1 make
+vivado-2015.1 make
 
 # Copy
 scp *.ko ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/drivers/.
