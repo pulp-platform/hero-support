@@ -1,5 +1,5 @@
 # Name of the program
-NAME=parMatrixMul
+NAME=hsa_par_matrix_mul
 
 # Cross compilation stuff
 ARCH=arm

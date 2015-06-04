@@ -4,7 +4,7 @@
 #include "pulp_host.h"
 #include "pulp_func.h"
 
-//#define CHECK_L2
+#define CHECK_L2
 #define PRINT_MAT
 
 #ifndef SIZE
@@ -32,6 +32,11 @@ int main() {
   pulp_rab_free(pulp,0x0);
   pulp_init(pulp);
   
+  pulp_stdout_clear(pulp,0);
+  pulp_stdout_clear(pulp,1);
+  pulp_stdout_clear(pulp,2);
+  pulp_stdout_clear(pulp,3);
+
   /*
    * Body
    */
@@ -81,8 +86,8 @@ int main() {
  
   TaskDesc task_desc;
    
-  char name[13];
-  strcpy(name,"parMatrixMul");
+  char name[25];
+  strcpy(name,"hsa_par_matrix_mul");
  
   task_desc.name = &name[0];
   task_desc.n_clusters = -1;
@@ -160,7 +165,8 @@ int main() {
    */
   unsigned address, temp;
    
-  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  //address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  pulp_mailbox_read(pulp,&address,1);
   printf("address =  %#x\n",address);
  
   address -= L2_MEM_BASE_ADDR;
@@ -182,7 +188,8 @@ int main() {
     printf("\n");
   }
  
-  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  //address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  pulp_mailbox_read(pulp,&address,1);  
   printf("address =  %#x\n",address);
  
   address -= L2_MEM_BASE_ADDR;
@@ -204,7 +211,8 @@ int main() {
     printf("\n");
   }
  
-  address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  //address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
+  pulp_mailbox_read(pulp,&address,1);
   printf("address =  %#x\n",address);
  
   address -= L2_MEM_BASE_ADDR;
@@ -227,7 +235,25 @@ int main() {
   }
 #endif
  
+  pulp_mailbox_read(pulp,&address,1);
+  printf("address =  %#x\n",address);
+
+  pulp_mailbox_read(pulp,&address,1);
+  printf("address =  %#x\n",address);
+
+  pulp_mailbox_read(pulp,&address,1);
+  printf("address =  %#x\n",address);
+
+
   sleep(3);
+  pulp_stdout_print(pulp,0);
+  pulp_stdout_print(pulp,1);
+  pulp_stdout_print(pulp,2);
+  pulp_stdout_print(pulp,3);
+  pulp_stdout_clear(pulp,0);
+  pulp_stdout_clear(pulp,1);
+  pulp_stdout_clear(pulp,2);
+  pulp_stdout_clear(pulp,3);
 
   /*
    * Cleanup
