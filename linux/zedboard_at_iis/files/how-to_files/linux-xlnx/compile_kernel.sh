@@ -18,13 +18,8 @@ if [ -d "../"${Tools} ]; then
     cd ${CurrentPath}
 else
     echo "ERROR: U-Boot tools not found"
-    echo "Check for the folder ../"${Tools}
+    echo "Check for the folder ../"${tools}
     exit 1
-fi
-
-# Check & create sd_image directory
-if [ ! -d "../sd_image" ]; then
-    mkdir ../sd_image
 fi
 
 # Compile the Linux kernel
