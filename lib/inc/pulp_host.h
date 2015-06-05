@@ -261,7 +261,7 @@
 //#define JPEG
 //#define MEM_SHARING 2
 //#define ZYNQ_PMM
-//#define PROFILE
+//#define PROFILE // required for ROD, CT and JPEG
 
 // needed for profile_rab, dma_test
 //#define MEM_SHARING 2

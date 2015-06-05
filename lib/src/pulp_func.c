@@ -365,9 +365,11 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   else if(freq_mhz >= 200)
     freq_mhz = 200;
 
+  // input clock = 100 MHz
+  // default output clock = 50 MHz
   int divclk_divide = 1;
-  int clkfbout_mult = 12;
-  int clkout0_divide = 600/freq_mhz;
+  int clkfbout_mult = 10;
+  int clkout0_divide = 1000/freq_mhz;
 
   // config DIVCLK_DIVIDE, CLKFBOUT_MULT, CLKFBOUT_FRAC, CLKFBOUT_PHASE
   unsigned value;
