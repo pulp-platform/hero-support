@@ -76,13 +76,9 @@ int main(int argc, char *argv[]) {
   printf("PULP Execution\n");
   // load binary
   pulp_load_bin(pulp,app_name);
-  
-  sleep(2);
-
+ 
   // start execution
   pulp_exe_start(pulp);
-
-  sleep(2);
 
   // wait for end of computation
   pulp_exe_wait(pulp,timeout_s);
