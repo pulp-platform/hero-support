@@ -93,7 +93,8 @@ int zynq_pmm_parse(char *buffer, long long *counters, int accumulate){
       }
       // remove leading white spaces
       while (isspace(*position))
-	*position++;
+	position++;
+        //*position++;
       // convert to number
       number = strtol(position,NULL,10);
       // save

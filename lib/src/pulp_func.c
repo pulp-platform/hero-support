@@ -375,20 +375,25 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   unsigned value;
   value = 0x04000000 + 0x100*clkfbout_mult + 0x1*divclk_divide;
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_0_OFFSET_B,'b',value);
-  
+  if (DEBUG_LEVEL > 1)
+    printf("CLKING_CONFIG_REG_0: %#x\n",value);
+
   // config CLKOUT0: DIVIDE, FRAC, FRAC_EN
   value = 0x00040000 + 0x1*clkout0_divide;
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_2_OFFSET_B,'b',value);
-
-  // check status
-  if ( pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x0 ) {
-    printf("ERROR: Clock manager not locked, cannot reconfigure clocks.\n");
-    return -EBUSY;
-  }
+  if (DEBUG_LEVEL > 1)
+    printf("CLKING_CONFIG_REG_2: %#x\n",value);
 
   // start reconfiguration
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_23_OFFSET_B,'b',0x7);
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_23_OFFSET_B,'b',0x2);
+
+  // check status
+  sleep(0.1);
+  if ( !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1) ) {
+    printf("ERROR: Clock manager not locked, clock reconfiguration failed.\n");
+    return -EBUSY;
+  }
  
   return freq_mhz;
 }
@@ -821,67 +826,15 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
     }
   }
 
-  /*
-   * offload
-   */
-  // for now: simple binary offload
-  // prepare binary
-  char * bin_name;
-  bin_name = (char *)malloc((strlen(task->name)+4+1)*sizeof(char));
-  if (!bin_name) {
-    printf("ERROR: Malloc failed for bin_name.\n");
-    return -ENOMEM;
-  }
-  strcpy(bin_name,task->name);
-  strcat(bin_name,".bin");
-
-  // read in binary
-  FILE *fp;
-  if((fp = fopen(bin_name, "r")) == NULL) {
-    printf("BIN ERROR\n");
-    printf("%s\n",bin_name);
-    return 1;
-  }
-  int sz, nsz;
-  unsigned *bin, *bin_rv;
-  fseek(fp, 0L, SEEK_END);
-  sz = ftell(fp);
-  fseek(fp, 0L, SEEK_SET);
-  bin = (unsigned *) malloc(sz*sizeof(char));
-  if (!bin) {
-    printf("ERROR: Malloc failed for bin.\n");
-    return -ENOMEM;
-  }
-  bin_rv = (unsigned *) malloc(sz*sizeof(char));
-  if (!bin_rv) {
-    printf("ERROR: Malloc failed for bin_rv.\n");
-    return -ENOMEM;
-  }
-  if((nsz = fread(bin, sizeof(char), sz, fp)) != sz)
-    printf("Read only %d bytes in binary.\n", nsz);
-  fclose(fp);
-
-  // reverse endianness (PULPv2 is big-endian)
-  for(i=0; i<nsz/4; i++) {
-    bin_rv[i] = ((bin[i] & 0x000000ff) << 24 ) |
-                ((bin[i] & 0x0000ff00) <<  8 ) |
-                ((bin[i] & 0x00ff0000) >>  8 ) |
-                ((bin[i] & 0xff000000) >> 24 );
-  } 
-
-  // write binary to L2
-  for (i=0; i<nsz/4; i++) {
-    //pulp->l2_mem.v_addr[i] = bin_rv[i];
-    pulp->l2_mem.v_addr[i] = bin[i];
-  }
-
   // reset sync address
   pulp_write32(pulp->l2_mem.v_addr,0xFFF8,'b',0);
 
-  // start execution
-  printf("Starting program execution.\n");
-  pulp_write32(pulp->gpio.v_addr,0x8,'b',0x800000ff);
-  
+  /*
+   * offload
+   */
+  pulp_load_bin(pulp, task->name);
+  pulp_exe_start(pulp);
+    
 #ifdef PROFILE_RAB
   pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',PULP_START);
 #endif
@@ -921,7 +874,7 @@ void pulp_reset(PulpDev *pulp)
 
   // reset using GPIO register
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x00000000);
-  usleep(100);
+  usleep(0.1);
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
 
   // FPGA reset control register
@@ -935,7 +888,7 @@ void pulp_reset(PulpDev *pulp)
 	       slcr_value | (0x1 << SLCR_FPGA_OUT_RST));
     
   // wait
-  usleep(100);
+  usleep(0.1);
     
   // disable reset
   pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 
@@ -943,26 +896,51 @@ void pulp_reset(PulpDev *pulp)
 }
 
 /**
- * Load binary to L2 and boot PULP. Not yet uses the Zynq PS DMA
- * engine.  
+ * Boot PULP.  
  *
  * @pulp : pointer to the PulpDev structure 
  * @task : pointer to the TaskDesc structure
  */
 int pulp_boot(PulpDev *pulp, TaskDesc *task)
 {
+  int err;
+
+  // load the binary
+  err = pulp_load_bin(pulp, task->name);
+  if (err) {
+    printf("ERROR: Load of PULP binary failed.\n");
+    return err;
+  }
+  
+  // start execution
+  pulp_exe_start(pulp);
+
+  return 0;
+}
+
+/**
+ * Load binary to PULP. Not yet uses the Zynq PS DMA engine.
+ *
+ * @pulp : pointer to the PulpDev structure 
+ * @name : pointer to the string containing the name of the 
+ *         application to load
+ */
+int pulp_load_bin(PulpDev *pulp, char *name)
+{
   int i;
 
   // prepare binary reading
   char * bin_name;
-  bin_name = (char *)malloc((strlen(task->name)+4)*sizeof(char));
+  bin_name = (char *)malloc((strlen(name)+4+1)*sizeof(char));
   if (!bin_name) {
     printf("ERROR: Malloc failed for bin_name.\n");
     return -ENOMEM;
   }
-  strcpy(bin_name,task->name);
+  strcpy(bin_name,name);
   strcat(bin_name,".bin");
   
+  printf("Loading binary file: %s\n",bin_name);
+
   // read in binary
   FILE *fp;
   if((fp = fopen(bin_name, "r")) == NULL) {
@@ -970,33 +948,76 @@ int pulp_boot(PulpDev *pulp, TaskDesc *task)
     return -ENOENT;
   }
   int sz, nsz;
-  unsigned *bin;//, *bin_rv;
+  unsigned *bin;
   fseek(fp, 0L, SEEK_END);
   sz = ftell(fp);
   fseek(fp, 0L, SEEK_SET);
   bin = (unsigned *) malloc(sz*sizeof(char));
-  //bin_rv = (unsigned *) malloc(sz*sizeof(char));
   if((nsz = fread(bin, sizeof(char), sz, fp)) != sz)
     printf("ERROR: Red only %d bytes in binary.\n", nsz);
   fclose(fp);
   
-  //// reverse endianness (PULPv2 is big-endian)
-  //for(i=0; i<nsz/4; i++) {
-  //  bin_rv[i] = ((bin[i] & 0x000000ff) << 24 ) |
-  //              ((bin[i] & 0x0000ff00) <<  8 ) |
-  //              ((bin[i] & 0x00ff0000) >>  8 ) |
-  //              ((bin[i] & 0xff000000) >> 24 );
-  //} 
-
   // write binary to L2
-  for (i=0; i<nsz/4; i++) {
-    //pulp->l2_mem.v_addr[i] = bin_rv[i];
+  for (i=0; i<nsz/4; i++)
     pulp->l2_mem.v_addr[i] = bin[i];
-  }
 
-  // start execution
+  return 0;
+}
+
+/**
+ * Starts programm execution on PULP.
+ *
+ * @pulp : pointer to the PulpDev structure 
+ */
+void pulp_exe_start(PulpDev *pulp)
+{
   printf("Starting program execution.\n");
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x800000ff);
+
+  return;
+}
+
+/**
+ * Stops programm execution on PULP.
+ *
+ * @pulp : pointer to the PulpDev structure 
+ */
+void pulp_exe_stop(PulpDev *pulp)
+{
+  printf("Stopping program execution.\n");
+  pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
+
+  return;
+}
+
+/**
+ * Polls the GPIO register for the end of computation signal for at
+ * most timeous_s seconds.
+ *
+ * @pulp      : pointer to the PulpDev structure
+ * @timeout_s : maximum number of seconds to wait for end of 
+ *              computation
+ */
+int pulp_exe_wait(PulpDev *pulp, int timeout_s)
+{
+  unsigned status = 0;
+  float interval_s = 0.1;
+  float timeout = 0;
+
+  sleep(3);
+
+  while (!status) {
+    status = (pulp_read32(pulp->gpio.v_addr,0,'b') & 0x1);
+    
+    if (!status) {
+      sleep(interval_s);
+      timeout += interval_s;
+      if (timeout > timeout_s) {
+	printf("ERROR: PULP execution timeout.\n");
+	return -ETIME;
+      }
+    }
+  }
 
   return 0;
 }

@@ -14,9 +14,9 @@ int main(int argc, char *argv[]) {
    * Preparation
    */
   char app_name[50];
-  int pulp_clk_freq_mhz = 50;
   int timeout_s = 1;  
-
+  int pulp_clk_freq_mhz = 50;
+  
   if (argc < 2) {
     printf("ERROR: Specify the name of the standalone PULP application to execute as first argument.\n");
     return -EINVAL;
@@ -27,9 +27,10 @@ int main(int argc, char *argv[]) {
 
   strcpy(app_name,argv[1]);
   if (argc > 2)
-    pulp_clk_freq_mhz = atoi(argv[2]);
+    timeout_s = atoi(argv[2]);    
   if (argc > 3)
-    timeout_s = atoi(argv[3]);
+    pulp_clk_freq_mhz = atoi(argv[3]);    
+
 
 
   /*

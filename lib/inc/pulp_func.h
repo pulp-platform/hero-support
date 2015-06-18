@@ -10,6 +10,7 @@
 #include <unistd.h>     // for sleep
 #include <sys/ioctl.h>  // for ioctl
 #include <stdlib.h>     // for system
+#include <unistd.h>     // for sleep
 
 #include "zynq.h"
 #include "pulp_host.h"
@@ -90,6 +91,11 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task);
 
 void pulp_reset(PulpDev *pulp);
 int  pulp_boot(PulpDev *pulp, TaskDesc *task);
+
+int  pulp_load_bin(PulpDev *pulp, char *name);
+void pulp_exe_start(PulpDev *pulp);
+void pulp_exe_stop(PulpDev *pulp);
+int  pulp_exe_wait(PulpDev *pulp, int timeout_s);
 
 // required for ROD, CT, MJPEG
 
