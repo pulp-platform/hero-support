@@ -13,4 +13,4 @@ scp ${NAME} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
 scp *.c ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
 scp *.h ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
 # Accelerator binary
-scp ${CMAKE_PATH}/hsa_tests/*.bin ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
+scp ${PULP_BIN_PATH}/hsa_tests/*.bin ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.

@@ -22,7 +22,7 @@ export ARM_INC_DIR1=${ARM_LIB_DIR1}/inc
 export PULP_INC_DIR1=/home/vogelpi/pulp_on_fpga/software/pulp/sw/libs/sys_lib/inc
 
 # machine to which the make_and_copy.sh scripts transfer the compiled stuff
-export SCP_TARGET_MACHINE="pirmin@iis-ubuntu2.ee.ethz.ch"
+export SCP_TARGET_MACHINE="vogelpi@bordcomputer"
 
 # base path to which the make_and_copy.sh scripts transfer the compiled stuff
 export SCP_TARGET_PATH="~/pulp_on_fpga/share"
@@ -33,8 +33,5 @@ then
     mkdir ${ARM_LIB_DIR1}/lib
 fi    
 
-# cmake path, i.e., where the compiled accelerator binaries can be found
-export CMAKE_PATH="/scratch/vogelpi/cmake"
-
-# 
-export PULP_SW_PATH="/home/vogelpi/pulp_on_fpga/software/arm/apps"
+# PULP binary path, i.e., where the compiled accelerator binaries can be found
+export PULP_BIN_PATH=/home/vogelpi/pulp_on_fpga/software/arm/apps
