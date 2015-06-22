@@ -359,6 +359,8 @@ int pulp_munmap(PulpDev *pulp)
  */
 int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
 {
+  unsigned status;
+  int timeout;
   int freq_mhz = des_freq_mhz - (des_freq_mhz % 5);
   if(freq_mhz <= 0)
     freq_mhz = 5;
@@ -375,24 +377,47 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   unsigned value;
   value = 0x04000000 + 0x100*clkfbout_mult + 0x1*divclk_divide;
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_0_OFFSET_B,'b',value);
-  if (DEBUG_LEVEL > 1)
+  if (DEBUG_LEVEL > 3)
     printf("CLKING_CONFIG_REG_0: %#x\n",value);
 
   // config CLKOUT0: DIVIDE, FRAC, FRAC_EN
   value = 0x00040000 + 0x1*clkout0_divide;
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_2_OFFSET_B,'b',value);
-  if (DEBUG_LEVEL > 1)
+  if (DEBUG_LEVEL > 3)
     printf("CLKING_CONFIG_REG_2: %#x\n",value);
+
+  // check status
+  if ( !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1) ) {
+    timeout = 10;
+    status = 1;
+    while ( status && (timeout > 0) ) {
+      usleep(10000);
+      timeout--;
+      status = !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1);
+    }
+    if ( status ) {
+      printf("ERROR: Clock manager not locked, cannot start reconfiguration.\n");
+      return -EBUSY;
+    } 
+  }
 
   // start reconfiguration
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_23_OFFSET_B,'b',0x7);
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_23_OFFSET_B,'b',0x2);
 
   // check status
-  sleep(0.1);
   if ( !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1) ) {
-    printf("ERROR: Clock manager not locked, clock reconfiguration failed.\n");
-    return -EBUSY;
+    timeout = 10;
+    status = 1;
+    while ( status && (timeout > 0) ) {
+      usleep(10000);
+      timeout--;
+      status = !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1);
+    }
+    if ( status ) {
+      printf("ERROR: Clock manager not locked, clock reconfiguration failed.\n");
+      return -EBUSY;
+    } 
   }
  
   return freq_mhz;
@@ -844,8 +869,7 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   done = 0;
   while (!done) {
     done = pulp_read32(pulp->l2_mem.v_addr,0xFFF8,'b');
-    //usleep(1000);
-    sleep(1);
+    usleep(100000);
     //printf("Waiting...\n");
   }
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
@@ -867,32 +891,47 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
 /**
  * Reset PULP
  * @pulp : pointer to the PulpDev structure
+ * @full : type of reset: 0 for PULP reset, 1 for entire FPGA
  */
-void pulp_reset(PulpDev *pulp)
+void pulp_reset(PulpDev *pulp, unsigned full)
 {
   unsigned slcr_value;
 
-  // reset using GPIO register
-  pulp_write32(pulp->gpio.v_addr,0x8,'b',0x00000000);
-  usleep(0.1);
-  pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
-
   // FPGA reset control register
   slcr_value = pulp_read32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b');
-  
+ 
   // extract the FPGA_OUT_RST bits
   slcr_value = slcr_value & 0xF;
-  
-  // enable reset
-  pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b',
-	       slcr_value | (0x1 << SLCR_FPGA_OUT_RST));
+
+
+  if (full) {
+    // enable reset
+    pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 0xF);
+
+    // wait
+    usleep(100000);
     
-  // wait
-  usleep(0.1);
+    // disable reset
+    pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', slcr_value);
+
+  }
+  else {
+    // enable reset
+    pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b',
+		 slcr_value | (0x1 << SLCR_FPGA_OUT_RST));
     
-  // disable reset
-  pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 
-	       slcr_value & (0xF & (0x0 << SLCR_FPGA_OUT_RST)));
+    // wait
+    usleep(100000);
+    
+    // disable reset
+    pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 
+		 slcr_value & (0xF & (0x0 << SLCR_FPGA_OUT_RST)));
+
+    // reset using GPIO register
+    pulp_write32(pulp->gpio.v_addr,0x8,'b',0x00000000);
+    usleep(100000);
+    pulp_write32(pulp->gpio.v_addr,0x8,'b',0x80000000);
+  }
 }
 
 /**
@@ -1000,25 +1039,24 @@ void pulp_exe_stop(PulpDev *pulp)
  */
 int pulp_exe_wait(PulpDev *pulp, int timeout_s)
 {
-  unsigned status = 0;
-  float interval_s = 0.1;
+  unsigned status;
+  float interval_us = 100000;
   float timeout = 0;
 
-  sleep(3);
-
-  while (!status) {
-    status = (pulp_read32(pulp->gpio.v_addr,0,'b') & 0x1);
-    
-    if (!status) {
-      sleep(interval_s);
-      timeout += interval_s;
-      if (timeout > timeout_s) {
-	printf("ERROR: PULP execution timeout.\n");
-	return -ETIME;
-      }
+  if ( !(pulp_read32(pulp->gpio.v_addr,0,'b') & 0x1) ) {
+    timeout = (float)timeout_s*1000000/interval_us;
+    status = 1;
+    while ( status && (timeout > 0) ) {
+      usleep(interval_us);
+      timeout--;
+      status = !(pulp_read32(pulp->gpio.v_addr,0,'b') & 0x1);
+    }
+    if ( status ) {
+      printf("ERROR: PULP execution timeout.\n");
+      return -ETIME;
     }
   }
-
+ 
   return 0;
 }
 
@@ -1223,7 +1261,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   for (i=0;i<n_data_int;i++) {
     if (DEBUG_LEVEL > 2) {
       printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
-      sleep(1);
+      usleep(1000000);
     }
     pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur);
   }

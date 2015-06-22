@@ -31,8 +31,6 @@ int main(int argc, char *argv[]) {
   if (argc > 3)
     pulp_clk_freq_mhz = atoi(argv[3]);    
 
-
-
   /*
    * Initialization
    */
@@ -47,7 +45,7 @@ int main(int argc, char *argv[]) {
 
   pulp_mmap(pulp);
   //pulp_print_v_addr(pulp);
-  pulp_reset(pulp);
+  pulp_reset(pulp,1);
   
   // set desired clock frequency
   if (pulp_clk_freq_mhz != 50) {
@@ -60,7 +58,7 @@ int main(int argc, char *argv[]) {
 
   pulp_rab_free(pulp,0x0);
 
-  // initialization of PULP, static RAB rules (mailbox, L2)
+  // initialization of PULP, static RAB rules (mailbox, L2, ...)
   pulp_init(pulp);
 
   // clear memories?

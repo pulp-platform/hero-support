@@ -7,10 +7,9 @@
 #include <fcntl.h>
 #include <errno.h>      // for error codes
 #include <stdbool.h>    // for bool
-#include <unistd.h>     // for sleep
 #include <sys/ioctl.h>  // for ioctl
 #include <stdlib.h>     // for system
-#include <unistd.h>     // for sleep
+#include <unistd.h>     // for usleep
 
 #include "zynq.h"
 #include "pulp_host.h"
@@ -89,7 +88,7 @@ int pulp_dma_xfer(PulpDev *pulp,
 
 int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task);
 
-void pulp_reset(PulpDev *pulp);
+void pulp_reset(PulpDev *pulp, unsigned full);
 int  pulp_boot(PulpDev *pulp, TaskDesc *task);
 
 int  pulp_load_bin(PulpDev *pulp, char *name);

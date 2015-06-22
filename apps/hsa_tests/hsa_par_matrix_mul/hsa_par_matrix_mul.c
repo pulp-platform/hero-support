@@ -28,7 +28,7 @@ int main() {
   //sleep(1);
   //pulp_print_v_addr(pulp);
   //sleep(1);  
-  pulp_reset(pulp);
+  pulp_reset(pulp,1);
   pulp_rab_free(pulp,0x0);
   pulp_init(pulp);
   
@@ -107,8 +107,7 @@ int main() {
  
   // issue the offload
   pulp_omp_offload_task(pulp,&task_desc);
-  //pulp_omp_wait(pulp,ker_id);
- 
+   
   /*
    * Check
    */
