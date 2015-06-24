@@ -9,7 +9,7 @@
 #include <stdbool.h>    // for bool
 #include <sys/ioctl.h>  // for ioctl
 #include <stdlib.h>     // for system
-#include <unistd.h>     // for usleep
+#include <unistd.h>     // for usleep, access
 
 #include "zynq.h"
 #include "pulp_host.h"
@@ -68,7 +68,9 @@ int pulp_init(PulpDev *pulp);
 int pulp_mailbox_read(PulpDev *pulp, unsigned *buffer, unsigned n_words);
 void pulp_mailbox_clear_is(PulpDev *pulp);
 
-int  pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
+int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
+int pulp_clking_measure_freq(PulpDev *pulp);
+
 void pulp_stdout_print(PulpDev *pulp, unsigned pe);
 void pulp_stdout_clear(PulpDev *pulp, unsigned pe);
 
@@ -81,6 +83,9 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
 			 unsigned **data_idxs, int n_elements,  
 			 unsigned char prot, unsigned char port);
 void pulp_rab_free_striped(PulpDev *pulp);
+
+void pulp_rab_mh_enable(PulpDev *pulp);
+void pulp_rab_mh_disable(PulpDev *pulp);
 
 int pulp_dma_xfer(PulpDev *pulp, 
 		  unsigned addr_l3, unsigned addr_pulp, unsigned size_b,

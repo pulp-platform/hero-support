@@ -49,7 +49,7 @@ static irqreturn_t pulp_isr_eoc    (int irq, void *ptr);
 static irqreturn_t pulp_isr_mailbox(int irq, void *ptr);
 static irqreturn_t pulp_isr_rab    (int irq, void *ptr);
 
-//#define RAB_MH 1
+#define RAB_MH 1
 #ifdef RAB_MH
 static void pulp_rab_handle_miss(unsigned unused);
 #endif
@@ -106,12 +106,16 @@ static unsigned n_cleanups = 0;
 #endif
 
 // for RAB miss handling
+#ifdef RAB_MH
 static char rab_mh_wq_name[10] = "RAB_MH_WQ";
 static struct workqueue_struct *rab_mh_wq;
 static struct work_struct rab_mh_w;
 static struct task_struct *user_task;
 static struct mm_struct *user_mm;
 static unsigned rab_mh = 0;
+static unsigned rab_mh_addr[RAB_MH_FIFO_DEPTH];
+static unsigned rab_mh_id[RAB_MH_FIFO_DEPTH];
+#endif
 
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
@@ -235,13 +239,6 @@ static int __init pulp_init(void)
   mpcore_icdicfr3=ioread32(my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B);
   mpcore_icdicfr4=ioread32(my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B);
    
-  //// configure rising-edge active for 61, 63-65, and high-level active for 62
-  //mpcore_icdicfr3 &= 0x03FFFFFF; // delete bits 31 - 26
-  //mpcore_icdicfr3 |= 0xDC000000; // set bits 31 - 26: 11 01 11
-  //  
-  //mpcore_icdicfr4 &= 0xFFFFFFF0; // delete bits 3 - 0
-  //mpcore_icdicfr4 |= 0x0000000F; // set bits 3 - 0: 11 11
-
   // configure rising-edge active for 61-65
   mpcore_icdicfr3 &= 0x03FFFFFF; // delete bits 31 - 26
   mpcore_icdicfr3 |= 0xFC000000; // set bits 31 - 26: 11 11 11
@@ -757,15 +754,22 @@ irqreturn_t pulp_isr_rab(int irq, void *ptr)
   else // RAB_PROT_IRQ == irq
     strcpy(rab_interrupt_type,"prot");
 
+  printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
+	 rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+
+  if (RAB_MISS_IRQ == irq) {
+    if (rab_mh) {
+      schedule_work(&rab_mh_w);
+    }
+  }
+
   // interrupt is just a pulse, no need to clear it
   // instead reset PULP
 
-  printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
-	 rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-  // read FPGA reset control register
-  slcr_value = ioread32(my_dev.slcr+SLCR_FPGA_RST_CTRL_OFFSET_B);
-  // extract the FPGA_OUT_RST bits
-  slcr_value = slcr_value & 0xF;
+  // // read FPGA reset control register
+  // slcr_value = ioread32(my_dev.slcr+SLCR_FPGA_RST_CTRL_OFFSET_B);
+  // // extract the FPGA_OUT_RST bits
+  // slcr_value = slcr_value & 0xF;
   // // enable reset
   // iowrite32(slcr_value | (0x1 << SLCR_FPGA_OUT_RST),my_dev.slcr+SLCR_FPGA_RST_CTRL_OFFSET_B);
   // // wait
@@ -1634,6 +1638,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     // enable - protect with semaphore?
     rab_mh = 1;
 
+    printk(KERN_INFO "PULP: RAB miss handling enabled.\n");
+
     break;
 
   case PULP_IOCTL_RAB_MH_DIS:
@@ -1643,6 +1649,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     // flush and destroy the workqueue
     destroy_workqueue(rab_mh_wq);
+
+    printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
 
     break;
 #endif
@@ -1765,10 +1773,11 @@ ssize_t pulp_mailbox_read(struct file *filp, char __user *buf, size_t count, lof
  ***********************************************************************************/
 static void pulp_rab_handle_miss(unsigned unused)
 {
-  int err = 0, i, result;
+  int err = 0, i, j, handled, result;
+  unsigned id, id_pe, id_cluster, n_misses;
   unsigned addr_start, addr_phys;
     
-  // what get_user_pages needs
+  // what get_user_pages needs2
   unsigned long start;
   struct page **pages;
 
@@ -1776,18 +1785,58 @@ static void pulp_rab_handle_miss(unsigned unused)
   RabSliceReq rab_slice_request;
   RabSliceReq *rab_slice_req = &rab_slice_request;
 
-  //
   printk(KERN_INFO "PULP: RAB miss handling routine called.\n");
 
-  // check every miss handling register separately
-  for (i=0; i<RAB_N_MHRS; i++) {
+  // empty miss-handling FIFOs
+  for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
+    rab_mh_addr[i] = ioread32(my_dev.rab_config+RAB_MH_ADDR_FIFO_OFFSET_B);
+    rab_mh_id[i]   = ioread32(my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B);
     
-    // read the MHR
-    //addr_start = ioread32(my_dev.rab_config+RAB_MHRS_OFFSET_B+i*4);   
-    addr_start = 0;
+    // detect empty FIFOs
+    if ( (rab_mh_addr[i] & 0x1) || (rab_mh_id[i] & 0x80000000) ) {
+      break;
+    }
+  }
+  n_misses = i;
+
+  // handle every miss separately
+  for (i=0; i<n_misses; i++) {
     
+    addr_start = rab_mh_addr[i];
+    id = rab_mh_id[i];
+    
+    // check the ID
+    id_pe = BF_GET(id, 0, AXI_ID_WIDTH_CORE);
+    id_cluster = BF_GET(id, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC) - 0x3;
+
+    // identify RAB port - for now, only handle misses on Port 1: PULP -> Host
+    if ( BF_GET(id, AXI_ID_WIDTH, 1) )
+      rab_slice_req->rab_port = 1;   	
+    else {
+      printk(KERN_WARNING "PULP: Cannot handle RAB miss on ports different from Port 1.\n");
+      printk(KERN_WARNING "PULP: RAB miss ID %#x.\n",id);
+      continue;
+    }
+
+    // only handle misses from PEs' data interfaces
+    if ( ( BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) != 0x2 ) ||
+	 ( (id_cluster < 0) || (id_cluster > (N_CLUSTERS-1)) ) || 
+	 ( (id_pe < 0) || (id_pe > N_CORES-1) ) ) {
+      printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces\n");
+      continue;
+    }
+  
+    // check if there has been a miss to the same page before
+    handled = 0;    
+    for (j=0; j<i; j++) {
+      if ( addr_start == rab_mh_addr[j] ) {
+	handled = 1;
+	break;
+      }
+    }
+
     // handle a miss
-    if (addr_start) {
+    if (!handled) {
      
       // what get_user_pages returns
       pages = (struct page **)kmalloc((size_t)(sizeof(struct page *)),GFP_KERNEL);
@@ -1816,10 +1865,9 @@ static void pulp_rab_handle_miss(unsigned unused)
       // fill rab_slice_req structure
       rab_slice_req->flags = 0;
       rab_slice_req->prot = 0x7;
-      rab_slice_req->rab_port = 1;
       // allocate a fixed number of slices to each MHR
       rab_slice_req->date_exp = 0; 
-      rab_slice_req->date_cur = 0;
+      rab_slice_req->date_cur = 1;
 
       rab_slice_req->addr_start  = (unsigned)start;
       rab_slice_req->addr_end    = (unsigned)start + PAGE_SIZE;
@@ -1827,7 +1875,7 @@ static void pulp_rab_handle_miss(unsigned unused)
       rab_slice_req->page_idx_start = 0;
       rab_slice_req->page_idx_end   = 0;
 
-      //  check for free field in page_ptrs list
+      // check for free field in page_ptrs list
       err = pulp_rab_page_ptrs_get_field(rab_slice_req);
       if (err) {
 	return;
@@ -1850,11 +1898,12 @@ static void pulp_rab_handle_miss(unsigned unused)
 
       // flush the entire page from the caches
       pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
+    }
     
-      // clear the MHR
-      //iowrite32(0x0,my_dev.rab_config+RAB_MHRS_OFFSET_B+i*4);
-    } 
-  }
+    // wake up the sleeping PE
+    iowrite32(BIT_N_SET(id_pe), my_dev.clusters + CLUSTER_SIZE_B*id_cluster \
+	      + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B);
+  } 
 }
 #endif
 

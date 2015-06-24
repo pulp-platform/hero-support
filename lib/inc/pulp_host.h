@@ -91,7 +91,6 @@
   ( BF_SET(request, n_stripes, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
 	   + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
 	   RAB_CONFIG_N_BITS_N_STRIPES) )
-
   
 /*
  * General settings
@@ -178,9 +177,16 @@
 
 //#define RAB_CONFIG_CHECK_PROT     1
 #define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
+#define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
+#define RAB_MH_ID_FIFO_OFFSET_B   0x4
+#define RAB_MH_FIFO_DEPTH         16
 
 #define PULP_SIZE_B     0x10000000
 #define CLUSTER_SIZE_MB 4
+
+#define CLUSTER_PERIPHERALS_OFFSET_B 0x200000
+#define BBMUX_CLKGATE_OFFSET_B       0x800
+#define GP_2_OFFSET_B                0x368
 
 #define SOC_PERIPHERALS_SIZE_B 0x50000
 
@@ -199,20 +205,11 @@
 #define RAB_MULTI_IRQ          64
 #define RAB_PROT_IRQ           65
 
-// old
-//#define CLUSTER_CONTROLLER_OFFSET_B 0x210000
-//#define MAILBOX_INTERFACE0_OFFSET_B 0x220000
-//#define MAILBOX_INTERFACE1_OFFSET_B 0x221000
-//#define CLUSTER_DMA_OFFSET_B        0x250000
-//#define END_OF_COMPUTATION_OFFSET_B 0x260000
-
-//#define DEMUX_CONFIG_CORE_OFFSET_B    0x1000
-//#define DEMUX_CONFIG_CLUSTER_OFFSET_B 0x0
-
-//#define CONFIG_BASE_ADDR 0x83C00000
-//#define CONFIG_SIZE_B 0x401000 // something above than the highest config register
-//#define DEMUX_CONFIG_BASE_ADDR 0x83C00000
-//#define DEMUX_CONFIG_SIZE_B    0x1000
+// required for RAB miss handling
+#define AXI_ID_WIDTH         10
+#define AXI_ID_WIDTH_CORE    4
+#define AXI_ID_WIDTH_CLUSTER 2
+#define AXI_ID_WIDTH_SOC     3
 
 /*
  * Dependent parameters
@@ -227,12 +224,10 @@
 #define SOC_PERIPHERALS_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_ADDR + SOC_PERIPHERALS_BASE_ADDR)
 
 #define CLUSTERS_H_BASE_ADDR (PULP_H_BASE_ADDR)
-#define CLUSTERS_SIZE_B      (N_CLUSTERS*CLUSTER_SIZE_MB*1024*1024)
-
-//#define PULP_CLUSTER_OFFSET  (PULP_P_BASE_ADDR>>28)
+#define CLUSTER_SIZE_B       (CLUSTER_SIZE_MB*1024*1024)
+#define CLUSTERS_SIZE_B      (N_CLUSTERS*CLUSTER_SIZE_B)
 
 // RAB
-#define RAB_N_MHRS   (N_CLUSTERS*N_CORES)
 #define RAB_MAX_DATE BIT_MASK_GEN(RAB_CONFIG_N_BITS_DATE)
 
 // mailbox
@@ -250,9 +245,6 @@
 /*
  * Program execution
  */
-//#define BOOT_OFFSET_B 0x100
-//#define BOOT_ADDR (L3_MEM_BASE_ADDR + BOOT_OFFSET_B)
-
 #define SYNC_OFFSET_B 0xB000
 
 // needed for ROD, CT, JPEG

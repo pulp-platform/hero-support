@@ -5,7 +5,7 @@
 #include "zynq.h"
 #include "zynq_pmm_user.h"
 
-#define WRITE_L3
+//#define WRITE_L3
 
 int main(){
 

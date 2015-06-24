@@ -424,6 +424,71 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
 }
 
 /**
+ * Measure the clock frequency of PULP. Can only be executed with the
+ * RAB configured to allow accessing the cluster peripherals. To
+ * validate the measurement, the ZYNQ_PMM needs to be loaded for
+ * access to the ARM clock counter.
+ *
+ * @pulp:         pointer to the PulpDev structure
+ */
+int pulp_clking_measure_freq(PulpDev *pulp)
+{
+  unsigned seconds = 1;
+  unsigned limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*1.61)*seconds);
+
+  unsigned pulp_clk_counter, arm_clk_counter;
+  unsigned zynq_pmm;
+
+  volatile unsigned k;
+  int mes_freq_mhz;
+  
+  if( access("/dev/ZYNQ_PMM", F_OK ) != -1 )
+    zynq_pmm = 1;
+  else
+    zynq_pmm = 0;
+
+  // start clock counters
+  if (zynq_pmm) {
+    // enable clock counter divider (by 64), reset & enable clock counter, PMCR register 
+    asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
+  }
+  pulp_write32(pulp->clusters.v_addr,TIMER_STOP_OFFSET_B,'b',0x1);
+  pulp_write32(pulp->clusters.v_addr,TIMER_RESET_OFFSET_B,'b',0x1);
+  pulp_write32(pulp->clusters.v_addr,TIMER_START_OFFSET_B,'b',0x1);
+
+  // wait but don't sleep
+  k = 0;
+  while (k<limit) {
+    k++;
+    k++;
+    k++;
+    k++;
+    k++;
+    k++;
+    k++;
+    k++;
+    k++;
+    k++;
+  }
+
+  // stop and read clock counters
+  if (zynq_pmm) {
+    // Read the counter value, PMCCNTR register
+    asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_counter) : );
+  }
+  pulp_clk_counter = pulp_read32(pulp->clusters.v_addr,TIMER_GET_TIME_LO_OFFSET_B,'b');
+ 
+  if (zynq_pmm) {
+    mes_freq_mhz = (int)((float)pulp_clk_counter/((float)(arm_clk_counter*ARM_PMU_CLK_DIV)/ARM_CLK_FREQ_MHZ));
+  }
+  else {
+    mes_freq_mhz = (int)((float)pulp_clk_counter/seconds/1000000);
+  }
+
+  return mes_freq_mhz;
+}
+
+/**
  * Initialize the memory mapped device 
  *
  * @pulp: pointer to the PulpDev structure
@@ -766,7 +831,8 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
  *
  * @pulp      : pointer to the PulpDev structure
  */
-void pulp_rab_free_striped(PulpDev *pulp) {
+void pulp_rab_free_striped(PulpDev *pulp)
+{
   
   unsigned offload_id = 0;
 
@@ -775,6 +841,20 @@ void pulp_rab_free_striped(PulpDev *pulp) {
   
   return;
 } 
+
+void pulp_rab_mh_enable(PulpDev *pulp)
+{
+  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA);
+  
+  return;
+}
+
+void pulp_rab_mh_disable(PulpDev *pulp)
+{
+  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_DIS);
+
+  return;
+}
 
 /**
  * Setup a DMA transfer using the Zynq PS DMA engine
@@ -1310,7 +1390,7 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
     // check if mailbox is full
     if ( pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x2 ) {
       timeout = 1000;
-      status = 0;
+      status = 1;
       // wait for not full or timeout
       while ( status && (timeout > 0) ) {
 	usleep(us_delay);

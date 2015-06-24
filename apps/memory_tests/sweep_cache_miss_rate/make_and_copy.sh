@@ -4,7 +4,7 @@
 NAME=sweep_cache_miss_rate
 
 # Make
-vivado-2014.1 make all
+${VIVADO_VERSION} make all
 
 # Copy
 # Host executable

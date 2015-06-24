@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
     printf("ERROR: Specify the name of the standalone PULP application to execute as first argument.\n");
     return -EINVAL;
   }
-  else if (argc > 5) {
+  else if (argc > 4) {
     printf("WARNING: More than 3 command line arguments are not supported. Those will be ignored.\n");
   }
 
@@ -48,18 +48,19 @@ int main(int argc, char *argv[]) {
   pulp_reset(pulp,1);
   
   // set desired clock frequency
-  if (pulp_clk_freq_mhz != 50) {
-    ret = pulp_clking_set_freq(pulp,pulp_clk_freq_mhz);
-    if (ret > 0)
-      printf("PULP Running @ %d MHz.\n",ret);
-    else
-      printf("ERROR: setting clock frequency failed");
-  }
-
+  ret = pulp_clking_set_freq(pulp,pulp_clk_freq_mhz);
+  if (ret > 0)
+    printf("PULP confgiured to run @ %d MHz.\n",ret);
+  else
+    printf("ERROR: setting clock frequency failed");
+  
   pulp_rab_free(pulp,0x0);
 
   // initialization of PULP, static RAB rules (mailbox, L2, ...)
   pulp_init(pulp);
+
+  // measure the actual clock frequency
+  printf("PULP actually running @ %d MHz.\n",pulp_clking_measure_freq(pulp));
 
   // clear memories?
   
@@ -82,11 +83,10 @@ int main(int argc, char *argv[]) {
   // wait for end of computation
   pulp_exe_wait(pulp,timeout_s);
 
-  // start execution
+  // stop execution
   pulp_exe_stop(pulp);
  
   // -> poll stdout
-  sleep(3);
   pulp_stdout_print(pulp,0);
   pulp_stdout_print(pulp,1);
   pulp_stdout_print(pulp,2);
