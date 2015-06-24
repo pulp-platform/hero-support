@@ -14,7 +14,7 @@
 #define ARRAY_SIZE_B 0x1000 * 1000 
 #define ARRAY_SIZE   ARRAY_SIZE_B/4
 
-#define PULP_CLK_FREQ_MHZ 75
+#define PULP_CLK_FREQ_MHZ 66
 //#define PULP_CLK_FREQ_MHZ 50
 
 int main(){
@@ -33,7 +33,7 @@ int main(){
   //sleep(1);
   //pulp_print_v_addr(pulp);
   //sleep(1);  
-  pulp_reset(pulp);
+  pulp_reset(pulp,1);
   printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
   pulp_rab_free(pulp,0x0);
   pulp_init(pulp);
@@ -87,47 +87,8 @@ int main(){
   
   pulp_rab_free_striped(pulp);
 
-
-  /***********************************************************************************/
-  unsigned arm_clk_cntr, pulp_clk_cntr;
-  volatile unsigned k;
-  unsigned seconds = 1;
-  unsigned limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*1.61)*seconds);
-  
-  pulp_write32(pulp->clusters.v_addr,TIMER_STOP_OFFSET_B,'b',0x1);
-  pulp_write32(pulp->clusters.v_addr,TIMER_RESET_OFFSET_B,'b',0x1);
-  pulp_write32(pulp->clusters.v_addr,TIMER_START_OFFSET_B,'b',0x1);  
-  arm_clk_cntr_reset();
-  
-  // wait but don't sleep
-  k = 0;
-  while (k<limit) {
-    k++;
-    k++;
-    k++;
-    k++;
-    k++;
-    k++;
-    k++;
-    k++;
-    k++;
-    k++;
-  }
-  
-  pulp_clk_cntr = pulp_read32(pulp->clusters.v_addr,TIMER_GET_TIME_LO_OFFSET_B,'b');
-  arm_clk_cntr = arm_clk_cntr_read();
-  
-  printf("----------------------------------------\n");
-  printf("Comparing counter precision:\n");
-  printf("Waited for %0.6f secs\n",(float)seconds);
-  
-  printf("ARM: %d cycles\n", arm_clk_cntr);
-  printf("ARM: %0.6f secs\n", (float)(arm_clk_cntr*64/1000000)/ARM_CLK_FREQ_MHZ);
-  
-  printf("PULP: %d cycles\n", pulp_clk_cntr);
-  printf("PULP: %0.6f secs\n", (float)(pulp_clk_cntr/1000000)/PULP_CLK_FREQ_MHZ);
-  printf("----------------------------------------\n");
-  /***********************************************************************************/
+  // measure the actual clock frequency
+  printf("PULP actually running @ %d MHz.\n",pulp_clking_measure_freq(pulp));
 
   sleep(1);
 
