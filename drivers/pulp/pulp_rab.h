@@ -27,6 +27,7 @@
 
 // type definitions
 typedef struct {
+  unsigned rab_mapping;
   unsigned rab_slice;
   unsigned char rab_port;
   unsigned char prot;
@@ -38,10 +39,11 @@ typedef struct {
   unsigned page_ptr_idx;
   unsigned page_idx_start;
   unsigned page_idx_end;
-  unsigned flags; // bit 0 = const mapping, bit 1 = striped mapping
+  unsigned flags; // bit 0 = const mapping, bit 1 = striped mapping, bit 2 = set up in every mapping
 } RabSliceReq;
 
 typedef struct {
+  unsigned rab_mapping;
   unsigned n_slices;
   unsigned *slices;
   unsigned char rab_port;
@@ -68,5 +70,8 @@ int  pulp_rab_slice_check(RabSliceReq *rab_slice_req);
 int  pulp_rab_slice_get(RabSliceReq *rab_slice_req);
 void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req);
 int  pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct page **pages);
+
+void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping);
+void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping);
 
 #endif/*_PULP_RAB_H_*/
