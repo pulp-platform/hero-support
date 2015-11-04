@@ -120,4 +120,10 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask);
 int pulp_offload_start(PulpDev *pulp, TaskDesc *task);
 int pulp_offload_wait(PulpDev *pulp, TaskDesc *task);
 
+// for random_forest
+int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned char port,
+				   unsigned p_height, unsigned i_width,
+				   unsigned n_channels, unsigned char **channels,
+				   unsigned *s_height);
+
 #endif // PULP_FUNC_H__

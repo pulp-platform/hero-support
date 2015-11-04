@@ -4,7 +4,7 @@
 #include "pulp.h"
 #include "pulpemu.h"
 
-#define DEBUG_LEVEL 3
+#define DEBUG_LEVEL 2
 
 #define ZEDBOARD 1
 #define ZC706    2
@@ -24,6 +24,7 @@
 
 #define TO_RUNTIME 0x10000000 // pass PULP driver
 #define RAB_UPDATE 0x10000001 // handled by PULP driver
+#define RAB_SWITCH 0x10000002 // handled by PULP driver
 
 /*
  * Macros
@@ -126,10 +127,11 @@
 #if BOARD == ZEDBOARD 
 
 // L3
-#define L3_MEM_SIZE_MB 128 
+#define L3_MEM_SIZE_MB 64 
 // PULP system address map
 #define PULP_H_BASE_ADDR 0x40000000 // Address at which the host sees PULP
 #define N_CLUSTERS 1
+#define N_CORES 2
 #define L2_MEM_SIZE_KB 64
 
 #elif BOARD == ZC706 || BOARD == MINI_ITX
@@ -141,7 +143,7 @@
 #define PULP_H_BASE_ADDR 0x40000000 // Address at which the host sees PULP
 #define N_CLUSTERS 1
 #define N_CORES 4
-#define L2_MEM_SIZE_KB 64
+#define L2_MEM_SIZE_KB 256
 
 #endif // BOARD
 
@@ -164,6 +166,7 @@
 
 #define RAB_CONFIG_BASE_ADDR      0x51030000
 #define RAB_CONFIG_SIZE_B         0x1000
+#define RAB_N_MAPPINGS            2
 #define RAB_N_PORTS               2
 #define RAB_N_SLICES              32
 #define RAB_CONFIG_N_BITS_PORT    1
@@ -186,6 +189,7 @@
 
 #define CLUSTER_PERIPHERALS_OFFSET_B 0x200000
 #define BBMUX_CLKGATE_OFFSET_B       0x800
+#define GP_1_OFFSET_B                0x364
 #define GP_2_OFFSET_B                0x368
 
 #define SOC_PERIPHERALS_SIZE_B 0x50000
@@ -228,7 +232,8 @@
 #define CLUSTERS_SIZE_B      (N_CLUSTERS*CLUSTER_SIZE_B)
 
 // RAB
-#define RAB_MAX_DATE BIT_MASK_GEN(RAB_CONFIG_N_BITS_DATE)
+#define RAB_MAX_DATE     BIT_MASK_GEN(RAB_CONFIG_N_BITS_DATE)
+#define RAB_MAX_DATE_MH  (RAB_MAX_DATE-2)
 
 // mailbox
 #define MAILBOX_H_BASE_ADDR \
@@ -241,6 +246,8 @@
 #define TIMER_RESET_OFFSET_B       (TIMER_H_OFFSET_B + 0x08) 
 #define TIMER_GET_TIME_LO_OFFSET_B (TIMER_H_OFFSET_B + 0x0c) 
 #define TIMER_GET_TIME_HI_OFFSET_B (TIMER_H_OFFSET_B + 0x10) 
+
+#define PE_TIMER_OFFSET_B         0x40
 
 /*
  * Program execution
