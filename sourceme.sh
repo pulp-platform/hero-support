@@ -37,7 +37,7 @@ then
 fi    
 
 # PULP binary path, i.e., where the compiled accelerator binaries can be found
-export PULP_BIN_PATH=/home/vogelpi/pulp_on_fpga/software/pulp/hsa_apps
+export PULP_SW_PATH=/home/vogelpi/pulp_on_fpga/software/pulp
 
 # path to external ARM libraries (on scratch)
 export ARM_LIB_EXT_DIR=/scratch/vogelpi/libs-zynq/lib

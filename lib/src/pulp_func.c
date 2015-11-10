@@ -370,8 +370,9 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   // input clock = 100 MHz
   // default output clock = 50 MHz
   int divclk_divide = 1;
-  int clkfbout_mult = 10;
-  int clkout0_divide = 1000/freq_mhz;
+  int clkfbout_mult = 5;
+  int clkout0_divide = 500/freq_mhz;
+  int clkout0_divide_frac = ((500 % freq_mhz) << 10)/freq_mhz;
 
   // config DIVCLK_DIVIDE, CLKFBOUT_MULT, CLKFBOUT_FRAC, CLKFBOUT_PHASE
   unsigned value;
@@ -380,11 +381,13 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   if (DEBUG_LEVEL > 3)
     printf("CLKING_CONFIG_REG_0: %#x\n",value);
 
-  // config CLKOUT0: DIVIDE, FRAC, FRAC_EN
-  value = 0x00040000 + 0x1*clkout0_divide;
-  pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_2_OFFSET_B,'b',value);
+  // config CLKOUT0/1/2: DIVIDE, FRAC, FRAC_EN
+  value = 0x00040000 + 0x100*clkout0_divide_frac + 0x1*clkout0_divide;
+  //pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_2_OFFSET_B,'b',value);
+  pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_5_OFFSET_B,'b',value);
+  pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_8_OFFSET_B,'b',value);
   if (DEBUG_LEVEL > 3)
-    printf("CLKING_CONFIG_REG_2: %#x\n",value);
+    printf("CLKING_CONFIG_REG_5/8: %#x\n",value);
 
   // check status
   if ( !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1) ) {
@@ -403,6 +406,7 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
 
   // start reconfiguration
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_23_OFFSET_B,'b',0x7);
+  usleep(1000);
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_23_OFFSET_B,'b',0x2);
 
   // check status
@@ -1160,7 +1164,7 @@ int pulp_exe_wait(PulpDev *pulp, int timeout_s)
  */
 unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr)
 {
-  unsigned v_addr;
+  unsigned int v_addr;
 
   // round l3_offset to next higher 64-bit word -> required for PULP DMA
   if (pulp->l3_offset & 0x7) {
