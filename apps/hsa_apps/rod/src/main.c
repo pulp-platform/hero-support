@@ -18,8 +18,6 @@
 
 #include "Removal-Object.h"
 
-#define PULP_CLK_FREQ_MHZ 75
-//#define PULP_CLK_FREQ_MHZ 50
 //#define REPETITIONS 2
 #define REPETITIONS 5
 //#define PIPELINE
@@ -62,8 +60,9 @@ unsigned long ns_duration, ns_duration1, ns_duration2, ns_duration3;
 #ifdef ZYNQ_PMM
 // for cache miss rate measurement
 int *zynq_pmm_fd;
-int zynq_pmm, ret;
+int zynq_pmm;
 #endif
+int ret;
 
 int main(int argc, char *argv[]) {
   raw_image_data_t foreground;
@@ -84,6 +83,10 @@ int main(int argc, char *argv[]) {
   strcpy(name,"rod");
   TaskDesc task_desc;
   task_desc.name = &name[0];
+  int pulp_clk_freq_mhz = 50;
+
+  if (argc>1)
+    pulp_clk_freq_mhz = atoi(argv[1]);
 
   /*
    * Initialization
@@ -92,11 +95,29 @@ int main(int argc, char *argv[]) {
   pulp_reserve_v_addr(pulp);
   pulp_mmap(pulp);
   //pulp_print_v_addr(pulp);
-  pulp_reset(pulp);
-  printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
-  pulp_rab_free(pulp,0x0);
-  pulp_init(pulp);
+  pulp_reset(pulp,1);
+
+  // set desired clock frequency
+  if (pulp_clk_freq_mhz != 50) {
+    ret = pulp_clking_set_freq(pulp,pulp_clk_freq_mhz);
+    if (ret > 0) {
+      printf("PULP Running @ %d MHz.\n",ret);
+      pulp_clk_freq_mhz = ret;
+    }
+    else
+      printf("ERROR: setting clock frequency failed");
+  }
   
+  pulp_rab_free(pulp,0x0);
+
+  // initialization of PULP, static RAB rules (mailbox, L2, ...)
+  pulp_init(pulp);
+
+  // measure the actual clock frequency
+  pulp_clk_freq_mhz = pulp_clking_measure_freq(pulp);
+  printf("PULP actually running @ %d MHz.\n",pulp_clk_freq_mhz);
+  
+  // clear stdout
   pulp_stdout_clear(pulp,0);
   pulp_stdout_clear(pulp,1);
   pulp_stdout_clear(pulp,2);
@@ -106,6 +127,7 @@ int main(int argc, char *argv[]) {
   for (i = 0; i<L3_MEM_SIZE_B/4; i++)
     pulp_write32(pulp->l3_mem.v_addr,i*4,'b',0);
 
+  printf("PULP Boot\n");
   pulp_boot(pulp,&task_desc);
 
   // setup time measurement
