@@ -1875,7 +1875,7 @@ static void pulp_rab_handle_miss(unsigned unused)
     // detect empty FIFOs
     if ( (rab_mh_addr[i] & 0x1) || (rab_mh_id[i] & 0x80000000) )
       break;
-    printk(KERN_INFO "i = %d, date = %#x, id = %#x, addr = %#x\n",i,rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
+    //printk(KERN_INFO "i = %d, date = %#x, id = %#x, addr = %#x\n",i,rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
 
     // handle every miss separately
     err = 0;
@@ -2005,7 +2005,7 @@ static void pulp_rab_handle_miss(unsigned unused)
 	rab_mh_date++;
 	if (rab_mh_date > RAB_MAX_DATE_MH)
 	  rab_mh_date = 0;
-	printk(KERN_INFO "rab_mh_date = %d\n",rab_mh_date);
+	//printk(KERN_INFO "rab_mh_date = %d\n",rab_mh_date);
       }
     }
     
