@@ -8,19 +8,31 @@
 
 //#define USE_L3
 #define CHECK_RESULT
-#define PRINT_MAT
 
-#define ARM_DMA_SIZE_B 0x10000 // 64kB = L2 Size
+#ifndef USE_L3
+#define ARM_DMA_SIZE_B L2_MEM_SIZE_B
+#else
+#define ARM_DMA_SIZE_B 1572864
+#endif
 //#define ARM_DMA_SIZE_B 0x8000
 //#define ARM_DMA_SIZE_B 0x1000
-#define PULP_DMA_SIZE_B 0x4000 // 16kB
+#define PULP_DMA_SIZE_B 0x4000 //L1_MEM_SIZE_B/2
 
 #define ARM_DMA_SIZE  ARM_DMA_SIZE_B/4
 #define PULP_DMA_SIZE  PULP_DMA_SIZE_B/4
 
-#define PULP_CLK_FREQ_MHZ 75
+int main(int argc, char *argv[]){
+  
+  int ret;
+  
+  printf("Testing DMA performance...\n");
 
-int main(){
+  PulpDev pulp_dev;
+  PulpDev *pulp;
+  pulp = &pulp_dev;
+
+  // reserve virtual addresses overlapping with PULP's internal physical address space
+  pulp_reserve_v_addr(pulp);
   
   //// preparation
   //int * arm_dma_array;
@@ -41,25 +53,44 @@ int main(){
 
   clock_getres(CLOCK_REALTIME,&res);
 
+  int pulp_clk_freq_mhz = 50;
+
+  if (argc > 2) {
+    printf("WARNING: More than 1 command line argument is not supported. Those will be ignored.\n");
+  }
+  
+  if (argc > 1)
+    pulp_clk_freq_mhz = atoi(argv[1]);
+
   /*
    * Initialization
    */ 
-  // global variables
-  PulpDev pulp_dev;
-  PulpDev *pulp;
-  pulp = &pulp_dev;
-
-  // initialization of pulp
-  pulp_reserve_v_addr(pulp);
+  printf("PULP Initialization\n");
+  
   pulp_mmap(pulp);
   //sleep(1);
   //pulp_print_v_addr(pulp);
   //sleep(1);  
-  pulp_reset(pulp);
-  //printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
+  pulp_reset(pulp,1);
+
+  // set desired clock frequency
+  if (pulp_clk_freq_mhz != 50) {
+    ret = pulp_clking_set_freq(pulp,pulp_clk_freq_mhz);
+    if (ret > 0)
+      printf("PULP confgiured to run @ %d MHz.\n",ret);
+    else
+      printf("ERROR: setting clock frequency failed");
+  }
+
   pulp_rab_free(pulp,0x0);
+
+  // initialization of PULP, static RAB rules (mailbox, L2, ...)
   pulp_init(pulp);
-  
+
+  // measure the actual clock frequency
+  pulp_clk_freq_mhz = pulp_clking_measure_freq(pulp);
+  printf("PULP actually running @ %d MHz.\n",pulp_clk_freq_mhz);
+
   /*
    * Body
    */
@@ -67,6 +98,10 @@ int main(){
   unsigned l2_offset;
   
   l2_offset = 0x0;
+
+#ifdef CHECK_RESULT
+  int value;
+#endif
 
   // initialize the arrays
   for(i=0; i<ARM_DMA_SIZE; i++) {
@@ -111,11 +146,10 @@ int main(){
     ns_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) % 1000000000;
     s_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) / 1000000000;
   }
-  printf("Measured Zynq PS DMA bandwidth = %.2f MB/s (includes transfer setup)\n",((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
+  printf("Measured Zynq PS DMA bandwidth = %.2f MiB/s (includes transfer setup)\n",
+	 ((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
 
 #ifdef CHECK_RESULT
-  int value;
-
   for (i=0; i<ARM_DMA_SIZE; i++) {
 #ifndef USE_L3
     value = pulp_read32(pulp->l2_mem.v_addr,l2_offset+4*i,'b');
@@ -125,17 +159,71 @@ int main(){
     //printf("entry %d = %d \n",i,value);
     if ( arm_dma_array[i] != value ) {
       printf("Error: mismatch in Entry %i detected\n",i);
-      printf("Value found in L2 = %d\n",value);
-      printf("Value expected    = %d\n",arm_dma_array[i]);
+      printf("Value found    = %d\n",value);
+      printf("Value expected = %d\n",arm_dma_array[i]);
       break;
     }
     if ( i == ARM_DMA_SIZE-1 )
-      printf("Success: L2 content matches array in DRAM.\n");
+      printf("Success: Content matches.\n");
+  }
+#endif // CHECK_RESULT
+  /*
+   * Second, let the CPU do a memcpy().
+   */
+  printf("Testing Zynq PS memcpy()...\n");  
+
+  // clean L2
+  for (i=0; i<ARM_DMA_SIZE; i++) {
+#ifndef USE_L3
+    pulp_write32(pulp->l2_mem.v_addr,l2_offset+4*i,'b',0);
+#else
+    pulp_write32(pulp->l3_mem.v_addr,l2_offset+4*i,'b',0);
+#endif
+  }
+ 
+  clock_gettime(CLOCK_REALTIME,&tp1);
+
+#ifndef USE_L3
+  memcpy((void *)(pulp->l2_mem.v_addr+l2_offset),(void *)arm_dma_array,ARM_DMA_SIZE_B);
+#else
+  memcpy((void *)(pulp->l3_mem.v_addr+l2_offset),(void *)arm_dma_array,ARM_DMA_SIZE_B);
+#endif  
+
+  clock_gettime(CLOCK_REALTIME,&tp2);
+
+  // compute bandwidth
+  s_duration = (int)(tp2.tv_sec - tp1.tv_sec);
+  if ((tp2.tv_nsec > tp1.tv_nsec) && (s_duration < 1)) { // no overflow
+    ns_duration = (tp2.tv_nsec - tp1.tv_nsec);
+  }
+  else {//((tp2.tv_nsec < tp1.tv_nsec) && (s_duration > 1)) {// overflow of tv_nsec
+    ns_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) % 1000000000;
+    s_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) / 1000000000;
+  }
+  printf("Measured Zynq PS memcpy() bandwidth = %.2f MiB/s\n",
+	 ((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
+
+#ifdef CHECK_RESULT
+  for (i=0; i<ARM_DMA_SIZE; i++) {
+#ifndef USE_L3
+    value = pulp_read32(pulp->l2_mem.v_addr,l2_offset+4*i,'b');
+#else
+    value = pulp_read32(pulp->l3_mem.v_addr,l2_offset+4*i,'b');
+#endif   
+    //printf("entry %d = %d \n",i,value);
+    if ( arm_dma_array[i] != value ) {
+      printf("Error: mismatch in Entry %i detected\n",i);
+      printf("Value found     = %d\n",value);
+      printf("Value expected  = %d\n",arm_dma_array[i]);
+      break;
+    }
+    if ( i == ARM_DMA_SIZE-1 )
+      printf("Success: Content matches.\n");
   }
 #endif // CHECK_RESULT
 
   /*
-   * Second, run a test program on PULP to test it's own DMA engine.
+   * Third, run a test program on PULP to test it's own DMA engine.
    */
   printf("Testing PULP DMA engine...\n");  
   
@@ -174,22 +262,23 @@ int main(){
     ns_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) % 1000000000;
     s_duration = (1000000000 - tp1.tv_nsec + tp2.tv_nsec) / 1000000000;
   }
-  printf("Measured PULP DMA bandwidth = %.2f MB/s (includes offload and transfer setup)\n",((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
+  printf("Measured PULP DMA bandwidth = %.2f MiB/s (includes offload and transfer setup)\n",
+	 ((float)(ARM_DMA_SIZE_B)/((float)(ns_duration+s_duration*1000000000)))*1000000000/(1024*1024));
 
   int time_high, time_low;
   //time_high = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
-  pulp_mailbox_read(pulp,&time_high,1);
+  pulp_mailbox_read(pulp,(unsigned *)&time_high,1);
   //time_low = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
-  pulp_mailbox_read(pulp,&time_low,1);
+  pulp_mailbox_read(pulp,(unsigned *)&time_low,1);
 
   float time;
-  time = ((2<<31)*(float)time_high + (float)time_low)/(50);
+  time = ((2<<31)*(float)time_high + (float)time_low)/(pulp_clk_freq_mhz);
 
   printf("PULP - DMA: size = %d [bytes]\n",PULP_DMA_SIZE_B);
   printf("PULP - DMA: time = %.2f [us]\n",time);
 
   float bw;
-  bw = PULP_DMA_SIZE_B/time;
+  bw = (float)PULP_DMA_SIZE_B/time*1000000/(1024*1024);
   printf("DMA bandwidth measured on PULP = %.2f MiB/s\n",bw);
 
 #ifdef CHECK_RESULT
@@ -205,23 +294,37 @@ int main(){
     //printf("entry %d = %d \n",i,value);
     if ( pulp_dma_array[i] != value ) {
       printf("Error: mismatch in Entry %i detected\n",i);
-      printf("Value found in L2 = %d\n",value);
-      printf("Value expected    = %d\n",arm_dma_array[i]);
+      printf("Value found    = %d\n",value);
+      printf("Value expected = %d\n",arm_dma_array[i]);
       break;
     }
     if ( i == PULP_DMA_SIZE-1 )
-      printf("Success: L2 content matches array in DRAM.\n");
+      printf("Success: Content matches.\n");
   }
 #endif // CHECK_RESULT
  
-  //free(arm_dma_array);
-  //free(pulp_dma_array);
+  // wait for end of computation
+  pulp_exe_wait(pulp,2);
 
-  sleep(3);
+  // stop execution
+  pulp_exe_stop(pulp);
+
+  // -> poll stdout
+  pulp_stdout_print(pulp,0);
+  pulp_stdout_print(pulp,1);
+  pulp_stdout_print(pulp,2);
+  pulp_stdout_print(pulp,3);
+
+  // clear stdout
+  pulp_stdout_clear(pulp,0);
+  pulp_stdout_clear(pulp,1);
+  pulp_stdout_clear(pulp,2);
+  pulp_stdout_clear(pulp,3);
 
   /*
    * Cleanup
    */
+  printf("PULP Cleanup\n");
   pulp_rab_free(pulp,0);
   pulp_free_v_addr(pulp);
   sleep(1);

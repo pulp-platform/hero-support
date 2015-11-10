@@ -12,6 +12,13 @@ int main(int argc, char *argv[]){
   
   printf("Testing PULP memory latencies...\n");      
 
+  PulpDev pulp_dev;
+  PulpDev *pulp;
+  pulp = &pulp_dev;
+
+  // reserve virtual addresses overlapping with PULP's internal physical address space
+  pulp_reserve_v_addr(pulp);
+
   /*
    * Preparation
    */
@@ -33,13 +40,6 @@ int main(int argc, char *argv[]){
    */
   printf("PULP Initialization\n");
  
-  PulpDev pulp_dev;
-  PulpDev *pulp;
-  pulp = &pulp_dev;
-
-  // reserve virtual addresses overlapping with PULP's internal physical address space
-  pulp_reserve_v_addr(pulp);
-
   pulp_mmap(pulp);
   //pulp_print_v_addr(pulp);
   pulp_reset(pulp,1);
@@ -47,10 +47,8 @@ int main(int argc, char *argv[]){
   // set desired clock frequency
   if (pulp_clk_freq_mhz != 50) {
     ret = pulp_clking_set_freq(pulp,pulp_clk_freq_mhz);
-    if (ret > 0) {
-      printf("PULP Running @ %d MHz.\n",ret);
-      pulp_clk_freq_mhz = ret;
-    }
+    if (ret > 0)
+      printf("PULP confgiured to run @ %d MHz.\n",ret);
     else
       printf("ERROR: setting clock frequency failed");
   }
@@ -59,6 +57,10 @@ int main(int argc, char *argv[]){
 
   // initialization of PULP, static RAB rules (mailbox, L2, ...)
   pulp_init(pulp);
+
+  // measure the actual clock frequency
+  pulp_clk_freq_mhz = pulp_clking_measure_freq(pulp);
+  printf("PULP actually running @ %d MHz.\n",pulp_clk_freq_mhz);
 
   // clear memories?
   
