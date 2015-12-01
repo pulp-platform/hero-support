@@ -18,8 +18,8 @@
 //#include "ompOffload.h"
 #include "utils.h"
 
-#define PULP_CLK_FREQ_MHZ 75
-#define REPETITIONS 100
+//#define REPETITIONS 100
+#define REPETITIONS 5
 
 #ifndef WIDTH
 #define WIDTH 240
@@ -514,21 +514,21 @@ void JPEG_destroy(JPEG_kernel_t *jpegInstance);
 // vogelpi
 PulpDev pulp_dev;
 PulpDev *pulp;
+char name[5];
 
 // for time measurement
 #define ACC_CTRL 0 
 int accumulate_time(struct timespec *tp1, struct timespec *tp2,
-		    unsigned *seconds, unsigned long *nanoseconds,
-		    int ctrl);
+		    double *duration, int ctrl);
 struct timespec res, tp1, tp2, tp1_local, tp2_local;
-unsigned s_duration, s_duration1, s_duration2, s_duration3;
-unsigned long ns_duration, ns_duration1, ns_duration2, ns_duration3;
+double s_duration, s_duration1, s_duration2, s_duration3;
 
 #ifdef ZYNQ_PMM
 // for cache miss rate measurement
 int *zynq_pmm_fd;
-int zynq_pmm, ret;
+int zynq_pmm;
 #endif
+int ret;
 
 int main(int argc, char *argv[]) {
   unsigned int i, ii;
@@ -543,21 +543,20 @@ int main(int argc, char *argv[]) {
 #else
   JPEG_kernel_t JPEG_instance;
 #endif
-  int error = 0;
 
   unsigned int lastlong  = 0;
   int bitsleft  = 0;
   unsigned long *nextlong  = huffbits;
     
   // used to boot PULP
-  char name[5];
   strcpy(name,"jpeg");
   TaskDesc task_desc;
   task_desc.name = &name[0];
+  int pulp_clk_freq_mhz = 50;
 
-  /* Init the runtime */
-  //sthorm_omp_rt_init();
-  // vogelpi
+  if (argc>1)
+    pulp_clk_freq_mhz = atoi(argv[1]);
+  
   /*
    * Initialization
    */ 
@@ -565,21 +564,48 @@ int main(int argc, char *argv[]) {
   pulp_reserve_v_addr(pulp);
   pulp_mmap(pulp);
   //pulp_print_v_addr(pulp);
-  pulp_reset(pulp);
-  printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
-  pulp_rab_free(pulp,0x0);
-  pulp_init(pulp);
+  pulp_reset(pulp,1);
   
+  // set desired clock frequency
+  if (pulp_clk_freq_mhz != 50) {
+    ret = pulp_clking_set_freq(pulp,pulp_clk_freq_mhz);
+    if (ret > 0) {
+      printf("PULP Running @ %d MHz.\n",ret);
+      pulp_clk_freq_mhz = ret;
+    }
+    else
+      printf("ERROR: setting clock frequency failed");
+  }
+  
+  pulp_rab_free(pulp,0x0);
+
+  // initialization of PULP, static RAB rules (mailbox, L2, ...)
+  pulp_init(pulp);
+
+  // measure the actual clock frequency
+  //pulp_clk_freq_mhz = pulp_clking_measure_freq(pulp);
+  printf("PULP actually running @ %d MHz.\n",pulp_clk_freq_mhz);
+  
+  // clear stdout
   pulp_stdout_clear(pulp,0);
   pulp_stdout_clear(pulp,1);
   pulp_stdout_clear(pulp,2);
   pulp_stdout_clear(pulp,3);
 
+  // clear contiguous L3
+  for (i = 0; i<L3_MEM_SIZE_B/4; i++)
+    pulp_write32(pulp->l3_mem.v_addr,i*4,'b',0);
+
+  printf("PULP Boot\n");
   pulp_boot(pulp,&task_desc);
+
+#if (MEM_SHARING == 3)
+  // enable RAB miss handling
+  pulp_rab_mh_enable(pulp);
+#endif
 
   // setup time measurement
   s_duration = 0, s_duration1 = 0, s_duration2 = 0, s_duration3 = 0;
-  ns_duration = 0, ns_duration1 = 0, ns_duration2 = 0, ns_duration3 = 0;
   
 #ifdef ZYNQ_PMM
   // setup cache miss rate measurement
@@ -601,7 +627,19 @@ int main(int argc, char *argv[]) {
 
 #ifndef PIPELINE
   JPEG_init(&JPEG_instance);
-    
+  
+#if (MEM_SHARING == 2) || (MEM_SHARING == 3)
+  unsigned int virt_addr_1;
+  unsigned int phys_addr_1;
+  virt_addr_1 = pulp_l3_malloc(pulp, 64*sizeof(unsigned char), &phys_addr_1);
+
+  unsigned int virt_addr;
+  unsigned int phys_addr;
+  virt_addr = pulp_l3_malloc(pulp, NBLKS*BLKSIZE*sizeof(short), &phys_addr);
+  
+  printf("phys_addr = %#x\n",phys_addr);
+#endif
+  
   for(iter= 0; iter < REPETITIONS; iter++) {
         
     //#ifdef PROFILE
@@ -642,7 +680,7 @@ int main(int argc, char *argv[]) {
       }
 
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration2,&ns_duration2,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration2,ACC_CTRL);
 
 #ifdef ZYNQ_PMM
     zynq_pmm_read(zynq_pmm_fd, proc_text);
@@ -654,17 +692,34 @@ int main(int argc, char *argv[]) {
     // write command to make PULP continue
     pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',PULP_START);
     
+#if (MEM_SHARING == 2) || (MEM_SHARING == 3)
+    memcpy((void *)virt_addr_1, (void *)(&JPEG_instance.qtblLum[0]),64*sizeof(unsigned char));
+
+    memcpy((void *)virt_addr, (void *)(&JPEG_instance.dctData[0]),NBLKS*BLKSIZE*sizeof(short));
+    
+    short *virt_addr_px;
+    int n_failed = 0;
+    virt_addr_px = (short *)virt_addr;
+    for (i=0; i<NBLKS*BLKSIZE; i++) {
+      if ( JPEG_instance.dctData[i] != virt_addr_px[i] ) {
+	n_failed++;
+	if (n_failed < 100)
+	  printf("%#x %#x\n",JPEG_instance.dctData[i],virt_addr_px[i]);
+      }
+    }
+    printf("memcpy() failed for %i pixels.\n",n_failed);
+#endif
+
     // offload
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     JPEG_offload_out(&JPEG_instance);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
 
     // start
     ret = JPEG_exe_start(&JPEG_instance);
     if ( ret ) {
       printf("ERROR: Execution start failed. ret = %d\n",ret);
-      error = 1;
       break;
     }
 
@@ -673,20 +728,18 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     ret = JPEG_exe_wait(&JPEG_instance);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration3,&ns_duration3,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration3,ACC_CTRL);
     if ( ret ) {
       printf("ERROR: Execution wait failed. ret = %d\n",ret);
-      error = 1;
       break;
     }
 
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     ret = JPEG_offload_in(&JPEG_instance);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
     if ( ret ) {
       printf("ERROR: Offload in failed. ret = %d\n",ret);
-      error = 1;
       break;
     } 
     
@@ -707,12 +760,12 @@ int main(int argc, char *argv[]) {
       pulp->l3_offset = 0;
     }
 
-    if (DEBUG_LEVEL > 0)  {
-      pulp_stdout_print(pulp,0);
-      pulp_stdout_print(pulp,1);
-      pulp_stdout_print(pulp,2);
-      pulp_stdout_print(pulp,3);
-    }
+    //if (DEBUG_LEVEL > 0)  {
+    //  pulp_stdout_print(pulp,0);
+    //  pulp_stdout_print(pulp,1);
+    //  pulp_stdout_print(pulp,2);
+    //  pulp_stdout_print(pulp,3);
+    //}
 
   }//iters
     
@@ -723,7 +776,9 @@ int main(int argc, char *argv[]) {
   int buff_id = 0;
   int next_iter = 0;
 
+#ifdef ZYNQ_PMM
   zynq_pmm_read(zynq_pmm_fd,proc_text); // reset cache counters
+#endif
 
   clock_gettime(CLOCK_REALTIME,&tp1_local);
 
@@ -751,17 +806,19 @@ int main(int argc, char *argv[]) {
       huff_ac_dec(&JPEG_instance[buff_id].dctData[i*blockSize],&lastlong, &nextlong, &bitsleft);
   }
   clock_gettime(CLOCK_REALTIME,&tp2_local);
-  accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration2,ACC_CTRL);
+  accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
 
+#ifdef ZYNQ_PMM
   zynq_pmm_read(zynq_pmm_fd, proc_text);
   zynq_pmm_parse(proc_text, counter_values, 1); // accumulate cache counter values
+#endif
 
   if (DEBUG_LEVEL > 0) printf("\n[APP ] Execute offload nbclusters %d\n", JPEG_instance[0].n_clusters);
 
   clock_gettime(CLOCK_REALTIME,&tp1_local);
   JPEG_launch(&JPEG_instance[buff_id]);
   clock_gettime(CLOCK_REALTIME,&tp2_local);
-  accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
+  accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
     
   if (DEBUG_LEVEL > 0) printf("[APP ] Offload %d scheduled\n", 0);
 
@@ -772,7 +829,9 @@ int main(int argc, char *argv[]) {
 
     if (next_iter < REPETITIONS) {
 
+#ifdef ZYNQ_PMM
       zynq_pmm_read(zynq_pmm_fd,proc_text); // reset cache counters
+#endif
 
       clock_gettime(CLOCK_REALTIME,&tp1_local);
       /* Not a DOALL loop. Run sequential */
@@ -799,17 +858,19 @@ int main(int argc, char *argv[]) {
 	  huff_ac_dec(&JPEG_instance[buff_id].dctData[i*blockSize],&lastlong, &nextlong, &bitsleft);
       }
       clock_gettime(CLOCK_REALTIME,&tp2_local);
-      accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration2,ACC_CTRL);
+      accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
 
+#ifdef ZYNQ_PMM
       zynq_pmm_read(zynq_pmm_fd, proc_text);
       zynq_pmm_parse(proc_text, counter_values, 1); // accumulate cache counter values
+#endif
 
       if (DEBUG_LEVEL > 0) printf("\n[APP ] Execute offload nbclusters %d\n", JPEG_instance[buff_id].n_clusters);
         
       clock_gettime(CLOCK_REALTIME,&tp1_local);
       JPEG_offload_out(&JPEG_instance[buff_id]);
       clock_gettime(CLOCK_REALTIME,&tp2_local);
-      accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
+      accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
 
       if (DEBUG_LEVEL > 0) printf("[APP ] Offload %d scheduled\n", next_iter);
     }
@@ -871,14 +932,14 @@ int main(int argc, char *argv[]) {
 
   // measure time
   clock_gettime(CLOCK_REALTIME,&tp2);
-  accumulate_time(&tp1,&tp2,&s_duration,&ns_duration,ACC_CTRL);
+  accumulate_time(&tp1,&tp2,&s_duration,ACC_CTRL);
   
   // print time measurements
   printf("\n###########################################################################\n");
-  printf("Total Offload Time \t : %u.%09lu seconds\n",s_duration1,ns_duration1);
-  printf("Total Host Wait Time \t : %u.%09lu seconds\n",s_duration3,ns_duration3);
-  printf("Total Host Kernel Time \t : %u.%09lu seconds\n",s_duration2,ns_duration2);
-  printf("Total Execution Time \t : %u.%09lu seconds\n",s_duration,ns_duration);
+  printf("Total Offload Time [s]:     %.6f\n",s_duration1);
+  printf("Total Host Wait Time [s]:   %.6f\n",s_duration3);
+  printf("Total Host Kernel Time [s]: %.6f\n",s_duration2);
+  printf("Total Execution Time [s]:   %.6f\n",s_duration);
   printf("\n######################################################################\n");
   //double dma_time = (double)acc_read32(acc->mb_mem.v_addr,DMA_TIME_REG_OFFSET_B,'b')/(MB_CLK_FREQ_MHZ * 1000000);
   //printf("Total DMA Time \t\t : %.9f seconds\n", dma_time);
@@ -909,13 +970,17 @@ int main(int argc, char *argv[]) {
   //printf("DMA %i status = %#x\n",0,acc_dma_status(acc,0));
   //printf("DMA %i status = %#x\n",1,acc_dma_status(acc,1));
   ////acc_reset(acc);
+
+#if (MEM_SHARING == 3)
+  // disable RAB miss handling
+  pulp_rab_mh_disable(pulp);
+#endif
     
   sleep(0.5);
   
   /*
    * Cleanup
    */
- cleanup:
   sleep(0.5);
   pulp_stdout_print(pulp,0);
   pulp_stdout_print(pulp,1);
@@ -941,37 +1006,23 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-int accumulate_time(struct timespec *tp1, struct timespec *tp2, unsigned *seconds, unsigned long *nanoseconds, int ctrl) {
+int accumulate_time(struct timespec *tp1, struct timespec *tp2, double *duration, int ctrl) {
 
-  unsigned tmp_s;
-  unsigned long tmp_ns; 
-
-  // compute and output the measured time
-  tmp_s = (int)(tp2->tv_sec - tp1->tv_sec);
-  if (tp2->tv_nsec > tp1->tv_nsec) { // no overflow
-    tmp_ns = (tp2->tv_nsec - tp1->tv_nsec);
-  }
-  else {//(tp2.tv_nsec < tp1.tv_nsec) {// overflow of tv_nsec
-    if (ctrl == 1)
-      printf("tp2->tv_nsec < tp1->tv_nsec \n");
-    tmp_ns = (1000000000 - tp1->tv_nsec + tp2->tv_nsec) % 1000000000;
-    tmp_s -= 1;
-  }
-
-  if (ctrl == 1) {
-    printf("Elapsed time in seconds = %i\n",tmp_s);
-    printf("Elapsed time in nanoseconds = %09li\n",tmp_ns);
-  }
-
-  *seconds += tmp_s;
-  *nanoseconds += tmp_ns;
-
-  *seconds += (*nanoseconds / 1000000000);
-  *nanoseconds = (*nanoseconds % 1000000000);
+  double start, end, tmp_duration;
   
+  // compute and output the measured time
+  start = ((double)(tp1->tv_sec))*1000000000 + (double)(tp1->tv_nsec); 
+  end = ((double)(tp2->tv_sec))*1000000000 + (double)(tp2->tv_nsec); 
+  tmp_duration = (end - start)/1000000000;
+
   if (ctrl == 1) {
-    printf("Total elapsed time in seconds = %i\n",*seconds);
-    printf("Total elapsed time in nanoseconds = %09li\n",*nanoseconds);
+    printf("Elapsed time [s] = %.6f\n",tmp_duration);
+  }
+
+  *duration += tmp_duration;
+
+  if (ctrl == 1) {
+    printf("Total elapsed time [s] = %.6f\n",*duration);
   }
 
   return 0;
@@ -1037,7 +1088,7 @@ void JPEG_offload_out(JPEG_kernel_t *jpegInstance){
 #endif // PROFILE     
   jpegInstance->desc->data_desc   = jpegInstance->data_desc;
   jpegInstance->desc->n_clusters  = jpegInstance->n_clusters;
-  jpegInstance->desc->name        = (void *) 6;
+  jpegInstance->desc->name        = &name[0];
     
 #if (MEM_SHARING == 1)
   pulp_offload_out_contiguous(pulp, jpegInstance->desc, &jpegInstance->fdesc);
@@ -1068,6 +1119,7 @@ inline int JPEG_offload_in(JPEG_kernel_t *jpegInstance) {
 #else // 2
   ret = pulp_offload_in(pulp, jpegInstance->desc); 
 #endif // MEM_SHARING
+
   free(jpegInstance->desc);
   return ret;
 }

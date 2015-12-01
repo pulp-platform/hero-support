@@ -1,18 +1,18 @@
 #!/bin/bash
 
 # Name of the program
-NAME=ct
+APP=ct
 
 # Make
-vivado-2014.1 make all
+vivado-2015.1 make all
 
 # Copy
 # Host executable
-scp ${NAME} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
+scp ${APP} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/${APP}/.
 # Sample files
-scp -r samples ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
+scp -r samples ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/${APP}/.
 # Host sources for GDB
-scp *.c ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
-scp *.h ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
+scp *.c ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/${APP}/.
+scp *.h ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/${APP}/.
 # Accelerator binary
-scp *.bin ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
+#scp ${PULP_SW_PATH}/hsa_apps/${APP}/${APP}.bin ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/${APP}/.

@@ -58,7 +58,8 @@ int readPgmOrPpm(char *filename, raw_image_data_t *raw_image)
     else
         raw_image->nr_channels = 3;
         
-    raw_image->data = (uint8_t *)malloc(raw_image->width*raw_image->height*sizeof(uint8_t)*raw_image->nr_channels);
+    //raw_image->data = (uint8_t *)malloc(raw_image->width*raw_image->height*sizeof(uint8_t)*raw_image->nr_channels);
+    posix_memalign((void **)&(raw_image->data), (size_t)4096, (size_t)(raw_image->width*raw_image->height*sizeof(uint8_t)*raw_image->nr_channels));
     
     fgetc(fl);  /* Discard exactly one byte after header. */
     fread(raw_image->data, 1, raw_image->width*raw_image->height*raw_image->nr_channels, fl);
