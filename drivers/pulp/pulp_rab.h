@@ -45,6 +45,7 @@ typedef struct {
 typedef struct {
   unsigned rab_mapping;
   unsigned n_slices;
+  unsigned n_slices_per_stripe;
   unsigned *slices;
   unsigned char rab_port;
   unsigned char prot;

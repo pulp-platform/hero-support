@@ -350,7 +350,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
 {
   int mapping_min, mapping_max;
   int i,j,k;
-  unsigned offset, off_slices, off_mappings;
+  unsigned offset, off_slices, off_mappings, off_ptrs;
   unsigned addr_start, addr_end, addr_offset, prot;
 
   if (rab_mapping == 0xFFFF) {
@@ -406,5 +406,21 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
       }
     }
   }
+
+  // print the RAB pages and reference counter lists
+  for (k=mapping_min; k<mapping_max; k++) {
+    off_ptrs  = k*RAB_N_PORTS*RAB_N_SLICES;
+    printk(KERN_INFO "PULP - RAB: Printing Mapping %d: \n",k);
+
+    for (i=0; i<RAB_N_PORTS; i++) {
+      for (j=0; j<RAB_N_SLICES; j++) {
+	if (page_ptr_ref_cntrs[off_ptrs+i*RAB_N_SLICES+j])
+	  printk(KERN_INFO "Port %d, Slice %d: page_ptrs[i] = %#x, page_ptr_ref_cntrs[i] = %d\n",
+		 i,j,(unsigned int)page_ptrs[off_ptrs+i*RAB_N_SLICES+j],
+		 page_ptr_ref_cntrs[off_ptrs+i*RAB_N_SLICES+j]);
+      }
+    }
+  }
+
 }
 

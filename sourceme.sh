@@ -22,7 +22,8 @@ export ARM_LIB_DIR1=/home/vogelpi/pulp_on_fpga/software/arm/lib
 export ARM_INC_DIR1=${ARM_LIB_DIR1}/inc
 
 # directory containing PULP header files
-export PULP_INC_DIR1=/home/vogelpi/pulp_on_fpga/software/pulp/pulp_pipeline/pkg/sdk/install/include/pulp4
+export PULP_INC_DIR1=/home/vogelpi/pulp_on_fpga/software/pulp/pulp_pipeline/pkg/sdk/dev/install/include/archi/pulp4
+export PULP_INC_DIR2=/home/vogelpi/pulp_on_fpga/software/pulp/pulp_pipeline/pkg/sdk/dev/install/include/pulp4
 
 # machine to which the make_and_copy.sh scripts transfer the compiled stuff
 export SCP_TARGET_MACHINE="vogelpi@bordcomputer"
