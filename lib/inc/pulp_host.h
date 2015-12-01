@@ -261,19 +261,16 @@
  */
 #define SYNC_OFFSET_B 0xB000
 
+#define MAX_STRIPE_SIZE 0x8000
+
 // needed for ROD, CT, JPEG
-//#define ROD
-//#define CT
-//#define JPEG
-//#define MEM_SHARING 2
+#define PROFILE
+#define MEM_SHARING 2 // 1, 2 ,3
 //#define ZYNQ_PMM
-//#define PROFILE // required for ROD, CT and JPEG (app code)
 
 // needed for profile_rab, dma_test
 //#define MEM_SHARING 2
 //#define PROFILE_RAB
-//#define MAX_STRIPE_SIZE 0x1800
-//#define MAX_STRIPE_SIZE 0x8000
 
 // needed for profile_rab & profile_rab_mh
 #define CLK_CNTR_RESPONSE_OFFSET_B 0x00

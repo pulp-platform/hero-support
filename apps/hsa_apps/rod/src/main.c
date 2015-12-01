@@ -47,15 +47,14 @@ double GetTimeMs()
 // vogelpi
 PulpDev pulp_dev;
 PulpDev *pulp;
+char name[4];
 
 // for time measurement
 #define ACC_CTRL 0 
 int accumulate_time(struct timespec *tp1, struct timespec *tp2,
-		    unsigned *seconds, unsigned long *nanoseconds,
-		    int ctrl);
+		    double *duration, int ctrl);
 struct timespec res, tp1, tp2, tp1_local, tp2_local;
-unsigned s_duration, s_duration1, s_duration2, s_duration3;
-unsigned long ns_duration, ns_duration1, ns_duration2, ns_duration3;
+double s_duration, s_duration1, s_duration2, s_duration3;
 
 #ifdef ZYNQ_PMM
 // for cache miss rate measurement
@@ -76,10 +75,8 @@ int main(int argc, char *argv[]) {
   Rois roi;
   uint8_t *tmp, *tmp2;
   int i;
-  int error = 0;
   
   // used to boot PULP
-  char name[4];
   strcpy(name,"rod");
   TaskDesc task_desc;
   task_desc.name = &name[0];
@@ -130,9 +127,13 @@ int main(int argc, char *argv[]) {
   printf("PULP Boot\n");
   pulp_boot(pulp,&task_desc);
 
+#if (MEM_SHARING == 3)
+  // enable RAB miss handling
+  pulp_rab_mh_enable(pulp);
+#endif
+
   // setup time measurement
   s_duration = 0, s_duration1 = 0, s_duration2 = 0, s_duration3 = 0;
-  ns_duration = 0, ns_duration1 = 0, ns_duration2 = 0, ns_duration3 = 0;
   
 #ifdef ZYNQ_PMM
   // setup cache miss rate measurement
@@ -195,13 +196,12 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     NCC_offload_out(&NCC_instance, foreground.data, i);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
 
     // start
     ret = NCC_exe_start(&NCC_instance);
     if ( ret ) {
       printf("ERROR: Execution start failed. ret = %d\n",ret);
-      error = 1;
       break;
     }
 
@@ -211,10 +211,9 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     ret = NCC_exe_wait(&NCC_instance);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration3,&ns_duration3,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration3,ACC_CTRL);
     if ( ret ) {
       printf("ERROR: Execution wait failed. ret = %d\n",ret);
-      error = 1;
       break;
     }
 
@@ -222,10 +221,9 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_REALTIME,&tp1_local);
     ret = NCC_offload_in(&NCC_instance,  foreground.data);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
     if ( ret ) {
       printf("ERROR: Offload in failed. ret = %d\n",ret);
-      error = 1;
       break;
     } 
     
@@ -268,7 +266,7 @@ int main(int argc, char *argv[]) {
      if (DEBUG_LEVEL > 0) printf("\n###########################################################################\n");
 
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration2,&ns_duration2,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration2,ACC_CTRL);
 #ifdef ZYNQ_PMM 
     zynq_pmm_read(zynq_pmm_fd, proc_text);
     zynq_pmm_parse(proc_text, counter_values, 1); // accumulate cache counter values
@@ -312,7 +310,7 @@ int main(int argc, char *argv[]) {
   clock_gettime(CLOCK_REALTIME,&tp1_local);
   NCC_launch(&NCC_instance[buff_id], foreground.data);
   clock_gettime(CLOCK_REALTIME,&tp2_local);
-  accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);   
+  accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);   
     
   if (DEBUG_LEVEL > 0) printf("[APP ] Offload %d scheduled\n", 0);
 
@@ -328,7 +326,7 @@ int main(int argc, char *argv[]) {
       clock_gettime(CLOCK_REALTIME,&tp1_local);
       NCC_launch(&NCC_instance[buff_id], foreground.data);
       clock_gettime(CLOCK_REALTIME,&tp2_local);
-      accumulate_time(&tp1_local,&tp2_local,&s_duration1,&ns_duration1,ACC_CTRL);
+      accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
 
       if (DEBUG_LEVEL > 0) printf("[APP ] Offload %d scheduled\n", next_i);
 
@@ -359,7 +357,7 @@ int main(int argc, char *argv[]) {
     if (DEBUG_LEVEL > 0) printf("[APP ] Classify Roi %d\n",i);
     classify_roi(foreground.data, NCC_instance[!buff_id].out, foreground.data, background.width, background.height, &roi);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
-    accumulate_time(&tp1_local,&tp2_local,&s_duration2,&ns_duration2,ACC_CTRL);
+    accumulate_time(&tp1_local,&tp2_local,&s_duration2,ACC_CTRL);
 #ifdef ZYNQ_PMM  
     zynq_pmm_read(zynq_pmm_fd, proc_text);
     zynq_pmm_parse(proc_text, counter_values, 1); // accumulate cache counter values
@@ -379,14 +377,14 @@ int main(int argc, char *argv[]) {
 
   // measure time
   clock_gettime(CLOCK_REALTIME,&tp2);
-  accumulate_time(&tp1,&tp2,&s_duration,&ns_duration,ACC_CTRL);
+  accumulate_time(&tp1,&tp2,&s_duration,ACC_CTRL);
   
   // print time measurements
-  printf("\n###########################################################################\n");
-  printf("Total Offload Time \t : %u.%09lu seconds\n",s_duration1,ns_duration1);
-  printf("Total Host Wait Time \t : %u.%09lu seconds\n",s_duration3,ns_duration3);
-  printf("Total Host Kernel Time \t : %u.%09lu seconds\n",s_duration2,ns_duration2);
-  printf("Total Execution Time \t : %u.%09lu seconds\n",s_duration,ns_duration);
+   printf("\n###########################################################################\n");
+  printf("Total Offload Time [s]:     %.6f\n",s_duration1);
+  printf("Total Host Wait Time [s]:   %.6f\n",s_duration3);
+  printf("Total Host Kernel Time [s]: %.6f\n",s_duration2);
+  printf("Total Execution Time [s]:   %.6f\n",s_duration);
   printf("\n######################################################################\n");
   //double dma_time = (double)pulp_read32(pulp->mb_mem.v_addr,DMA_TIME_REG_OFFSET_B,'b')/(MB_CLK_FREQ_MHZ * 1000000);
   //printf("Total DMA Time \t\t : %.9f seconds\n", dma_time);
@@ -417,12 +415,16 @@ int main(int argc, char *argv[]) {
   //printf("DMA %i status = %#x\n",0,pulp_dma_status(pulp,0));
   //printf("DMA %i status = %#x\n",1,pulp_dma_status(pulp,1));
 
+#if (MEM_SHARING == 3)
+  // disable RAB miss handling
+  pulp_rab_mh_disable(pulp);
+#endif
+
  sleep(0.5);
  
   /*
    * Cleanup
    */
- cleanup:
  sleep(0.5);
  pulp_stdout_print(pulp,0);
  pulp_stdout_print(pulp,1);
@@ -461,7 +463,7 @@ int NCC_init(NCC_kernel_t *nccInstance, int width, int height){
   //#if (MEM_SHARING == 1) 
   //nccInstance->bg         = (uint8_t *)pulp_l3_malloc(pulp, nccInstance->w*nccInstance->h*sizeof(uint8_t),
   //						      &nccInstance->Fbg);
-  //#else // 2
+  //#else // 2 --> allocate memory for background also for every offload in pulp_offload_out_contiguous
   nccInstance->bg         = (uint8_t *)malloc(nccInstance->w*nccInstance->h*sizeof(uint8_t));
   //#endif // MEM_SHARING  
   nccInstance->out        = (uint8_t *)malloc(nccInstance->w*nccInstance->h*sizeof(uint8_t));
@@ -517,7 +519,7 @@ inline void NCC_offload_out(NCC_kernel_t *nccInstance, uint8_t *frame, int offlo
 
   nccInstance->desc->data_desc   = nccInstance->data_desc;
   nccInstance->desc->n_clusters  = nccInstance->n_clusters;
-  nccInstance->desc->name        = NULL;
+  nccInstance->desc->name        = &name[0];
   nccInstance->desc->task_id     = offload_id;
   
 #if (MEM_SHARING == 1)
@@ -835,38 +837,23 @@ void drawROI ( uint8_t *image, int type, int width, int height, int x_1, int y_1
   }
 }
 
+int accumulate_time(struct timespec *tp1, struct timespec *tp2, double *duration, int ctrl) {
 
-int accumulate_time(struct timespec *tp1, struct timespec *tp2, unsigned *seconds, unsigned long *nanoseconds, int ctrl) {
-
-  unsigned tmp_s;
-  unsigned long tmp_ns; 
-
-  // compute and output the measured time
-  tmp_s = (int)(tp2->tv_sec - tp1->tv_sec);
-  if (tp2->tv_nsec > tp1->tv_nsec) { // no overflow
-    tmp_ns = (tp2->tv_nsec - tp1->tv_nsec);
-  }
-  else {//(tp2.tv_nsec < tp1.tv_nsec) {// overflow of tv_nsec
-    if (ctrl == 1)
-      printf("tp2->tv_nsec < tp1->tv_nsec \n");
-    tmp_ns = (1000000000 - tp1->tv_nsec + tp2->tv_nsec) % 1000000000;
-    tmp_s -= 1;
-  }
-
-  if (ctrl == 1) {
-    printf("Elapsed time in seconds = %i\n",tmp_s);
-    printf("Elapsed time in nanoseconds = %09li\n",tmp_ns);
-  }
-
-  *seconds += tmp_s;
-  *nanoseconds += tmp_ns;
-
-  *seconds += (*nanoseconds / 1000000000);
-  *nanoseconds = (*nanoseconds % 1000000000);
+  double start, end, tmp_duration;
   
+  // compute and output the measured time
+  start = ((double)(tp1->tv_sec))*1000000000 + (double)(tp1->tv_nsec); 
+  end = ((double)(tp2->tv_sec))*1000000000 + (double)(tp2->tv_nsec); 
+  tmp_duration = (end - start)/1000000000;
+
   if (ctrl == 1) {
-    printf("Total elapsed time in seconds = %i\n",*seconds);
-    printf("Total elapsed time in nanoseconds = %09li\n",*nanoseconds);
+    printf("Elapsed time [s] = %.6f\n",tmp_duration);
+  }
+
+  *duration += tmp_duration;
+
+  if (ctrl == 1) {
+    printf("Total elapsed time [s] = %.6f\n",*duration);
   }
 
   return 0;

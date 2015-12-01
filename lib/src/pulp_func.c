@@ -632,6 +632,18 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   unsigned * max_stripe_size_b; 
   unsigned ** rab_stripes;
 
+  // extracted from accelerator code
+  // for ROD
+  unsigned R, TILE_HEIGHT;
+  unsigned w, h, n_bands, band_height, odd;
+  unsigned tx_band_size_in, tx_band_size_in_first, tx_band_size_in_last;
+  unsigned tx_band_size_out, tx_band_size_out_last;
+  unsigned overlap;
+
+  // for CT
+  unsigned width, height, bHeight, nbBands;
+  unsigned band_size_1ch, band_size_3ch;
+  
   page_size_b = getpagesize();
 
   max_stripe_size_b = (unsigned *)malloc((size_t)(n_elements*sizeof(unsigned))); 
@@ -645,79 +657,74 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   size_b = 0;
   offload_id = 0;
 
-#ifdef PROFILE_RAB
- 
- for (i=0;i<n_elements;i++) {
-    max_stripe_size_b[i] = MAX_STRIPE_SIZE; 
+  if ( !strcmp(task->name, "profile_rab") ) { // valid for PROFILE_RAB only
+
+    for (i=0;i<n_elements;i++) {
+      max_stripe_size_b[i] = MAX_STRIPE_SIZE; 
+    }
+
+    n_stripes = (task->data_desc[0].size)/max_stripe_size_b[0];
+    if (n_stripes * max_stripe_size_b[0] < task->data_desc[0].size)
+      n_stripes++;
+
   }
+  else if ( !strcmp(task->name, "rod") ) { // valid for ROD only
 
-  n_stripes = (task->data_desc[0].size)/max_stripe_size_b[0];
-  if (n_stripes * max_stripe_size_b[0] < task->data_desc[0].size)
-    n_stripes++;
-
-#elif defined(ROD)
-
-  // max sizes hardcoded
-  max_stripe_size_b[0] = 0x1100;
-  max_stripe_size_b[1] = 0x1100;
-  max_stripe_size_b[2] = 0xe00;  
+    // max sizes hardcoded
+    max_stripe_size_b[0] = 0x1100;
+    max_stripe_size_b[1] = 0x1100;
+    max_stripe_size_b[2] = 0xe00;  
   
-  // extracted from accelerator code
-  unsigned R, TILE_HEIGHT;
-  unsigned w, h, n_bands, band_height, odd;
-  unsigned tx_band_size_in, tx_band_size_in_first, tx_band_size_in_last;
-  unsigned tx_band_size_out, tx_band_size_out_last;
-  unsigned overlap;
+    R = 3;
+    TILE_HEIGHT = 10;
+    w = *(unsigned *)(task->data_desc[3].ptr);
+    h = *(unsigned *)(task->data_desc[4].ptr);
+
+    n_bands = h / TILE_HEIGHT;
+    band_height = TILE_HEIGHT;
+    odd = h - (n_bands * band_height);
   
-  R = 3;
-  TILE_HEIGHT = 10;
-  w = *(unsigned *)(task->data_desc[3].ptr);
-  h = *(unsigned *)(task->data_desc[4].ptr);
-
-  n_bands = h / TILE_HEIGHT;
-  band_height = TILE_HEIGHT;
-  odd = h - (n_bands * band_height);
+    tx_band_size_in       = sizeof(unsigned char)*((band_height + (R << 1)) * w);
+    tx_band_size_in_first = sizeof(unsigned char)*((band_height + R) * w);
+    tx_band_size_in_last  = sizeof(unsigned char)*((band_height + odd + R ) * w);
+    tx_band_size_out      = sizeof(unsigned char)*( band_height * w);
+    tx_band_size_out_last = sizeof(unsigned char)*((band_height + odd )* w);
   
-  tx_band_size_in       = sizeof(unsigned char)*((band_height + (R << 1)) * w);
-  tx_band_size_in_first = sizeof(unsigned char)*((band_height + R) * w);
-  tx_band_size_in_last  = sizeof(unsigned char)*((band_height + odd + R ) * w);
-  tx_band_size_out      = sizeof(unsigned char)*( band_height * w);
-  tx_band_size_out_last = sizeof(unsigned char)*((band_height + odd )* w);
+    overlap = sizeof(unsigned char)*(R * w);
+    n_stripes = n_bands;
+
+  }
+  else if ( !strcmp(task->name, "ct") ) { // valid for CT only
+
+    // max sizes hardcoded
+    max_stripe_size_b[0] = 0x3000;
+
+    width = *(unsigned *)(task->data_desc[1].ptr);
+    height = *(unsigned *)(task->data_desc[2].ptr);
+    bHeight = *(unsigned *)(task->data_desc[3].ptr);
+
+    nbBands = (height / bHeight);
+    band_size_1ch = (width*bHeight);
+    band_size_3ch = (width*bHeight*3);  
+    //printf("buffer size = %#x \n",(band_size_3ch*2+band_size_1ch)*sizeof(unsigned char));
+
+    n_stripes = nbBands;
+
+  }
+  else if ( !strcmp(task->name, "jpeg") ) { // valid for JPEG only
+
+    // max sizes hardcoded
+    max_stripe_size_b[0] = 0x1000;
+    n_stripes = 18;
+
+  }
+  else {
+
+    n_stripes = 1;
+    printf("ERROR: Unknown task name %s\n",task->name);
+
+  }
   
-  overlap = sizeof(unsigned char)*(R * w);
-  n_stripes = n_bands;
-
-#elif defined(CT)
-  
-  // max sizes hardcoded
-  max_stripe_size_b[0] = 0x3000;
-
-  // extracted from accelerator code
-  unsigned width, height, bHeight, nbBands;
-  unsigned band_size_1ch, band_size_3ch;
-  
-  width = *(unsigned *)(task->data_desc[1].ptr);
-  height = *(unsigned *)(task->data_desc[2].ptr);
-  bHeight = *(unsigned *)(task->data_desc[3].ptr);
-
-  nbBands = (height / bHeight);
-  band_size_1ch = (width*bHeight);
-  band_size_3ch = (width*bHeight*3);  
-  //printf("buffer size = %#x \n",(band_size_3ch*2+band_size_1ch)*sizeof(unsigned char));
-
-  n_stripes = nbBands;
-
-#elif defined(JPEG)
-  // max sizes hardcoded
-  max_stripe_size_b[0] = 0x1000;
-  n_stripes = 18;
-
-#else
-
-  n_stripes = 1;
-
-#endif   
-
   i = -1;
   for (k=0; k<task->n_data; k++) {
 
@@ -758,46 +765,53 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
       }
       else {
      	addr_start = (unsigned)(task->data_desc[k].ptr);
-	
-#ifdef PROFILE_RAB
-	
-	size_b = max_stripe_size_b[k];
-	tx_band_start = j*size_b;
 
-#elif defined(ROD) 
-	
-	if ( (*data_idxs)[k] == 2 ) { // input elements
-	  if (j == 0) {
-	    tx_band_start = 0;
-	    size_b = tx_band_size_in_first;
+	if ( !strcmp(task->name, "profile_rab") ) {
+    
+	  size_b = max_stripe_size_b[k];
+	  tx_band_start = j*size_b;
+
+	}
+	else if ( !strcmp(task->name, "rod") ) {
+    
+	  if ( (*data_idxs)[k] == 2 ) { // input elements
+	    if (j == 0) {
+	      tx_band_start = 0;
+	      size_b = tx_band_size_in_first;
+	    }
+	    else {
+	      tx_band_start = tx_band_size_in_first + tx_band_size_in * (j-1) - (overlap * (2 + (j-1)*2));
+	      if (j == n_stripes-1 )	    
+		size_b = tx_band_size_in_last;
+	      else
+		size_b = tx_band_size_in;
+	    }
 	  }
-	  else {
-	    tx_band_start = tx_band_size_in_first + tx_band_size_in * (j-1) - (overlap * (2 + (j-1)*2));
-	    if (j == n_stripes-1 )	    
-	      size_b = tx_band_size_in_last;
+	  else {// 3, output elements
+	    tx_band_start = tx_band_size_out * (j-1);
+	    if (j == n_stripes ) 
+	      size_b = tx_band_size_out_last;
 	    else
-	      size_b = tx_band_size_in;
+	      size_b = tx_band_size_out;
 	  }
+
 	}
-	else {// 3, output elements
-	  tx_band_start = tx_band_size_out * (j-1);
-	  if (j == n_stripes ) 
-    	    size_b = tx_band_size_out_last;
-	  else
-    	    size_b = tx_band_size_out;
+	else if ( !strcmp(task->name, "ct") ) {
+    
+	  tx_band_start = j*band_size_3ch;
+	  size_b = band_size_3ch;
+
+	}
+	else if ( !strcmp(task->name, "jpeg") ) {
+    
+	  tx_band_start = j*max_stripe_size_b[0];
+	  size_b = max_stripe_size_b[0];
+
+	}
+	else {
+	  printf("ERROR: Unknown task name %s\n",task->name);
 	}
 
-#elif defined(CT)
-	
-	tx_band_start = j*band_size_3ch;
-	size_b = band_size_3ch;
-
-#elif defined(JPEG)
-	
-	tx_band_start = j*max_stripe_size_b[0];
-	size_b = max_stripe_size_b[0];
-
-#endif
 	addr_start += tx_band_start;
 	addr_end = addr_start + size_b;
       }
@@ -1264,35 +1278,39 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
 
   n_data_int = 1;
 
-// Mark striped data elements
-#ifdef PROFILE_RAB
+  // Mark striped data elements
+  if ( !strcmp(task->name, "profile_rab") ) { // valid for PROFILE_RAB only
+        
+    n_data_int = 0;
+    for (i=0; i<task->n_data; i++) {
+      (*data_idxs)[i] = 2;
+    }
+    n_idxs -= task->n_data;
 
-  n_data_int = 0;
-
-  // valid for PROFILE_RAB only
-  for (i=0; i<task->n_data; i++) {
-    (*data_idxs)[i] = 2;
   }
-  n_idxs -= task->n_data;
+  else if ( !strcmp(task->name, "rod") ) { // valid for ROD only
 
-#elif defined(ROD)
-  // valid for ROD only
-  (*data_idxs)[0] = 2; // striped in
-  (*data_idxs)[1] = 2; // striped in 
-  (*data_idxs)[2] = 3; // striped out (shifted)
-  n_idxs -= 3;
+    (*data_idxs)[0] = 2; // striped in
+    (*data_idxs)[1] = 2; // striped in 
+    (*data_idxs)[2] = 3; // striped out (shifted)
+    n_idxs -= 3;
 
-#elif defined(CT)
-  // valid for CT only
-  (*data_idxs)[0] = 2; // striped in
-  n_idxs -= 1;
+  }
+  else if ( !strcmp(task->name, "ct") ) { // valid for CT only
+    
+    (*data_idxs)[0] = 2; // striped in
+    n_idxs -= 1;
 
-#elif defined(JPEG)
-  // valid for CT only
-  (*data_idxs)[3] = 4; // striped inout
-  n_idxs -= 1;
+  }
+  else if ( !strcmp(task->name, "jpeg") ) { // valid for JPEG only
+    
+    (*data_idxs)[3] = 4; // striped inout
+    n_idxs -= 1;
 
-#endif  
+  }
+  else {
+    printf("ERROR: Unknown task name %s\n",task->name);
+  }
 
   // !!!!TO DO: check type and set protections!!!
   prot = 0x7; 
@@ -1372,15 +1390,21 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
 
   // set up RAB stripes
   //pulp_rab_req_striped(pulp, task, data_idxs, n_idxs, prot, port);
-#ifdef PROFILE_RAB
-  pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port);
-#elif defined(ROD)
-  pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port);
-#elif defined(CT)
-  pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
-#elif defined(JPEG)
-  pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
-#endif
+  if ( !strcmp(task->name, "profile_rab") ) {
+    pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port);
+  }
+  else if ( !strcmp(task->name, "rod") ) {
+    pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port);
+  }
+  else if ( !strcmp(task->name, "ct") ) {
+    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
+  }
+  else if ( !strcmp(task->name, "jpeg") ) {
+    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
+  }
+  else {
+    printf("ERROR: Unknown task name %s\n",task->name);
+  }
 
   // free memory
   free(v_addr_int);
@@ -1573,10 +1597,11 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   date_cur = (unsigned char)(task->task_id + 4);
   pulp_rab_free(pulp, date_cur);
 
-#if defined(PROFILE_RAB) || defined(ROD) || defined(CT) || defined(JPEG)
-  // free striped RAB slices
-  pulp_rab_free_striped(pulp);
-#endif
+  if ( !strcmp(task->name, "profile_rab") || !strcmp(task->name, "rod")
+       || !strcmp(task->name, "ct") || !strcmp(task->name, "jpeg") ) {
+    // free striped RAB slices
+    pulp_rab_free_striped(pulp);   
+  }
 #endif
 
   // fetch values of data elements passed by value
@@ -1679,25 +1704,31 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   (*ftask)->name = task->name;
   (*ftask)->n_clusters = task->n_clusters;
   (*ftask)->n_data = task->n_data;
-#if defined(ROD)
+
+  if ( !strcmp(task->name, "rod") ) {
 #ifdef PROFILE   
-  (*ftask)->data_desc  = (DataDesc *)malloc(9*sizeof(DataDesc));
+    (*ftask)->data_desc  = (DataDesc *)malloc(9*sizeof(DataDesc));
 #else
-  (*ftask)->data_desc  = (DataDesc *)malloc(6*sizeof(DataDesc));
-#endif // PROFILE
-#elif defined(CT)
+    (*ftask)->data_desc  = (DataDesc *)malloc(6*sizeof(DataDesc));
+#endif // PROFILE    
+  }
+  else if ( !strcmp(task->name, "ct") ) {
 #ifdef PROFILE   
-  (*ftask)->data_desc  = (DataDesc *)malloc(8*sizeof(DataDesc));
+    (*ftask)->data_desc  = (DataDesc *)malloc(8*sizeof(DataDesc));
 #else
-  (*ftask)->data_desc  = (DataDesc *)malloc(6*sizeof(DataDesc));
-#endif // PROFILE
-#elif defined(JPEG)
+    (*ftask)->data_desc  = (DataDesc *)malloc(6*sizeof(DataDesc));
+#endif // PROFILE    
+  }
+  else if ( !strcmp(task->name, "jpeg") ) {
 #ifdef PROFILE   
-  (*ftask)->data_desc  = (DataDesc *)malloc(10*sizeof(DataDesc));
+    (*ftask)->data_desc  = (DataDesc *)malloc(10*sizeof(DataDesc));
 #else
-  (*ftask)->data_desc  = (DataDesc *)malloc(7*sizeof(DataDesc));
-#endif // PROFILE
-#endif // ROD / CT / JPEG
+    (*ftask)->data_desc  = (DataDesc *)malloc(7*sizeof(DataDesc));
+#endif // PROFILE    
+  }
+  else {
+    printf("ERROR: Unknown task name %s\n",task->name);
+  }
 
   if ( ((*ftask)->data_desc) == NULL ) {
     printf("ERROR: Malloc failed for data_desc.\n");
