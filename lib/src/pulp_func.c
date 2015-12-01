@@ -636,6 +636,10 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
 
   max_stripe_size_b = (unsigned *)malloc((size_t)(n_elements*sizeof(unsigned))); 
   rab_stripes = (unsigned **)malloc((size_t)(n_elements*sizeof(unsigned *))); 
+  if ( (rab_stripes == NULL) || (max_stripe_size_b == NULL) ) {
+    printf("ERROR: Malloc failed.\n");
+    return -ENOMEM;
+  }
 
   unsigned tx_band_start = 0;
   size_b = 0;
@@ -735,6 +739,10 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
     n_fields = 2*n_slices_max + 1; // addr_start & addr_offset per slice, addr_end  
 
     rab_stripes[i] = (unsigned *)malloc((size_t)((n_stripes+1)*(n_fields)*sizeof(unsigned)));
+    if ( rab_stripes[i] == NULL  ) {
+      printf("ERROR: Malloc failed for rab_stripes[%i].\n",i);
+      return -ENOMEM;
+    }
 
     // fill in stripe data
     for (j=0; j<(n_stripes+1); j++) {
@@ -743,6 +751,10 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
       if ( ((j == 0) && ((*data_idxs)[k] == 3)) || ((j == n_stripes) && ((*data_idxs)[k] == 2)) ) {
 	addr_start = 0;
 	addr_end = 0;
+      }
+      else if ( (j == n_stripes) && ((*data_idxs)[k] == 4))  { // last stripe for inout elements
+	addr_start = 0xFFFFFFFF;
+	addr_end = 0xFFFFFFFF;
       }
       else {
      	addr_start = (unsigned)(task->data_desc[k].ptr);
@@ -1265,19 +1277,19 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
 
 #elif defined(ROD)
   // valid for ROD only
-  (*data_idxs)[0] = 2;
-  (*data_idxs)[1] = 2;
-  (*data_idxs)[2] = 3; // shifted
+  (*data_idxs)[0] = 2; // striped in
+  (*data_idxs)[1] = 2; // striped in 
+  (*data_idxs)[2] = 3; // striped out (shifted)
   n_idxs -= 3;
 
 #elif defined(CT)
   // valid for CT only
-  (*data_idxs)[0] = 2;
+  (*data_idxs)[0] = 2; // striped in
   n_idxs -= 1;
 
 #elif defined(JPEG)
   // valid for CT only
-  (*data_idxs)[3] = 2; // 2 and 3 since INOUT -> TODO: handle this case in driver for efficiency 
+  (*data_idxs)[3] = 4; // striped inout
   n_idxs -= 1;
 
 #endif  
@@ -1420,14 +1432,14 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
       // pass data element by reference
       pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',
 		   (unsigned)(task->data_desc[i].ptr));
-      if (DEBUG_LEVEL > 2)
+      //if (DEBUG_LEVEL > 2)
 	printf("Element %d: wrote %#x to mailbox.\n",i,(unsigned) (task->data_desc[i].ptr));
     }
     else {
       // pass data element by value
       pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',
 		   *(unsigned *)(task->data_desc[i].ptr));
-      if (DEBUG_LEVEL > 2)
+      //if (DEBUG_LEVEL > 2)
 	printf("Element %d: wrote %#x to mailbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
     }    
   }
@@ -1456,14 +1468,14 @@ int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, i
   n_data = task->n_data;
 
   buffer = (unsigned *)malloc((n_data-n_idxs)*sizeof(unsigned));
-  if ( data_idxs == NULL ) {
+  if ( buffer == NULL ) {
     printf("ERROR: Malloc failed for buffer.\n");
     return -ENOMEM;
   }
   
   // read from mailbox
-  pulp_mailbox_read(pulp, buffer, n_data-n_idxs);
-
+  pulp_mailbox_read(pulp, &buffer[0], n_data-n_idxs);
+  
   for (i=0; i<n_data; i++) {
     // check if argument has been passed by value
     if ( (*data_idxs)[i] == 0 ) {
@@ -1486,7 +1498,9 @@ int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, i
     printf("Got back %d of %d data elements from PULP.\n",j,n_data-n_idxs);
   }
 
+#ifndef JPEG // generates error
   free(buffer);
+#endif
 
   return j;
 }
@@ -1511,12 +1525,14 @@ int pulp_offload_out(PulpDev *pulp, TaskDesc *task)
   // only remap addresses belonging to data elements larger than 32 bit
   n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
   
+#if (MEM_SHARING != 3)
   // RAB setup
   err = pulp_offload_rab_setup(pulp, task, &data_idxs, n_idxs);
   if (err) {
     printf("ERROR: pulp_offload_rab_setup failed.\n");
     return err;
   }
+#endif
 
   // Pass data descriptor to PULP
   err = pulp_offload_pass_desc(pulp, task, &data_idxs);
@@ -1551,7 +1567,8 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
 
   // read back data elements with sizes up to 32 bit from mailbox
   n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
-  
+ 
+#if (MEM_SHARING != 3) 
   // free RAB slices
   date_cur = (unsigned char)(task->task_id + 4);
   pulp_rab_free(pulp, date_cur);
@@ -1559,6 +1576,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
 #if defined(PROFILE_RAB) || defined(ROD) || defined(CT) || defined(JPEG)
   // free striped RAB slices
   pulp_rab_free_striped(pulp);
+#endif
 #endif
 
   // fetch values of data elements passed by value
@@ -1681,6 +1699,11 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 #endif // PROFILE
 #endif // ROD / CT / JPEG
 
+  if ( ((*ftask)->data_desc) == NULL ) {
+    printf("ERROR: Malloc failed for data_desc.\n");
+    return -ENOMEM;
+  }
+ 
   // memory allocation in contiguous L3 memory for IN and OUT
   // copy to contiguous L3 memory for IN 
   for (i = 0; i < (*ftask)->n_data; i++) {
@@ -1853,6 +1876,10 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
 
   max_stripe_size_b = &stripe_size_b;
   rab_stripes = (unsigned **)malloc((size_t)(sizeof(unsigned *)));
+  if (rab_stripes == NULL) {
+    printf("ERROR: Malloc failed for rab_stripes.\n");
+    return -ENOMEM;
+  }
   
   n_slices_max = *max_stripe_size_b/page_size_b;
   if (n_slices_max*page_size_b < *max_stripe_size_b)
@@ -1862,6 +1889,10 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   n_fields = 2*n_slices_max + 1; // addr_start & addr_offset per slice, addr_end
 
   *rab_stripes = (unsigned *)malloc((size_t)((n_stripes+1)*(n_fields)*sizeof(unsigned)));
+  if (*rab_stripes == NULL) {
+    printf("ERROR: Malloc failed for *rab_stripes.\n");
+    return -ENOMEM;
+  }
   memset(*rab_stripes, 0, (n_stripes+1)*(n_fields)*sizeof(unsigned));
   
   for (i=0; i<n_channels; i++) {
@@ -1880,7 +1911,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
     }
   }
 
-  if (DEBUG_LEVEL > 2) {
+  //if (DEBUG_LEVEL > 2) {
     printf("RAB stripe table @ %#x\n",(unsigned)rab_stripes);
     for (i=0; i<(n_stripes+1); i++) {
       if (i>2 && i<(n_stripes+1-3))
@@ -1891,7 +1922,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
       }
       printf("\n");
     }
-  }
+    //}
 
   // set up the request
   request[0] = 0;

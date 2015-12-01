@@ -100,16 +100,16 @@
 
 // ioctl setup
 #define PULP_IOCTL_MAGIC 'p'
-#define PULP_IOCTL_RAB_REQ   _IOR(PULP_IOCTL_MAGIC,0xB0,int)
-#define PULP_IOCTL_RAB_FREE  _IOR(PULP_IOCTL_MAGIC,0xB1,int)
+#define PULP_IOCTL_RAB_REQ   _IOW(PULP_IOCTL_MAGIC,0xB0,int)
+#define PULP_IOCTL_RAB_FREE  _IOW(PULP_IOCTL_MAGIC,0xB1,int)
 
-#define PULP_IOCTL_RAB_REQ_STRIPED  _IOR(PULP_IOCTL_MAGIC,0xB2,int)
-#define PULP_IOCTL_RAB_FREE_STRIPED _IOR(PULP_IOCTL_MAGIC,0xB3,int)
+#define PULP_IOCTL_RAB_REQ_STRIPED  _IOW(PULP_IOCTL_MAGIC,0xB2,int)
+#define PULP_IOCTL_RAB_FREE_STRIPED _IOW(PULP_IOCTL_MAGIC,0xB3,int)
 
-#define PULP_IOCTL_RAB_MH_ENA  _IOR(PULP_IOCTL_MAGIC,0xB4,int)
-#define PULP_IOCTL_RAB_MH_DIS  _IOR(PULP_IOCTL_MAGIC,0xB5,int)
+#define PULP_IOCTL_RAB_MH_ENA  _IO(PULP_IOCTL_MAGIC,0xB4)
+#define PULP_IOCTL_RAB_MH_DIS  _IO(PULP_IOCTL_MAGIC,0xB5)
 
-#define PULP_IOCTL_DMAC_XFER _IOR(PULP_IOCTL_MAGIC,0xB6,int)
+#define PULP_IOCTL_DMAC_XFER _IOW(PULP_IOCTL_MAGIC,0xB6,int)
 
 #define L3_MEM_BASE_ADDR 0x80000000
 
@@ -267,7 +267,7 @@
 //#define JPEG
 //#define MEM_SHARING 2
 //#define ZYNQ_PMM
-//#define PROFILE // required for ROD, CT and JPEG
+//#define PROFILE // required for ROD, CT and JPEG (app code)
 
 // needed for profile_rab, dma_test
 //#define MEM_SHARING 2
@@ -275,7 +275,7 @@
 //#define MAX_STRIPE_SIZE 0x1800
 //#define MAX_STRIPE_SIZE 0x8000
 
-// needed for profile_rab
+// needed for profile_rab & profile_rab_mh
 #define CLK_CNTR_RESPONSE_OFFSET_B 0x00
 #define CLK_CNTR_UPDATE_OFFSET_B   0x04
 #define CLK_CNTR_SETUP_OFFSET_B    0x08
@@ -288,5 +288,11 @@
 #define CLK_CNTR_CACHE_FLUSH_OFFSET_B    0x20
 #define CLK_CNTR_GET_USER_PAGES_OFFSET_B 0x24
 #define CLK_CNTR_MAP_SG_OFFSET_B         0x28
+
+#define N_MISSES_OFFSET_B        0x2C
+#define N_FIRST_MISSES_OFFSET_B  0x30
+#define CLK_CNTR_REFILL_OFFSET_B 0x40
+#define CLK_CNTR_SCHED_OFFSET_B  0x50
+#define CLK_CNTR_RESP_OFFSET_B   0x60
 
 #endif // PULP_HOST_H___

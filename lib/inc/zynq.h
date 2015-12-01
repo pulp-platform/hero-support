@@ -48,6 +48,7 @@
 // ARM Architecture Reference Manual ARMv7, Appendix D3.1
 #define ARM_PMU_PMXEVCNTR1_EV 0x3 // event: L1 data refill/miss
 #define ARM_PMU_PMXEVCNTR0_EV 0x4 // event: L1 data access
+//#define ARM_PMU_PMXEVCNTR1_EV 0x5 // event: data micro TLB refill/miss
 // ARM Architecture Reference Manual ARMv7, Appendix D3.1 -- not implemented in Cortex-A9
 //#define ARM_PMU_PMXEVCNTR1_EV 0x42 // event: L1 data read refill
 //#define ARM_PMU_PMXEVCNTR0_EV 0x40 // event: L1 data read access
