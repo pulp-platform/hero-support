@@ -428,8 +428,6 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
 #endif // PROFILE
 
 #else  // PULP
-
-#ifndef PULP
   /*************************************************************************/
   // the original function
   for(int i=0; i<(int)vTrees.size(); ++i) {
