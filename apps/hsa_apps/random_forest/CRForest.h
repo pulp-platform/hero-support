@@ -9,6 +9,8 @@
 
 #include <vector>
 
+#include <highgui.h>
+
 #ifdef PULP
 extern "C" {
 #include "pulp_func.h"
@@ -21,39 +23,111 @@ extern int PULP_height;
 #endif
 
 class CRForest {
-public:
-	// Constructors
-	CRForest(int trees = 0) {
-		vTrees.resize(trees);
-	}
-	~CRForest() {
-		for(std::vector<CRTree*>::iterator it = vTrees.begin(); it != vTrees.end(); ++it) delete *it;
-		vTrees.clear();
-	}
+ public:
+  // Constructors
+  CRForest(int trees = 0) {
+    vTrees.resize(trees);
+  }
+  ~CRForest() {
+    for(std::vector<CRTree*>::iterator it = vTrees.begin(); it != vTrees.end(); ++it) delete *it;
+    vTrees.clear();
+  }
 
-	// Set/Get functions
-	void SetTrees(int n) {vTrees.resize(n);}
-	int GetSize() const {return vTrees.size();}
-	unsigned int GetDepth() const {return vTrees[0]->GetDepth();}
-	unsigned int GetNumCenter() const {return vTrees[0]->GetNumCenter();}
+  // Set/Get functions
+  void SetTrees(int n) {vTrees.resize(n);}
+  int GetSize() const {return vTrees.size();}
+  unsigned int GetDepth() const {return vTrees[0]->GetDepth();}
+  unsigned int GetNumCenter() const {return vTrees[0]->GetNumCenter();}
 	
-	// Regression 
-	void regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg) const;
+  // Regression 
+  //void regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg) const;
+  void regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg, IplImage *img) const;
 
-	// Training
-	void trainForest(int min_s, int max_d, CvRNG* pRNG, const CRPatch& TrData, int samples);
+  // Training
+  void trainForest(int min_s, int max_d, CvRNG* pRNG, const CRPatch& TrData, int samples);
 
-	// IO functions
-	void saveForest(const char* filename, unsigned int offset = 0);
-	void loadForest(const char* filename, int type = 0);
-	void show(int w, int h) const {vTrees[0]->showLeaves(w,h);}
+  // IO functions
+  void saveForest(const char* filename, unsigned int offset = 0);
+  void loadForest(const char* filename, int type = 0);
+  void show(int w, int h) const {vTrees[0]->showLeaves(w,h);}
 
-	// Trees
-	std::vector<CRTree*> vTrees;
+  // Trees
+  std::vector<CRTree*> vTrees;
 };
 
-inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg) const {
+//inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg) const {
+inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg, IplImage *img) const {
   result.resize( vTrees.size() );
+
+  //#define TEST
+#ifdef TEST // Test to pass unfiltered image patch to PULP and extract features on a patch basis on PULP
+
+  IplImage *img_new;
+
+  img_new = cvLoadImage("/media/nfs/programs/random_forest/example/testimages/test0_0.png",CV_LOAD_IMAGE_COLOR);
+  
+  CvRect setRect = cvRect(0,0,16,16);
+  cvSetImageROI(img,setRect);
+  
+  cvCopy(img, img_new, NULL);
+  cvResetImageROI(img);
+
+  //printf("width = %d\n",img->width);
+  //printf("height = %d\n",img->height);
+  //printf("widthStep = %d\n",img->widthStep);
+  //printf("stepImg = %d\n",stepImg);
+  //printf("depth = %d\n",img->depth);
+  //printf("nChannels = %d\n",img->nChannels);
+  //printf("imageSize = %d\n",img->imageSize);
+  //printf("roi = %d\n",img->roi);
+  //
+  //int i_width, i_height;
+  //int stepImg_bkp, imageSize_bkp, widthStep_bkp;
+  //
+  //i_width = img->width;
+  //i_height = img->height;
+  //stepImg_bkp = stepImg;
+  //imageSize_bkp = img->imageSize;
+  //widthStep_bkp = img->widthStep;
+  //
+  //img->width = 16;
+  //img->height = 16;
+  //img->widthStep = 16*3;
+  //
+  //img->imageSize = img->height * img->widthStep;
+  //
+  //unsigned char * img_ptr = (unsigned char *)img->imageData;
+  //unsigned char * patch_ptr = (unsigned char *)malloc(img->widthStep*img->height*sizeof(unsigned char));
+  //
+  //// extract patch from input image
+  //img->imageData = (char *)patch_ptr;
+  //// for (unsigned i_y = 0; i_y < img->height; i_y++) {
+  ////   for (unsigned i_c = 0; i_c < img->nChannels; i_c++) {
+  ////     for (unsigned i_x = 0; i_x < img->width; i_x++) {
+  //// patch_ptr[i_y*img->widthStep+i_c*img->width+i_x] = img_ptr[i_y*widthStep_bkp+i_c*i_width+i_x];
+  ////     }
+  ////   }
+  //// }
+  //for (unsigned i_y = 0; i_y < img->height; i_y++) {
+  //  for (unsigned i_x = 0; i_x < img->width*img->nChannels; i_x++) {
+  //    patch_ptr[i_y*img->nChannels+i_x] = img_ptr[i_y*widthStep_bkp+i_x];
+  //  }
+  //}
+  //
+  //
+  //img->imageDataOrigin = (char *)patch_ptr;
+
+  // extract features on patch basis
+  std::vector<IplImage*> vImg;
+  CRPatch::extractFeatureChannels(img_new, vImg);
+
+  // adjust feature pointers
+  for(unsigned int c=0; c<vImg.size(); ++c) {
+    cvGetRawData( vImg[c], (uchar**)&(ptFCh[c]), &stepImg);
+  }
+  stepImg /= sizeof(ptFCh[0][0]);
+
+#endif //TEST
 
 #ifdef PULP
   unsigned int n_failed = 0;
@@ -98,11 +172,21 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     // set up a RAB slice for features pointers -- striping TOGETHER with miss_handling NOT SAVE!!!
     pulp_rab_req(pulp, (unsigned int)ptFCh, n_features*sizeof(unsigned int *), 0x3, 0x1, 0xFD, 0xFE);
 
+
+    printf("width = %d\n",img->width);
+    printf("height = %d\n",img->height);
+    printf("widthStep = %d\n",img->widthStep);
+    printf("stepImg = %d\n",stepImg);
+
+
     // set up striped RAB slices for patch
     unsigned s_height;
+    // //pulp_rab_req_striped_mchan_img(pulp, 0x3, 1,
+    // //   (unsigned)height, (unsigned)width + (unsigned)stepImg,
+    // //   (unsigned)n_features, ptFCh, &s_height);
     pulp_rab_req_striped_mchan_img(pulp, 0x3, 1,
-    				   (unsigned)height, (unsigned)width + (unsigned)stepImg,
-    				   (unsigned)n_features, ptFCh, &s_height);
+				   (unsigned)height, (unsigned)width, (unsigned)stepImg,
+				   (unsigned)n_features, ptFCh, &s_height);
 
 #define PRINT_ARGS
 #define MEM_SHARING 3
@@ -260,7 +344,7 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
 	      if (n_failed < 100) {
 		printf("Channel %i, Height %i, Width %i @ %#x | %#x: L3 = %#x, TCDM = %#x\n",
 		       i,j,k,ptFCh[i]+j*stepImg+k, tcdm_patch+i*width*height+j*width+k ,pixel_l3, pixel_tcdm);
-	      
+      
 	      }
 	    }
 	  }
@@ -427,9 +511,19 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
   }
 #endif // PROFILE
 
-#else  // PULP
+#ifdef TEST
+  // img->width = i_width;
+  // img->height = i_height;
+  // stepImg = stepImg_bkp;
+  // img->imageSize = imageSize_bkp;
+  // img->widthStep = widthStep_bkp; 
+  // 
+  // img->imageData = (char *)img_ptr;
+  // 
+  // free(patch_ptr);
+#endif //TEST
 
-#ifndef PULP
+#else  // PULP
   /*************************************************************************/
   // the original function
   for(int i=0; i<(int)vTrees.size(); ++i) {
@@ -441,25 +535,25 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
 
 //Training
 inline void CRForest::trainForest(int min_s, int max_d, CvRNG* pRNG, const CRPatch& TrData, int samples) {
-	for(int i=0; i < (int)vTrees.size(); ++i) {
-		vTrees[i] = new CRTree(min_s, max_d, TrData.vLPatches[1][0].center.size(), pRNG);
-		vTrees[i]->growTree(TrData, samples);
-	}
+  for(int i=0; i < (int)vTrees.size(); ++i) {
+    vTrees[i] = new CRTree(min_s, max_d, TrData.vLPatches[1][0].center.size(), pRNG);
+    vTrees[i]->growTree(TrData, samples);
+  }
 }
 
 // IO Functions
 inline void CRForest::saveForest(const char* filename, unsigned int offset) {
-	char buffer[200];
-	for(unsigned int i=0; i<vTrees.size(); ++i) {
-		sprintf_s(buffer,"%s%03d.txt",filename,i+offset);
-		vTrees[i]->saveTree(buffer);
-	}
+  char buffer[200];
+  for(unsigned int i=0; i<vTrees.size(); ++i) {
+    sprintf_s(buffer,"%s%03d.txt",filename,i+offset);
+    vTrees[i]->saveTree(buffer);
+  }
 }
 
 inline void CRForest::loadForest(const char* filename, int type) {
-	char buffer[200];
-	for(unsigned int i=0; i<vTrees.size(); ++i) {
-		sprintf_s(buffer,"%s%03d.txt",filename,i);
-		vTrees[i] = new CRTree(buffer);
-	}
+  char buffer[200];
+  for(unsigned int i=0; i<vTrees.size(); ++i) {
+    sprintf_s(buffer,"%s%03d.txt",filename,i);
+    vTrees[i] = new CRTree(buffer);
+  }
 }
