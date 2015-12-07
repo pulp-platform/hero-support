@@ -264,8 +264,8 @@
 #define MAX_STRIPE_SIZE 0x8000
 
 // needed for ROD, CT, JPEG
-#define PROFILE
-#define MEM_SHARING 2 // 1, 2 ,3
+//#define PROFILE
+//#define MEM_SHARING 2 // 1, 2 ,3
 //#define ZYNQ_PMM
 
 // needed for profile_rab, dma_test

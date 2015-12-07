@@ -636,13 +636,13 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   // for ROD
   unsigned R, TILE_HEIGHT;
   unsigned w, h, n_bands, band_height, odd;
-  unsigned tx_band_size_in, tx_band_size_in_first, tx_band_size_in_last;
-  unsigned tx_band_size_out, tx_band_size_out_last;
-  unsigned overlap;
+  unsigned tx_band_size_in = 0, tx_band_size_in_first = 0, tx_band_size_in_last = 0;
+  unsigned tx_band_size_out = 0, tx_band_size_out_last = 0;
+  unsigned overlap = 0;
 
   // for CT
   unsigned width, height, bHeight, nbBands;
-  unsigned band_size_1ch, band_size_3ch;
+  unsigned band_size_1ch = 0, band_size_3ch = 0;
   
   page_size_b = getpagesize();
 
@@ -704,7 +704,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
     bHeight = *(unsigned *)(task->data_desc[3].ptr);
 
     nbBands = (height / bHeight);
-    band_size_1ch = (width*bHeight);
+    //band_size_1ch = (width*bHeight);
     band_size_3ch = (width*bHeight*3);  
     //printf("buffer size = %#x \n",(band_size_3ch*2+band_size_1ch)*sizeof(unsigned char));
 
@@ -1864,7 +1864,7 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 
 /****************************************************************************************/
 int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned char port,
-				   unsigned p_height, unsigned i_width,
+				   unsigned p_height, unsigned p_width, unsigned i_step,
 				   unsigned n_channels, unsigned char **channels,
 				   unsigned *s_height)
 {
@@ -1884,8 +1884,8 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
 
   // compute max stripe height
   stripe_size_b = (RAB_N_SLICES/2-1)*page_size_b;
-  stripe_height = stripe_size_b / i_width;    
-
+  stripe_height = stripe_size_b / i_step;    
+  
   n_stripes_per_channel = p_height / stripe_height;
   if (p_height % stripe_height)
     n_stripes_per_channel++;
@@ -1893,8 +1893,8 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   // compute effective stripe height
   stripe_height = p_height / n_stripes_per_channel;
   *s_height = stripe_height;
-  stripe_size_b = stripe_height * i_width;
-   
+  stripe_size_b = stripe_height * i_step;
+     
   if (DEBUG_LEVEL > 2) {
     printf("n_stripes_per_channel = %d\n", n_stripes_per_channel);
     printf("stripe_size_b = %#x\n", stripe_size_b);
@@ -1942,7 +1942,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
     }
   }
 
-  //if (DEBUG_LEVEL > 2) {
+  if (DEBUG_LEVEL > 2) {
     printf("RAB stripe table @ %#x\n",(unsigned)rab_stripes);
     for (i=0; i<(n_stripes+1); i++) {
       if (i>2 && i<(n_stripes+1-3))
@@ -1953,7 +1953,65 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
       }
       printf("\n");
     }
-    //}
+  }
+
+  // write the img to a file
+  //#define PATCH2FILE
+  //#define IMG2FILE
+#if defined(IMG2FILE) || defined(PATCH2FILE) 
+  
+  FILE *fp;
+  
+  // open the file  
+  if((fp = fopen("img.h", "a")) == NULL) {
+    printf("ERROR: Could not open img.h.\n");
+    return -ENOENT;
+  }
+
+  printf("p_width  = %d\n",p_width);
+  printf("p_height = %d\n",p_height);
+  printf("i_step   = %d\n",i_step);
+ 
+#if defined(PATCH2FILE)
+
+  //write start
+  printf(fp, "unsigned char img[%d] = {\n",p_width * p_height * n_channels);
+
+  for (i=0; i<n_channels; i++) {
+    fprintf(fp,"// Channel %d: \n",i);
+    for (j=0; j<p_height; j++) {
+      for (k=0; k<p_width; k++) {
+  	fprintf(fp,"\t%#x,",(unsigned) *(channels[i]+j*i_step+k));
+      }
+      fprintf(fp,"\n");
+    }
+  }
+
+#elsif defined(IMG2FILE)
+
+  unsigned i_height, i_width;
+  i_height = 21;
+  i_width = 37;
+
+  // write start
+  fprintf(fp, "unsigned char img[%d] = {\n",i_height * i_step * n_channels);
+
+  for (i=0; i<n_channels; i++) {
+    fprintf(fp,"// Channel %d: \n",i);
+    for (j=0; j<i_height; j++) {
+      for (k=0; k<i_step; k++) {
+	fprintf(fp,"\t%#x,",(unsigned) *(channels[i]+j*i_step+k));
+      }
+      fprintf(fp,"\n");
+    }
+  }
+
+  // write end
+  fprintf(fp, "};\n\n");
+#endif  
+
+  fclose(fp);
+#endif
 
   // set up the request
   request[0] = 0;

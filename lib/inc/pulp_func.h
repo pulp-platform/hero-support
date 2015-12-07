@@ -122,8 +122,9 @@ int pulp_offload_wait(PulpDev *pulp, TaskDesc *task);
 
 // for random_forest
 int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned char port,
-				   unsigned p_height, unsigned i_width,
+				   unsigned p_height, unsigned p_width, unsigned i_step,
 				   unsigned n_channels, unsigned char **channels,
 				   unsigned *s_height);
+
 
 #endif // PULP_FUNC_H__
