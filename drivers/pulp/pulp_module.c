@@ -2023,6 +2023,8 @@ static void pulp_rab_handle_miss(unsigned unused)
       down_read(&user_task->mm->mmap_sem);
       result = get_user_pages(user_task, user_task->mm, start, 1, 1, 0, pages, NULL);
       up_read(&user_task->mm->mmap_sem);
+      //current->mm = user_task->mm;
+      //result = get_user_pages_fast(start, 1, 1, pages);
       if (result != 1) {
 	printk(KERN_WARNING "PULP: Could not get requested user-space virtual address %#x.\n", addr_start);
 	err = 1;
