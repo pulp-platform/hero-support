@@ -134,6 +134,7 @@
 #define N_CORES 2
 #define L2_MEM_SIZE_KB 64
 #define L1_MEM_SIZE_KB 36
+#define RAB_N_SLICES              16
 
 #elif BOARD == ZC706 || BOARD == MINI_ITX
 
@@ -146,6 +147,7 @@
 #define N_CORES 4
 #define L2_MEM_SIZE_KB 256
 #define L1_MEM_SIZE_KB 72
+#define RAB_N_SLICES              32
 
 #endif // BOARD
 
@@ -172,7 +174,6 @@
 #define RAB_CONFIG_SIZE_B         0x1000
 #define RAB_N_MAPPINGS            2
 #define RAB_N_PORTS               2
-#define RAB_N_SLICES              32
 #define RAB_CONFIG_N_BITS_PORT    1
 #define RAB_CONFIG_N_BITS_PROT    3
 #define RAB_CONFIG_N_BITS_DATE    8
