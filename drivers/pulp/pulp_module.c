@@ -904,13 +904,14 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     byte = 0;
     n_bytes_left = 3*sizeof(unsigned); 
     while (ret > 0) {
-      ret = __copy_from_user(request, (void __user *)arg, n_bytes_left);
+      ret = __copy_from_user((void *)((char *)request+byte),
+			     (void __user *)((char *)arg+byte), n_bytes_left);
       if (ret < 0) {
 	printk(KERN_WARNING "PULP: Cannot copy RAB config from user space.\n");
 	return ret;
       }
-      byte += ret;
-      n_bytes_left -= ret;
+      byte += (n_bytes_left - ret);
+      n_bytes_left = ret;
     }
      
     // parse request
@@ -1116,15 +1117,16 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     byte = 0;
     n_bytes_left = 3*sizeof(unsigned); 
     while (ret > 0) {
-      ret = __copy_from_user(request, (void __user *)arg, n_bytes_left);
+      ret = __copy_from_user((void *)((char *)request+byte),
+			     (void __user *)((char *)arg+byte), n_bytes_left);
       if (ret < 0) {
-    	printk(KERN_WARNING "PULP: cannot copy striped RAB config from user space.\n");
-    	return ret;
+	printk(KERN_WARNING "PULP: Cannot copy striped RAB config from user space.\n");
+	return ret;
       }
-      byte += ret;
-      n_bytes_left -= ret;
+      byte += (n_bytes_left - ret);
+      n_bytes_left = ret;
     }
-    
+
     // parse request
     RAB_GET_PROT(prot, request[0]);
     RAB_GET_PORT(rab_port, request[0]);
@@ -1146,26 +1148,28 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     byte = 0;
     n_bytes_left = rab_stripe_req[rab_mapping].n_elements*sizeof(unsigned); 
     while (ret > 0) {
-      ret = copy_from_user(max_stripe_size_b, (void __user *)request[1], n_bytes_left);
+      ret = copy_from_user((void *)((char *)max_stripe_size_b+byte),
+			     (void __user *)((char *)request[1]+byte), n_bytes_left);
       if (ret < 0) {
-	printk(KERN_WARNING "PULP: cannot copy stripe information from user space.\n");
+	printk(KERN_WARNING "PULP: Cannot copy stripe information from user space.\n");
 	return ret;
       }
-      byte += ret;
-      n_bytes_left -= ret;
+      byte += (n_bytes_left - ret);
+      n_bytes_left = ret;
     }
     
     ret = 1;
     byte = 0;
     n_bytes_left = rab_stripe_req[rab_mapping].n_elements*sizeof(unsigned *); 
     while (ret > 0) {
-      ret = copy_from_user(rab_stripe_ptrs, (void __user *)request[2], n_bytes_left);
+      ret = copy_from_user((void *)((char *)rab_stripe_ptrs+byte),
+			     (void __user *)((char *)request[2]+byte), n_bytes_left);
       if (ret < 0) {
-	printk(KERN_WARNING "PULP: cannot copy stripe information from user space.\n");
+	printk(KERN_WARNING "PULP: Cannot copy stripe information from user space.\n");
 	return ret;
       }
-      byte += ret;
-      n_bytes_left -= ret;
+      byte += (n_bytes_left - ret);
+      n_bytes_left = ret;
     }
     
     if (DEBUG_LEVEL_RAB > 1) {
@@ -1200,17 +1204,18 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       // get data from user space
       ret = 1;
       byte = 0;
-      n_bytes_left = n_entries*sizeof(unsigned); 
+      n_bytes_left = n_entries*sizeof(unsigned);
       while (ret > 0) {
-	ret = copy_from_user(elem_cur->rab_stripes, (void __user *)rab_stripe_ptrs[i], n_bytes_left);
+	ret = copy_from_user((void *)((char *)(elem_cur->rab_stripes)+byte),
+			     (void __user *)((char *)rab_stripe_ptrs[i]+byte), n_bytes_left);
 	if (ret < 0) {
-	  printk(KERN_WARNING "PULP: cannot copy stripe information from user space.\n");
+	  printk(KERN_WARNING "PULP: Cannot copy stripe information from user space.\n");
 	  return ret;
 	}
-	byte += ret;
-	n_bytes_left -= ret;
+	byte += (n_bytes_left - ret);
+	n_bytes_left = ret;
       }
-      
+            
       // detect type of element: 2 = in, 3 = out, 4 = inout
       if ( elem_cur->rab_stripes[0] == 0 )
 	type = 3;
@@ -1574,15 +1579,16 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     // get transfer data from user space - arg already checked above
     ret = 1;
     byte = 0;
-    n_bytes_left = 3*sizeof(unsigned); 
+    n_bytes_left = 3*sizeof(unsigned);
     while (ret > 0) {
-      ret = __copy_from_user(request, (void __user *)arg, n_bytes_left);
+      ret = __copy_from_user((void *)((char *)request+byte),
+			     (void __user *)((char *)arg+byte), n_bytes_left);
       if (ret < 0) {
-    	printk(KERN_WARNING "PULP: cannot copy DMAC transfer data from user space.\n");
-    	return ret;
+	printk(KERN_WARNING "PULP: Cannot copy DMAC transfer data from user space.\n");
+	return ret;
       }
-      byte += ret;
-      n_bytes_left -= ret;
+      byte += (n_bytes_left - ret);
+      n_bytes_left = ret;
     }
     
     addr_l3   = request[0];
