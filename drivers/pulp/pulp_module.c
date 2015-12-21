@@ -1929,7 +1929,8 @@ static void pulp_rab_handle_miss(unsigned unused)
     
     // check the ID
     id_pe = BF_GET(id, 0, AXI_ID_WIDTH_CORE);
-    id_cluster = BF_GET(id, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC) - 0x3;
+    //id_cluster = BF_GET(id, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC) - 0x3;
+    id_cluster = BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) - 0x2;
 
     // identify RAB port - for now, only handle misses on Port 1: PULP -> Host
     if ( BF_GET(id, AXI_ID_WIDTH, 1) )
@@ -2115,7 +2116,7 @@ static void pulp_rab_handle_miss(unsigned unused)
     // wake up the sleeping PE
     iowrite32(BIT_N_SET(id_pe),
 	      (void *)((unsigned)my_dev.clusters + CLUSTER_SIZE_B*id_cluster
-		       + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_1_OFFSET_B));
+		       + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B));
 
     /*
      * printk(KERN_INFO "WAKEUP: value = %#x, address = %#x\n",BIT_N_SET(id_pe), CLUSTER_SIZE_B*id_cluster \
