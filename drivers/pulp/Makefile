@@ -22,3 +22,5 @@ clean:
 	rm -f *.o
 	rm -f pulp.ko
 	rm -f Module.symvers
+	rm -f .*.o.cmd
+	rm -f .*.ko.cmd
