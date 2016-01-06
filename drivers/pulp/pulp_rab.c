@@ -209,7 +209,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
  */
 int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct page **pages)
 {
-  unsigned offset, entry, off_slices, off_ptrs, off_mappings;
+  unsigned offset, entry, off_slices, off_ptrs, off_mappings, flags;
 
   off_slices = rab_slice_req->rab_mapping*RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES;
   off_ptrs  = rab_slice_req->rab_mapping*RAB_N_PORTS*RAB_N_SLICES;
@@ -219,6 +219,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
   entry = rab_slice_req->rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH+rab_slice_req->rab_slice*RAB_TABLE_WIDTH+0;
   RAB_SET_PROT(rab_slices[off_slices+entry],rab_slice_req->prot);
   RAB_SET_PORT(rab_slices[off_slices+entry],rab_slice_req->rab_port);
+  RAB_SET_USE_ACP(rab_slices[off_slices+entry],rab_slice_req->use_acp);
   RAB_SET_DATE_EXP(rab_slices[off_slices+entry],rab_slice_req->date_exp);
   RAB_SET_DATE_CUR(rab_slices[off_slices+entry],rab_slice_req->date_cur);
 
@@ -265,16 +266,19 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
   // set up new slice, configure the hardware
   if (rab_mapping_active == rab_slice_req->rab_mapping) {
     offset = 0x10*(rab_slice_req->rab_port*RAB_N_SLICES+rab_slice_req->rab_slice);
+    
+    RAB_SLICE_SET_FLAGS(flags, rab_slice_req->prot, rab_slice_req->use_acp);
+    
     iowrite32(rab_slice_req->addr_start,  (void *)((unsigned)rab_config+offset+0x10));
     iowrite32(rab_slice_req->addr_end,    (void *)((unsigned)rab_config+offset+0x14));
     iowrite32(rab_slice_req->addr_offset, (void *)((unsigned)rab_config+offset+0x18));
-    iowrite32(rab_slice_req->prot,        (void *)((unsigned)rab_config+offset+0x1c));
+    iowrite32(flags,                      (void *)((unsigned)rab_config+offset+0x1c));
  
     if (DEBUG_LEVEL_RAB > 1) {
       printk(KERN_INFO "PULP - RAB: addr_start  %#x\n", rab_slice_req->addr_start);
       printk(KERN_INFO "PULP - RAB: addr_end    %#x\n", rab_slice_req->addr_end);
       printk(KERN_INFO "PULP - RAB: addr_offset %#x\n", rab_slice_req->addr_offset);
-      printk(KERN_INFO "PULP - RAB: prot        %#x\n", rab_slice_req->prot);
+      printk(KERN_INFO "PULP - RAB: flags       %#x\n", flags);
     }
   }  
 
@@ -290,8 +294,8 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
 void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
 {
   int i,j;
-  unsigned offset, off_slices, off_mappings;
-  unsigned char prot;
+  unsigned offset, off_slices, off_mappings, flags;
+  unsigned char prot, use_acp;
 
   if (DEBUG_LEVEL_RAB > 0)
     printk(KERN_INFO "PULP - RAB: Switch from Mapping %d to %d.\n",rab_mapping_active,rab_mapping);
@@ -321,11 +325,15 @@ void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
       RAB_GET_PROT(prot, rab_slices[off_slices+i*RAB_TABLE_WIDTH*RAB_N_SLICES+j*RAB_TABLE_WIDTH+0]);
       if (prot & 0x1) { // activate slices with new active config
         offset =  0x10*(i*RAB_N_SLICES+j);
+
+        RAB_GET_USE_ACP(use_acp, rab_slices[off_slices+i*RAB_TABLE_WIDTH*RAB_N_SLICES+j*RAB_TABLE_WIDTH+0]);
+        RAB_SLICE_SET_FLAGS(flags, prot, use_acp);
+    
         iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0], (void *)((unsigned)rab_config+offset+0x10));
         iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1], (void *)((unsigned)rab_config+offset+0x14));
         iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2], (void *)((unsigned)rab_config+offset+0x18));
-        iowrite32(prot, (void *)((unsigned)rab_config+offset+0x1c));
-  
+        iowrite32(flags, (void *)((unsigned)rab_config+offset+0x1c));
+	
         if (DEBUG_LEVEL_RAB > 0)
           printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Setting up.\n",rab_mapping,i,j);
         if (DEBUG_LEVEL_RAB > 1) {
@@ -352,7 +360,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
   int mapping_min, mapping_max;
   int i,j,k;
   unsigned offset, off_slices, off_mappings, off_ptrs;
-  unsigned addr_start, addr_end, addr_offset, prot;
+  unsigned addr_start, addr_end, addr_offset, prot, use_acp, flags;
 
   if (rab_mapping == 0xFFFF) {
     mapping_min = 0;
@@ -380,10 +388,13 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
         addr_offset  = rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2];
         RAB_GET_PROT(prot, rab_slices[off_slices+i*RAB_TABLE_WIDTH*RAB_N_SLICES
                                       +j*RAB_TABLE_WIDTH+0]);
+        RAB_GET_USE_ACP(use_acp, rab_slices[off_slices+i*RAB_TABLE_WIDTH*RAB_N_SLICES
+                                            +j*RAB_TABLE_WIDTH+0]);
 
         if (prot)
-          printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x\n",
-                 i,j,addr_start,addr_end,addr_offset,prot);
+          printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x, acp: %d\n",
+                 i,j,addr_start,addr_end,addr_offset,prot,use_acp);
+
       }
     }
   } 
@@ -394,15 +405,17 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
     for (i=0; i<RAB_N_PORTS; i++) {
       for (j=0; j<RAB_N_SLICES; j++) {
         offset = 0x10*(i*RAB_N_SLICES+j);
-        prot         = ioread32((void *)((unsigned)rab_config+offset+0x1C));
-
+  
+        flags = ioread32((void *)((unsigned)rab_config+offset+0x1C));
+        RAB_SLICE_GET_FLAGS(flags, prot, use_acp);
+        
         if (prot) {
           addr_start   = ioread32((void *)((unsigned)rab_config+offset+0x10));
           addr_end     = ioread32((void *)((unsigned)rab_config+offset+0x14));
           addr_offset  = ioread32((void *)((unsigned)rab_config+offset+0x18));
-    
-          printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x\n",
-                 i,j,addr_start,addr_end,addr_offset,prot);
+          
+          printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x, acp: %d\n",
+                 i,j,addr_start,addr_end,addr_offset,prot,use_acp);
         }
       }
     }

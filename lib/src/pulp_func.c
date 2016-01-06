@@ -504,12 +504,12 @@ int pulp_init(PulpDev *pulp)
 
   // RAB setup
   // port 0: Host -> PULP
-  pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE);     // L2
-  //pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE); // Mailbox, Interface 0
-  pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B*2,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE); // Mailbox, Interface 0 and Interface 1
-  pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE);     // TCDM + Cluster Peripherals
+  pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0);     // L2
+  //pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0); // Mailbox, Interface 0
+  pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B*2,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0); // Mailbox, Interface 0 and Interface 1
+  pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0);     // TCDM + Cluster Peripherals
   // port 1: PULP -> Host
-  pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,RAB_MAX_DATE,RAB_MAX_DATE);       // L3 memory (contiguous)
+  pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,RAB_MAX_DATE,RAB_MAX_DATE, 0);       // L3 memory (contiguous)
   
   // enable mailbox interrupts
   pulp_write32(pulp->mailbox.v_addr,MAILBOX_IE_OFFSET_B,'b',0x6);
@@ -571,9 +571,10 @@ void pulp_mailbox_clear_is(PulpDev *pulp)
  * @date_exp  : expiration date of the mapping
  * @date_cur  : current date, used to check for suitable slices
  */
-int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
+int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
                  unsigned char prot, unsigned char port,
-                 unsigned char date_exp, unsigned char date_cur)
+                 unsigned char date_exp, unsigned char date_cur,
+                 unsigned char use_acp)
 {
   unsigned request[3];
 
@@ -581,16 +582,17 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
   request[0] = 0;
   RAB_SET_PROT(request[0], prot);
   RAB_SET_PORT(request[0], port);
+  RAB_SET_USE_ACP(request[0], use_acp);
   RAB_SET_DATE_EXP(request[0], date_exp);
   RAB_SET_DATE_CUR(request[0], date_cur);
   request[1] = addr_start;
   request[2] = size_b;
-  
+
   // make the request
   ioctl(pulp->fd,PULP_IOCTL_RAB_REQ,request);
-  
+
   return 0;
-} 
+}
 
 /**
  * Free RAB slices
@@ -599,12 +601,12 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
  * @date_cur  : current date, 0 = free all slices
  */
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
-  
+
   // make the request
   ioctl(pulp->fd,PULP_IOCTL_RAB_FREE,(unsigned)date_cur);
-  
+
   return;
-} 
+}
 
 /**
  * Request striped remappings
@@ -617,19 +619,20 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
  * @port      : RAB port, 0 = Host->PULP, 1 = PULP->Host
  */
 int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
-                         unsigned **data_idxs, int n_elements,  
-                         unsigned char prot, unsigned char port)
+                         unsigned **data_idxs, int n_elements,
+                         unsigned char prot, unsigned char port,
+                         unsigned char use_acp)
 {
   int i,j,k,m;
 
   /////////////////////////////////////////////////////////////////
 
   unsigned request[3];
-  unsigned n_stripes, n_slices_max, n_fields, offload_id; 
+  unsigned n_stripes, n_slices_max, n_fields, offload_id;
 
   unsigned addr_start, addr_end, size_b, page_size_b;
 
-  unsigned * max_stripe_size_b; 
+  unsigned * max_stripe_size_b;
   unsigned ** rab_stripes;
 
   // extracted from accelerator code
@@ -643,11 +646,11 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   // for CT
   unsigned width, height, bHeight, nbBands;
   unsigned band_size_1ch = 0, band_size_3ch = 0;
-  
+
   page_size_b = getpagesize();
 
   max_stripe_size_b = (unsigned *)malloc((size_t)(n_elements*sizeof(unsigned))); 
-  rab_stripes = (unsigned **)malloc((size_t)(n_elements*sizeof(unsigned *))); 
+  rab_stripes = (unsigned **)malloc((size_t)(n_elements*sizeof(unsigned *)));
   if ( (rab_stripes == NULL) || (max_stripe_size_b == NULL) ) {
     printf("ERROR: Malloc failed.\n");
     return -ENOMEM;
@@ -842,6 +845,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   request[0] = 0;
   RAB_SET_PROT(request[0], prot);
   RAB_SET_PORT(request[0], port);
+  RAB_SET_USE_ACP(request[0], use_acp);
   RAB_SET_OFFLOAD_ID(request[0], offload_id);
   RAB_SET_N_ELEM(request[0], n_elements);
   RAB_SET_N_STRIPES(request[0], n_stripes);
@@ -878,9 +882,9 @@ void pulp_rab_free_striped(PulpDev *pulp)
   return;
 } 
 
-void pulp_rab_mh_enable(PulpDev *pulp)
+void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp)
 {
-  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA);
+  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,&use_acp);
   
   return;
 }
@@ -1386,22 +1390,22 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
       printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
       usleep(1000000);
     }
-    pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur);
+    pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur, 0);
   }
 
   // set up RAB stripes
   //pulp_rab_req_striped(pulp, task, data_idxs, n_idxs, prot, port);
   if ( !strcmp(task->name, "profile_rab") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port);
+    pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port, 0);
   }
   else if ( !strcmp(task->name, "rod") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port);
+    pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port, 0);
   }
   else if ( !strcmp(task->name, "ct") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
+    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port, 0);
   }
   else if ( !strcmp(task->name, "jpeg") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
+    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port, 0);
   }
   else {
     if ( strcmp(task->name, "face_detect") )

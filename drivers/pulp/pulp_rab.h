@@ -25,11 +25,26 @@
 #define RAB_SET_PAGE_IDX_END(page_idxs, idx_end) \
   ( BF_SET(page_idxs, idx_end, 0, RAB_CONFIG_N_BITS_PAGE) )
 
+
+// These macros can be used to extract the flags from a physical RAB slice in pulpemu
+#define RAB_SLICE_SET_FLAGS(flags, prot, use_acp) \
+  { BF_SET(flags, prot, 0, RAB_SLICE_FLAGS_PROT);                       \
+    BF_SET(flags, use_acp, RAB_SLICE_FLAGS_PROT, RAB_SLICE_FLAGS_USE_ACP); }
+
+#define RAB_SLICE_GET_FLAGS(flags, prot, use_acp) \
+  { prot    = BF_GET(flags, 0, RAB_SLICE_FLAGS_PROT);                   \
+    use_acp = BF_GET(flags, RAB_SLICE_FLAGS_PROT, RAB_SLICE_FLAGS_USE_ACP); }
+
+// defines layout of the flags in a RAB slice
+#define RAB_SLICE_FLAGS_PROT      3
+#define RAB_SLICE_FLAGS_USE_ACP   1
+
 // type definitions
 typedef struct {
   unsigned rab_mapping;
   unsigned rab_slice;
   unsigned char rab_port;
+  unsigned char use_acp;
   unsigned char prot;
   unsigned char date_exp;
   unsigned char date_cur;
@@ -48,6 +63,7 @@ typedef struct {
   unsigned n_slices_per_stripe;
   unsigned *slices;
   unsigned char rab_port;
+  unsigned char use_acp;
   unsigned char prot;
   unsigned n_stripes;
   unsigned *rab_stripes;

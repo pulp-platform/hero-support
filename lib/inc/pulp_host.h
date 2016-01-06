@@ -55,44 +55,51 @@
 #define RAB_SET_PORT(request, port) \
   ( BF_SET(request, port, RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_PORT) )
 
+#define RAB_GET_USE_ACP(use_acp, request) \
+  ( use_acp = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
+		      RAB_CONFIG_N_BITS_USE_ACP) )
+#define RAB_SET_USE_ACP(request, use_acp) \
+  ( BF_SET(request, use_acp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
+	   RAB_CONFIG_N_BITS_USE_ACP) )
+
 #define RAB_GET_DATE_EXP(date_exp, request) \
-  ( date_exp = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
-		      RAB_CONFIG_N_BITS_DATE) )
+  ( date_exp = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+           + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_DATE) )
 #define RAB_SET_DATE_EXP(request, date_exp) \
-  ( BF_SET(request, date_exp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
-	   RAB_CONFIG_N_BITS_DATE) )
+  ( BF_SET(request, date_exp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+	         + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_DATE) )
 
 #define RAB_GET_DATE_CUR(date_cur, request) \
   ( date_cur = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-		      + RAB_CONFIG_N_BITS_DATE, RAB_CONFIG_N_BITS_DATE) )
+		       + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_DATE) )
 #define RAB_SET_DATE_CUR(request, date_cur) \
   ( BF_SET(request, date_cur, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	   + RAB_CONFIG_N_BITS_DATE, RAB_CONFIG_N_BITS_DATE) )
+	         + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_DATE) )
 
 // for RAB striping - ATTENTION: not compatible with date_exp, date_cur!!!
 #define RAB_GET_OFFLOAD_ID(offload_id, request) \
-  ( offload_id = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
-		    RAB_CONFIG_N_BITS_OFFLOAD_ID) )
+  ( offload_id = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+          + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_OFFLOAD_ID) )
 #define RAB_SET_OFFLOAD_ID(request, offload_id) \
-  ( BF_SET(request, offload_id, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
-	   RAB_CONFIG_N_BITS_OFFLOAD_ID) )
+  ( BF_SET(request, offload_id, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+          + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_OFFLOAD_ID) )
 
 #define RAB_GET_N_ELEM(n_elem, request) \
   ( n_elem = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-		    + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
+		     + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
 #define RAB_SET_N_ELEM(request, n_elem) \
   ( BF_SET(request, n_elem, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	   + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
+	       + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
 
 #define RAB_GET_N_STRIPES(n_stripes, request) \
   ( n_stripes = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-		       + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
-		       RAB_CONFIG_N_BITS_N_STRIPES) )
+		     + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
+		     RAB_CONFIG_N_BITS_N_STRIPES) )
 #define RAB_SET_N_STRIPES(request, n_stripes) \
   ( BF_SET(request, n_stripes, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	   + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
-	   RAB_CONFIG_N_BITS_N_STRIPES) )
-  
+	       + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
+	       RAB_CONFIG_N_BITS_N_STRIPES) )
+
 /*
  * General settings
  */
@@ -106,7 +113,7 @@
 #define PULP_IOCTL_RAB_REQ_STRIPED  _IOW(PULP_IOCTL_MAGIC,0xB2,int)
 #define PULP_IOCTL_RAB_FREE_STRIPED _IOW(PULP_IOCTL_MAGIC,0xB3,int)
 
-#define PULP_IOCTL_RAB_MH_ENA  _IO(PULP_IOCTL_MAGIC,0xB4)
+#define PULP_IOCTL_RAB_MH_ENA  _IOW(PULP_IOCTL_MAGIC,0xB4,unsigned)
 #define PULP_IOCTL_RAB_MH_DIS  _IO(PULP_IOCTL_MAGIC,0xB5)
 
 #define PULP_IOCTL_DMAC_XFER _IOW(PULP_IOCTL_MAGIC,0xB6,int)
@@ -127,7 +134,7 @@
 #if BOARD == ZEDBOARD 
 
 // L3
-#define L3_MEM_SIZE_MB 64 
+#define L3_MEM_SIZE_MB 8
 // PULP system address map
 #define PULP_H_BASE_ADDR 0x40000000 // Address at which the host sees PULP
 #define N_CLUSTERS 1
@@ -175,6 +182,7 @@
 #define RAB_N_MAPPINGS            2
 #define RAB_N_PORTS               2
 #define RAB_CONFIG_N_BITS_PORT    1
+#define RAB_CONFIG_N_BITS_USE_ACP 1
 #define RAB_CONFIG_N_BITS_PROT    3
 #define RAB_CONFIG_N_BITS_DATE    8
 #define RAB_CONFIG_N_BITS_PAGE    16

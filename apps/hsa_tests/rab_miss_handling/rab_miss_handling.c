@@ -25,15 +25,19 @@ int main(int argc, char *argv[]){
   char app_name[30];
   int timeout_s = 10;  
   int pulp_clk_freq_mhz = 50;
+  unsigned use_acp = 1;
 
   strcpy(app_name,"rab_miss_handling");
   
-  if (argc > 2) {
+  if (argc > 3) {
     printf("WARNING: More than 1 command line argument is not supported. Those will be ignored.\n");
   }
 
   if (argc > 1)
     pulp_clk_freq_mhz = atoi(argv[1]);
+
+  if (argc > 2)
+    use_acp = atoi(argv[1]);
 
   // shared data element
   unsigned *array_ptr;
@@ -95,7 +99,7 @@ int main(int argc, char *argv[]){
   /*************************************************************************/
  
   // enable RAB miss handling
-  pulp_rab_mh_enable(pulp);
+  pulp_rab_mh_enable(pulp, use_acp);
   
   // write PULP_START
   pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', PULP_START);

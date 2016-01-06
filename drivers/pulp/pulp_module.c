@@ -114,6 +114,7 @@ static unsigned rab_mh = 0;
 static unsigned rab_mh_addr[RAB_MH_FIFO_DEPTH];
 static unsigned rab_mh_id[RAB_MH_FIFO_DEPTH];
 static unsigned rab_mh_date;
+static unsigned rab_mh_use_acp = 0;
 #ifdef PROFILE_RAB_MH
 static unsigned clk_cntr_resp_tmp[N_CORES];
 static unsigned clk_cntr_resp[N_CORES];
@@ -585,7 +586,7 @@ irqreturn_t pulp_isr_eoc(int irq, void *ptr)
 irqreturn_t pulp_isr_mailbox(int irq, void *ptr)
 {
   int i,j;
-  unsigned idx, n_slices, n_fields, offset, read;
+  unsigned idx, n_slices, n_fields, offset, read, flags;
 
   if (DEBUG_LEVEL_MBOX > 0) {
     printk(KERN_INFO "PULP: Mailbox interrupt.\n");
@@ -645,6 +646,7 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr)
             // set up new translations rules
             if ( elem_cur->rab_stripes[idx*n_fields+j*2+1] ) { // offset != 0
               // set up the slice
+              RAB_SLICE_SET_FLAGS(flags, elem_cur->prot, elem_cur->use_acp);
               iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],
                         (void *)((unsigned)my_dev.rab_config+offset+0x10)); // start_addr
               iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+2],
@@ -652,8 +654,7 @@ irqreturn_t pulp_isr_mailbox(int irq, void *ptr)
               iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+1],
                         (void *)((unsigned)my_dev.rab_config+offset+0x18)); // offset  
               // activate the slice
-              iowrite32(elem_cur->prot,
-                        (void *)((unsigned)my_dev.rab_config+offset+0x1c));
+              iowrite32(flags, (void *)((unsigned)my_dev.rab_config+offset+0x1c));
 #ifdef PROFILE_RAB 
               n_slices_updated++;
 #endif
@@ -865,12 +866,15 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   // needed for RAB striping
   unsigned addr_start, addr_offset;
   unsigned n_entries, n_fields;
-  unsigned char rab_port, prot;
+  unsigned char rab_port, prot, use_acp;
   unsigned seg_idx_start, seg_idx_end, n_slices;
   unsigned * max_stripe_size_b;
   unsigned ** rab_stripe_ptrs;
   unsigned shift, type;
- 
+
+  // needed for RAB miss handling
+  unsigned mh_use_acp;
+  
   // needed for DMA management
   struct dma_async_tx_descriptor ** descs;
   unsigned addr_l3, addr_pulp;
@@ -924,6 +928,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     // parse request
     RAB_GET_PROT(rab_slice_req->prot, request[0]);    
     RAB_GET_PORT(rab_slice_req->rab_port, request[0]);
+    RAB_GET_USE_ACP(rab_slice_req->use_acp, request[0]);
     RAB_GET_OFFLOAD_ID(rab_slice_req->rab_mapping, request[0]);
     RAB_GET_DATE_EXP(rab_slice_req->date_exp, request[0]);
     RAB_GET_DATE_CUR(rab_slice_req->date_cur, request[0]);
@@ -937,6 +942,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     if (DEBUG_LEVEL_RAB > 1) {
       printk(KERN_INFO "PULP: New RAB request:\n");
       printk(KERN_INFO "PULP: rab_port = %d.\n",rab_slice_req->rab_port);
+      printk(KERN_INFO "PULP: use_acp = %d.\n",rab_slice_req->use_acp);
       printk(KERN_INFO "PULP: date_exp = %d.\n",rab_slice_req->date_exp);
       printk(KERN_INFO "PULP: date_cur = %d.\n",rab_slice_req->date_cur);
     }
@@ -1137,6 +1143,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     // parse request
     RAB_GET_PROT(prot, request[0]);
     RAB_GET_PORT(rab_port, request[0]);
+    RAB_GET_USE_ACP(use_acp, request[0]); // actually, this information could be retrieved on an element basis, similar to in/out/inout
     RAB_GET_OFFLOAD_ID(rab_mapping, request[0]);
     RAB_GET_N_ELEM(rab_stripe_req[rab_mapping].n_elements, request[0]);
     RAB_GET_N_STRIPES(rab_stripe_req[rab_mapping].n_stripes, request[0]);
@@ -1205,6 +1212,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       elem_cur->n_slices_per_stripe = n_slices;
       elem_cur->rab_port = rab_port;
       elem_cur->prot = prot;
+      elem_cur->use_acp = use_acp;
       elem_cur->n_stripes = rab_stripe_req[rab_mapping].n_stripes;
       
       // allocate memory to hold rab_stripes
@@ -1412,7 +1420,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       // to do: protect with semaphore!?
       rab_slice_req->rab_mapping = rab_mapping;
       rab_slice_req->rab_port = elem_cur->rab_port;
-            
+      rab_slice_req->use_acp = elem_cur->use_acp;
+
       // do not overwrite any remappings, the remappings will be freed manually
       rab_slice_req->date_cur = 0x1;
       rab_slice_req->date_exp = RAB_MAX_DATE; // also avoid check in pulp_rab_slice_setup
@@ -1729,6 +1738,21 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     break;
 
   case PULP_IOCTL_RAB_MH_ENA:
+
+    if(!arg) {
+      printk(KERN_WARNING "PULP: ioctl RAB miss handling enable requires an argument!\n");
+      return -EINVAL;
+    }
+    
+    // get use_acp argument from userspace - arg was checked above
+    ret = __copy_from_user(&mh_use_acp, (void __user *)arg, sizeof(unsigned));
+    if(ret != 0)
+    {
+      printk(KERN_WARNING "PULP: Cannot copy ioctl argument from user space. %lu, %x, %x, %d\n", ret, &mh_use_acp, arg, sizeof(unsigned));
+      return -EFAULT;
+    }
+
+    rab_mh_use_acp = mh_use_acp; // save argument to global variable
 
     // create workqueue for RAB miss handling
     //rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
@@ -2073,6 +2097,8 @@ static void pulp_rab_handle_miss(unsigned unused)
       // fill rab_slice_req structure
       rab_slice_req->flags = 0;
       rab_slice_req->prot = (write << 2) | 0x2 | 0x1;
+      rab_slice_req->use_acp = rab_mh_use_acp;
+
       // allocate a fixed number of slices to each PE???
       // works for one port only!!!
       rab_slice_req->date_exp = (unsigned char)rab_mh_date; 
