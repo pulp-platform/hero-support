@@ -1748,7 +1748,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     ret = __copy_from_user(&mh_use_acp, (void __user *)arg, sizeof(unsigned));
     if(ret != 0)
     {
-      printk(KERN_WARNING "PULP: Cannot copy ioctl argument from user space. %lu, %x, %x, %d\n", ret, &mh_use_acp, arg, sizeof(unsigned));
+      printk(KERN_WARNING "PULP: Could not copy ioctl argument from user space. %lu, %#lx, %#lx, %d\n",
+             ret, (unsigned long)&mh_use_acp, arg, sizeof(unsigned));
       return -EFAULT;
     }
 
