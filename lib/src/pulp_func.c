@@ -1278,6 +1278,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   unsigned n_data, n_data_int, gap_size, temp;
   unsigned * v_addr_int;
   unsigned * size_int;
+  unsigned char * use_acp_int;
   unsigned * order;
 
   n_data_int = 1;
@@ -1329,6 +1330,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   // memory allocation
   v_addr_int = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
   size_int = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
+  use_acp_int = (unsigned char *)malloc((size_t)n_idxs*sizeof(unsigned char));
   order = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
   if (!v_addr_int | !size_int | !order) {
     printf("Malloc failed for RAB setup.\n");
@@ -1363,17 +1365,20 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
 
   // determine the number of remappings/intervals to request
   v_addr_int[0] = (unsigned)task->data_desc[order[0]].ptr; 
-  size_int[0] = (unsigned)task->data_desc[order[0]].size; 
+  size_int[0] = (unsigned)task->data_desc[order[0]].size;
+  use_acp_int[0] = task->data_desc[order[0]].use_acp;
   for (i=1;i<n_idxs;i++) {
     j = order[i];
     gap_size = (unsigned)task->data_desc[j].ptr - (v_addr_int[n_data_int-1]
                                                    + size_int[n_data_int-1]);
     // !!!!TO DO: check protections, check dates!!!
-    if ( gap_size > RAB_CONFIG_MAX_GAP_SIZE_B ) { 
-      // the gap is too large, create a new mapping
+    if ( gap_size > RAB_CONFIG_MAX_GAP_SIZE_B
+         || task->data_desc[j].use_acp != use_acp_int[n_data_int-1]) { 
+      // the gap is too large or different ACP setting is used, create a new mapping
       n_data_int++;
       v_addr_int[n_data_int-1] = (unsigned)task->data_desc[j].ptr;
       size_int[n_data_int-1] = (unsigned)task->data_desc[j].size;
+      use_acp_int[n_data_int-1] = task->data_desc[j].use_acp;
     }
     else {
       // extend the previous mapping
@@ -1390,7 +1395,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
       printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
       usleep(1000000);
     }
-    pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur, 0);
+    pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur, use_acp_int[i]);
   }
 
   // set up RAB stripes
@@ -1415,6 +1420,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   // free memory
   free(v_addr_int);
   free(size_int);
+  free(use_acp_int);
   free(order);
   
   return 0;

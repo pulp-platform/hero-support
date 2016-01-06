@@ -42,6 +42,7 @@ typedef struct {
   void *ptr;
   size_t size;
   int type;
+  unsigned char use_acp;
 } DataDesc;
 
 // task descriptor created by the compiler

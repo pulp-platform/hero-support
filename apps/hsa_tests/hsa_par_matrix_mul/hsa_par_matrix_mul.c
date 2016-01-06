@@ -96,10 +96,13 @@ int main() {
   DataDesc data_desc[task_desc.n_data];
   data_desc[0].ptr = (unsigned *)&mat_a;
   data_desc[0].size   = SIZE*SIZE*sizeof(int);
+  data_desc[0].use_acp = 0;
   data_desc[1].ptr = (unsigned *)&mat_b;
   data_desc[1].size   = SIZE*SIZE*sizeof(int);
+  data_desc[1].use_acp = 0;
   data_desc[2].ptr = (unsigned *)&mat_c;
   data_desc[2].size   = SIZE*SIZE*sizeof(int);
+  data_desc[2].use_acp = 0;
   
   task_desc.data_desc = data_desc;
  
