@@ -125,7 +125,7 @@ int main() {
  
   for(i=0; i<SIZE; i++) {
     for (j=0; j<SIZE; j++) {
-      if (mat_c[i][j] != mat_c[i][j])
+      if (mat_c[i][j] != mat_d[i][j])
  	printf("ERROR: computation wrong!\n");
     }
   }
