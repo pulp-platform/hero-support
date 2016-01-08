@@ -25,11 +25,15 @@ export ARM_INC_DIR1=${ARM_LIB_DIR1}/inc
 export PULP_INC_DIR1=/home/vogelpi/pulp_on_fpga/software/pulp/pulp_pipeline/pkg/sdk/dev/install/include/archi/pulp4
 export PULP_INC_DIR2=/home/vogelpi/pulp_on_fpga/software/pulp/pulp_pipeline/pkg/sdk/dev/install/include/pulp4
 
+# PULP HSA home directory
+export PULP_HSA_HOME=/home/vogelpi/pulp_on_fpga/software/hsa_sw
+
 # machine to which the make_and_copy.sh scripts transfer the compiled stuff
 export SCP_TARGET_MACHINE="vogelpi@bordcomputer"
 
 # base path to which the make_and_copy.sh scripts transfer the compiled stuff
-export SCP_TARGET_PATH="~/pulp_on_fpga/share"
+export SCP_TARGET_PATH="~/pulp_on_fpga/share/programs"
+export SCP_TARGET_PATH_DRIVERS="~/pulp_on_fpga/share/drivers"
 
 # create lib/lib folder if not existing
 if [ ! -d ${ARM_LIB_DIR1}/lib ]

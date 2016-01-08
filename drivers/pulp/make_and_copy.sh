@@ -7,4 +7,4 @@ vivado-2015.1 make
 vivado-2015.1 arm-xilinx-linux-gnueabi-objdump -DS pulp.ko > pulp.read
 
 # Copy
-scp *.ko ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/drivers/.
+scp *.ko ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH_DRIVERS}/.
