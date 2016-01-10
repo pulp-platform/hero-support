@@ -173,6 +173,13 @@
 #define CLKING_CONFIG_REG_23_OFFSET_B 0x25C 
 #define CLKING_STATUS_REG_OFFSET_B    0x4 
 
+// CLKING_INPUT_FREQ_MHZ only supports 50 and 100 at the moment
+#if BOARD == ZEDBOARD
+#define CLKING_INPUT_FREQ_MHZ         50
+#elif BOARD == ZC706 || BOARD == MINI_ITX
+#define CLKING_INPUT_FREQ_MHZ         100
+#endif
+
 #define STDOUT_H_BASE_ADDR 0x51020000
 #define STDOUT_SIZE_B      0x10000
 #define STDOUT_PE_SIZE_B   0x1000
