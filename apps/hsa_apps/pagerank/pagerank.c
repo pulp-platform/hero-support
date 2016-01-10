@@ -74,11 +74,12 @@ int main(int argc, char *argv[]){
   int timeout_s = 10;  
   int pulp_clk_freq_mhz = 50;
   int mem_sharing = 2;
+  unsigned char use_acp = 0;
 
   strcpy(app_name,"pagerank");
   
-  if (argc > 5) {
-    printf("WARNING: More than 4 command line arguments are not supported. Those will be ignored.\n");
+  if (argc > 6) {
+    printf("WARNING: More than 5 command line arguments are not supported. Those will be ignored.\n");
   }
 
   if (argc > 1)
@@ -98,6 +99,9 @@ int main(int argc, char *argv[]){
     mem_sharing = atoi(argv[4]);
   if ((mem_sharing != 2) && (mem_sharing != 1))
     mem_sharing = 2;
+
+  if (argc > 5)
+    use_acp = atoi(argv[5]);
 
   /*************************************************************************/
   // build up the graph
@@ -574,7 +578,7 @@ int main(int argc, char *argv[]){
   /*************************************************************************/
  
   // enable RAB miss handling
-  pulp_rab_mh_enable(pulp);
+  pulp_rab_mh_enable(pulp, use_acp);
   
   clock_gettime(CLOCK_REALTIME,&tp1);
 
