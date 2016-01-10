@@ -18,8 +18,8 @@
  */
 #if BOARD == ZEDBOARD
 
-//#define ARM_CLK_FREQ_MHZ 667
-#define ARM_CLK_FREQ_MHZ 300
+#define ARM_CLK_FREQ_MHZ 667
+//#define ARM_CLK_FREQ_MHZ 300
 #define DRAM_SIZE_MB 512
 
 #elif BOARD == ZC706 || BOARD == MINI_ITX
