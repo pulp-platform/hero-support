@@ -884,7 +884,8 @@ void pulp_rab_free_striped(PulpDev *pulp)
 
 void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp)
 {
-  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,&use_acp);
+  unsigned int arg = (unsigned int)use_acp;
+  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,&arg);
   
   return;
 }
