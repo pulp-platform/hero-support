@@ -4,4 +4,4 @@
 ${VIVADO_VERSION} make
 
 # Copy
-scp *.ko ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/drivers/.
+scp *.ko ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH_DRIVERS}/.
