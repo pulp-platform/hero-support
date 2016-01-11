@@ -1047,7 +1047,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }
 
       // flush caches
-      if ( !(rab_slice_req->flags & 0x1) ) {
+      if ( !(rab_slice_req->flags & 0x1) && !(rab_slice_req->use_acp) ) {
         for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
           // flush the whole page?
           if (!i) 
@@ -2142,9 +2142,10 @@ static void pulp_rab_handle_miss(unsigned unused)
       clk_cntr_setup += (arm_clk_cntr_value - arm_clk_cntr_value_start);
 #endif
 
-      // flush the entire page from the caches
-      pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
-      
+      // flush the entire page from the caches if ACP is not used
+      if (!rab_mh_use_acp)
+        pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
+
       if (rab_slice_req->rab_slice == (RAB_N_SLICES - 1)) {
         rab_mh_date++;
         if (rab_mh_date > RAB_MAX_DATE_MH)
