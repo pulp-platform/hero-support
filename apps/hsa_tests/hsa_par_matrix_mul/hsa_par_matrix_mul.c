@@ -4,7 +4,7 @@
 #include "pulp_host.h"
 #include "pulp_func.h"
 
-#define CHECK_L2
+//#define CHECK_L2
 #define PRINT_MAT
 
 #ifndef SIZE
@@ -174,12 +174,14 @@ int main(int argc, char **argv) {
     printf("\n");
   }
 #endif
- 
+  
+  unsigned address;
+
 #ifdef CHECK_L2 
   /*
    * Read matrices from L2
    */
-  unsigned address, temp;
+  unsigned temp;
    
   //address = pulp_read32(pulp->mailbox.v_addr,MAILBOX_RDDATA_OFFSET_B,'b');
   pulp_mailbox_read(pulp,&address,1);
