@@ -261,7 +261,7 @@
  */
 #define SYNC_OFFSET_B 0xB000
 
-#define MAX_STRIPE_SIZE 0x8000
+#define MAX_STRIPE_SIZE 0x4000
 
 // needed for ROD, CT, JPEG
 //#define PROFILE
