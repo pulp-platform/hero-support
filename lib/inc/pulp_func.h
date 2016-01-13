@@ -82,7 +82,7 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur);
 
 int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
 			 unsigned **data_idxs, int n_elements,  
-                         unsigned char prot, unsigned char port, unsigned char use_acp);
+                         unsigned char prot, unsigned char port);
 void pulp_rab_free_striped(PulpDev *pulp);
 
 void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp);

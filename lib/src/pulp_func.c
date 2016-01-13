@@ -517,7 +517,7 @@ int pulp_init(PulpDev *pulp)
   pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B*2,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0); // Mailbox, Interface 0 and Interface 1
   pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0);     // TCDM + Cluster Peripherals
   // port 1: PULP -> Host
-  pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,RAB_MAX_DATE,RAB_MAX_DATE, 0);       // L3 memory (contiguous)
+  //pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,RAB_MAX_DATE,RAB_MAX_DATE, 0);       // L3 memory (contiguous)
   
   // enable mailbox interrupts
   pulp_write32(pulp->mailbox.v_addr,MAILBOX_IE_OFFSET_B,'b',0x6);
@@ -627,9 +627,8 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
  * @port      : RAB port, 0 = Host->PULP, 1 = PULP->Host
  */
 int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
-                         unsigned **data_idxs, int n_elements,
-                         unsigned char prot, unsigned char port,
-                         unsigned char use_acp)
+                         unsigned **data_idxs, int n_elements,  
+                         unsigned char prot, unsigned char port)
 {
   int i,j,k,m;
 
@@ -853,7 +852,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   request[0] = 0;
   RAB_SET_PROT(request[0], prot);
   RAB_SET_PORT(request[0], port);
-  RAB_SET_USE_ACP(request[0], use_acp);
+  RAB_SET_USE_ACP(request[0], 0); // for now we deactivate it
   RAB_SET_OFFLOAD_ID(request[0], offload_id);
   RAB_SET_N_ELEM(request[0], n_elements);
   RAB_SET_N_STRIPES(request[0], n_stripes);
@@ -1410,16 +1409,16 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   // set up RAB stripes
   //pulp_rab_req_striped(pulp, task, data_idxs, n_idxs, prot, port);
   if ( !strcmp(task->name, "profile_rab") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port, 0);
+    pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port);
   }
   else if ( !strcmp(task->name, "rod") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port, 0);
+    pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port);
   }
   else if ( !strcmp(task->name, "ct") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port, 0);
+    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
   }
   else if ( !strcmp(task->name, "jpeg") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port, 0);
+    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
   }
   else {
     if ( strcmp(task->name, "face_detect") )
@@ -2040,6 +2039,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   request[0] = 0;
   RAB_SET_PROT(request[0], prot);
   RAB_SET_PORT(request[0], port);
+  RAB_SET_USE_ACP(request[0], 0);
   RAB_SET_OFFLOAD_ID(request[0], offload_id);
   RAB_SET_N_ELEM(request[0], 1);
   RAB_SET_N_STRIPES(request[0], n_stripes);
