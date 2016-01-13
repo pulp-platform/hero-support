@@ -1190,6 +1190,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	n_slices++; // remainder
       n_slices++;   // non-aligned
 
+      if (DEBUG_LEVEL_RAB > 1) {
+	printk(KERN_INFO "PULP: Element %d, n_slices = %d \n", i, n_slices);
+      }
+
       // fill the RabStripeElem struct
       elem_cur->n_slices_per_stripe = n_slices;
       elem_cur->rab_port = rab_port;
