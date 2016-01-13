@@ -1283,7 +1283,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
         
     n_data_int = 0;
     for (i=0; i<task->n_data; i++) {
-      (*data_idxs)[i] = 2;
+      (*data_idxs)[i] = 2; // striped in
     }
     n_idxs -= task->n_data;
 
@@ -1987,22 +1987,26 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
     }
   }
 
-#elsif defined(IMG2FILE)
+#elif defined(IMG2FILE)
 
   unsigned i_height, i_width;
   i_height = 21;
   i_width = 37;
 
   // write start
-  fprintf(fp, "unsigned char img[%d] = {\n",i_height * i_step * n_channels);
+  //fprintf(fp, "unsigned char img[%d] = {\n",i_height * i_step * n_channels);
+  fprintf(fp, "unsigned char img[%d] = {\n",i_height * i_step * 2);
 
   for (i=0; i<n_channels; i++) {
-    fprintf(fp,"// Channel %d: \n",i);
-    for (j=0; j<i_height; j++) {
-      for (k=0; k<i_step; k++) {
-	fprintf(fp,"\t%#x,",(unsigned) *(channels[i]+j*i_step+k));
+
+    if ((i == 0) || (i == 16)) {
+      fprintf(fp,"// Channel %d: \n",i);
+      for (j=0; j<i_height; j++) {
+	for (k=0; k<i_step; k++) {
+	  fprintf(fp,"\t%#x,",(unsigned) *(channels[i]+j*i_step+k));
+	}
+	fprintf(fp,"\n");
       }
-      fprintf(fp,"\n");
     }
   }
 
