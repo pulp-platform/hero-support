@@ -1,4 +1,4 @@
-#define N_ELEMENTS 4
+#define N_ELEMENTS 3
 
 #include <unistd.h> // for sleep
 #include <stdlib.h> // posix_memalign
@@ -14,35 +14,32 @@
 #define ARRAY_SIZE_B 0x1000 * 1000 
 #define ARRAY_SIZE   ARRAY_SIZE_B/4
 
-#define PULP_CLK_FREQ_MHZ 66
-//#define PULP_CLK_FREQ_MHZ 50
-
-int main(){
+int main(int argc, char *argv[]) {
   
-  /*
-   * Initialization
-   */ 
-  // global variables
-  PulpDev pulp_dev;
-  PulpDev *pulp;
-  pulp = &pulp_dev;
+  int i,j,ret;
+   
+  printf("Profiling RAB...\n");
 
-  // initialization of pulp
-  pulp_reserve_v_addr(pulp);
-  pulp_mmap(pulp);
-  //sleep(1);
-  //pulp_print_v_addr(pulp);
-  //sleep(1);  
-  pulp_reset(pulp,1);
-  printf("PULP running at %d MHz\n",pulp_clking_set_freq(pulp,PULP_CLK_FREQ_MHZ));
-  pulp_rab_free(pulp,0x0);
-  pulp_init(pulp);
-  
   /*
-   * Body
+   * Preparation
    */
-  int i,j;
+  char app_name[30];
+  int timeout_s = 20;  
+  int pulp_clk_freq_mhz = 50;
 
+  strcpy(app_name,"profile_rab");
+  
+  if (argc > 3) {
+    printf("WARNING: More than 2 command line argument is not supported. Those will be ignored.\n");
+  }
+
+  if (argc > 1)
+    pulp_clk_freq_mhz = atoi(argv[1]);
+
+  if (argc > 2)
+    timeout_s = atoi(argv[2]);
+
+  // shared data element
   unsigned * array_ptrs[N_ELEMENTS];
 
   // allocate memory and initialize arrays
@@ -55,23 +52,56 @@ int main(){
       *(array_ptrs[i] + j) = j+1;
     }
   }
-  
+
   /*
-   * Run a test program on PULP
+   * Initialization
    */
-  printf("Profling RAB...\n");  
+  printf("PULP Initialization\n");
+ 
+  PulpDev pulp_dev;
+  PulpDev *pulp;
+  pulp = &pulp_dev;
+
+  // reserve virtual addresses overlapping with PULP's internal physical address space
+  pulp_reserve_v_addr(pulp);
+
+  pulp_mmap(pulp);
+  //pulp_print_v_addr(pulp);
+  pulp_reset(pulp,1);
+  
+  // set desired clock frequency
+  ret = pulp_clking_set_freq(pulp,pulp_clk_freq_mhz);
+  if (ret > 0) {
+    printf("PULP Running @ %d MHz.\n",ret);
+    pulp_clk_freq_mhz = ret;
+  }
+  else
+    printf("ERROR: setting clock frequency failed");
+
+  pulp_rab_free(pulp,0x0);
+
+  // initialization of PULP, static RAB rules (mailbox, L2, ...)
+  pulp_init(pulp);
+
+  // measure the actual clock frequency
+  printf("PULP actually running @ %d MHz.\n",pulp_clking_measure_freq(pulp));
+
+  // clear memories?
+  
+  // clear stdout
+  pulp_stdout_clear(pulp,0);
+  pulp_stdout_clear(pulp,1);
+  pulp_stdout_clear(pulp,2);
+  pulp_stdout_clear(pulp,3);
   
   // manually setup data structures (no compiler support right now)
   TaskDesc task_desc;
    
-  char name[15];
-  strcpy(name,"profile_rab");
-  
-  task_desc.name = &name[0];
+  task_desc.name = &app_name[0];
   task_desc.n_clusters = -1;
   task_desc.n_data = N_ELEMENTS;
    
-  DataDesc data_desc[task_desc.n_data];
+  DataDesc data_desc[N_ELEMENTS];
   for (i=0; i<task_desc.n_data; i++) {
     data_desc[i].ptr  = array_ptrs[i];
     data_desc[i].size = ARRAY_SIZE_B;  
@@ -81,14 +111,16 @@ int main(){
   
   sleep(1);
   
+  /*
+   * Body
+   */
+  printf("PULP Execution\n");
+
   // issue the offload
   pulp_omp_offload_task(pulp,&task_desc);
   //pulp_omp_wait(pulp,ker_id);
   
   pulp_rab_free_striped(pulp);
-
-  // measure the actual clock frequency
-  printf("PULP actually running @ %d MHz.\n",pulp_clking_measure_freq(pulp));
 
   sleep(1);
 
@@ -110,7 +142,7 @@ int main(){
   n_cleanups              = pulp_read32(pulp->l3_mem.v_addr,N_CLEANUPS_OFFSET_B,'b');
 
   float response_time, update_time, setup_time, cleanup_time;
-  response_time = ((float)clk_cntr_response)/(n_updates*PULP_CLK_FREQ_MHZ);
+  response_time = ((float)clk_cntr_response)/(n_updates*pulp_clk_freq_mhz);
   update_time = ((float)clk_cntr_update*64)/(n_slices_updated*ARM_CLK_FREQ_MHZ);
   setup_time = ((float)clk_cntr_setup*64)/(n_pages_setup*ARM_CLK_FREQ_MHZ);
   cleanup_time = ((float)clk_cntr_cleanup*64)/(n_pages_setup*ARM_CLK_FREQ_MHZ);
@@ -131,25 +163,30 @@ int main(){
   printf("Map segment time (per page)        = %.3f us\n",map_sg_time);
   printf("----------------------------------------------------------\n");
 
+  // -> poll stdout
   pulp_stdout_print(pulp,0);
   pulp_stdout_print(pulp,1);
   pulp_stdout_print(pulp,2);
   pulp_stdout_print(pulp,3);
+
+  // clear stdout
   pulp_stdout_clear(pulp,0);
   pulp_stdout_clear(pulp,1);
   pulp_stdout_clear(pulp,2);
   pulp_stdout_clear(pulp,3);
 
-  sleep(3);
+  usleep(10000);
 
   /*
    * Cleanup
    */
-
+  /*************************************************************************/
   for (i=0; i<N_ELEMENTS; i++) {
     free(array_ptrs[i]);
   }
+  /*************************************************************************/
 
+  printf("PULP Cleanup\n");
   pulp_rab_free(pulp,0);
   pulp_free_v_addr(pulp);
   sleep(1);
