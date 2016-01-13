@@ -1314,21 +1314,23 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       clk_cntr_map_sg += (arm_clk_cntr_value - arm_clk_cntr_value_start);
 #endif   
 
-      // flush caches for all segments
-      for (j=0; j<n_segments; j++) { 
-        for (k=page_idxs_start[j]; k<(page_idxs_end[j]+1); k++) {
-          // flush the whole page?
-          if (!j) 
-            offset_start = BF_GET(addr_start_vec[j],0,PAGE_SHIFT);
-          else
-            offset_start = 0;
-
-          if (j == (n_segments-1) )
-            offset_end = BF_GET(addr_end_vec[j],0,PAGE_SHIFT);
-          else 
-            offset_end = PAGE_SIZE;
-
-          pulp_mem_cache_flush(pages[k],offset_start,offset_end);
+      if(!elem_cur->use_acp) {
+        // flush caches for all segments
+        for (j=0; j<n_segments; j++) { 
+          for (k=page_idxs_start[j]; k<(page_idxs_end[j]+1); k++) {
+            // flush the whole page?
+            if (!j) 
+              offset_start = BF_GET(addr_start_vec[j],0,PAGE_SHIFT);
+            else
+              offset_start = 0;
+            
+            if (j == (n_segments-1) )
+              offset_end = BF_GET(addr_end_vec[j],0,PAGE_SHIFT);
+            else 
+              offset_end = PAGE_SIZE;
+  
+            pulp_mem_cache_flush(pages[k],offset_start,offset_end);
+          }
         }
       }
 
