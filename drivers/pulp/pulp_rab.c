@@ -274,6 +274,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
       printk(KERN_INFO "PULP - RAB: addr_start  %#x\n", rab_slice_req->addr_start);
       printk(KERN_INFO "PULP - RAB: addr_end    %#x\n", rab_slice_req->addr_end);
       printk(KERN_INFO "PULP - RAB: addr_offset %#x\n", rab_slice_req->addr_offset);
+      printk(KERN_INFO "PULP - RAB: prot        %#x\n", rab_slice_req->prot);
     }
   }  
 

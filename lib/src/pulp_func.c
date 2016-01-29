@@ -12,14 +12,14 @@ int pulp_reserve_v_addr(PulpDev *pulp)
 {
   pulp->reserved_v_addr.size = PULP_SIZE_B;
   pulp->reserved_v_addr.v_addr = mmap((int *)PULP_BASE_ADDR,pulp->reserved_v_addr.size,
-				      PROT_NONE,MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,-1,0);
+                                      PROT_NONE,MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,-1,0);
   if (pulp->reserved_v_addr.v_addr == MAP_FAILED) {
     printf("MMAP failed to reserve virtual addresses overlapping with physical address map of PULP.\n");
     return EIO;
   }
   else {
     printf("Reserved virtual addresses starting at %p and overlapping with physical address map of PULP. \n",
-	   pulp->reserved_v_addr.v_addr);
+           pulp->reserved_v_addr.v_addr);
   }
   
   return 0;
@@ -140,13 +140,13 @@ int pulp_mmap(PulpDev *pulp)
   pulp->clusters.size = CLUSTERS_SIZE_B;
   
   pulp->clusters.v_addr = mmap(NULL,pulp->clusters.size,
-			       PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                               PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->clusters.v_addr == MAP_FAILED) {
     printf("MMAP failed for clusters.\n");
     return -EIO;
   }
   else {
-     printf("Clusters mapped to virtual user space at %p.\n",pulp->clusters.v_addr);
+    printf("Clusters mapped to virtual user space at %p.\n",pulp->clusters.v_addr);
   }
 
   // SOC_PERIPHERALS
@@ -154,7 +154,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->soc_periph.size = SOC_PERIPHERALS_SIZE_B;
  
   pulp->soc_periph.v_addr = mmap(NULL,pulp->soc_periph.size,
-				 PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
+                                 PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
   if (pulp->soc_periph.v_addr == MAP_FAILED) {
     printf("MMAP failed for SoC peripherals.\n");
     return -EIO;
@@ -168,7 +168,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->mailbox.size = MAILBOX_SIZE_B;
  
   pulp->mailbox.v_addr = mmap(NULL,pulp->mailbox.size,
-			      PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
+                              PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
   if (pulp->mailbox.v_addr == MAP_FAILED) {
     printf("MMAP failed for Mailbox.\n");
     return -EIO;
@@ -182,14 +182,14 @@ int pulp_mmap(PulpDev *pulp)
   pulp->l2_mem.size = L2_MEM_SIZE_B;
  
   pulp->l2_mem.v_addr = mmap(NULL,pulp->l2_mem.size,
-			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                             PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
  
   if (pulp->l2_mem.v_addr == MAP_FAILED) {
     printf("MMAP failed for L2 memory.\n");
     return -EIO;
   }
   else {
-     printf("L2 memory mapped to virtual user space at %p.\n",pulp->l2_mem.v_addr);
+    printf("L2 memory mapped to virtual user space at %p.\n",pulp->l2_mem.v_addr);
   }
 
   // Platform
@@ -198,7 +198,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->l3_mem.size = L3_MEM_SIZE_B;
     
   pulp->l3_mem.v_addr = mmap(NULL,pulp->l3_mem.size,
-			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                             PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->l3_mem.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
@@ -214,7 +214,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->gpio.size = H_GPIO_SIZE_B;
     
   pulp->gpio.v_addr = mmap(NULL,pulp->gpio.size,
-			   PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                           PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->gpio.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
@@ -229,7 +229,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->clking.size = CLKING_SIZE_B;
     
   pulp->clking.v_addr = mmap(NULL,pulp->clking.size,
-			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                             PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->clking.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
@@ -244,7 +244,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->stdout.size = STDOUT_SIZE_B;
     
   pulp->stdout.v_addr = mmap(NULL,pulp->stdout.size,
-			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                             PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->stdout.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
@@ -259,7 +259,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->rab_config.size = RAB_CONFIG_SIZE_B;
     
   pulp->rab_config.v_addr = mmap(NULL,pulp->rab_config.size,
-				 PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                                 PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->rab_config.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
@@ -275,7 +275,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->slcr.size = SLCR_SIZE_B;
     
   pulp->slcr.v_addr = mmap(NULL,pulp->slcr.size,
-			   PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                           PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->slcr.v_addr == MAP_FAILED) {
     printf("MMAP failed for Zynq SLCR.\n");
     return -EIO;
@@ -291,7 +291,7 @@ int pulp_mmap(PulpDev *pulp)
   pulp->mpcore.size = MPCORE_SIZE_B;
     
   pulp->mpcore.v_addr = mmap(NULL,pulp->mpcore.size,
-			     PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
+                             PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->mpcore.v_addr == MAP_FAILED) {
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
@@ -572,8 +572,8 @@ void pulp_mailbox_clear_is(PulpDev *pulp)
  * @date_cur  : current date, used to check for suitable slices
  */
 int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
-		 unsigned char prot, unsigned char port,
-		 unsigned char date_exp, unsigned char date_cur)
+                 unsigned char prot, unsigned char port,
+                 unsigned char date_exp, unsigned char date_cur)
 {
   unsigned request[3];
 
@@ -617,8 +617,8 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
  * @port      : RAB port, 0 = Host->PULP, 1 = PULP->Host
  */
 int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
-			 unsigned **data_idxs, int n_elements,  
-			 unsigned char prot, unsigned char port)
+                         unsigned **data_idxs, int n_elements,  
+                         unsigned char prot, unsigned char port)
 {
   int i,j,k,m;
 
@@ -756,70 +756,70 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
 
       // first stripe for output elements, last stripe for input elements
       if ( ((j == 0) && ((*data_idxs)[k] == 3)) || ((j == n_stripes) && ((*data_idxs)[k] == 2)) ) {
-	addr_start = 0;
-	addr_end = 0;
+        addr_start = 0;
+        addr_end = 0;
       }
       else if ( (j == n_stripes) && ((*data_idxs)[k] == 4))  { // last stripe for inout elements
-	addr_start = 0xFFFFFFFF;
-	addr_end = 0xFFFFFFFF;
+        addr_start = 0xFFFFFFFF;
+        addr_end = 0xFFFFFFFF;
       }
       else {
-     	addr_start = (unsigned)(task->data_desc[k].ptr);
+        addr_start = (unsigned)(task->data_desc[k].ptr);
 
-	if ( !strcmp(task->name, "profile_rab") ) {
+        if ( !strcmp(task->name, "profile_rab") ) {
     
-	  size_b = max_stripe_size_b[k];
-	  tx_band_start = j*size_b;
+          size_b = max_stripe_size_b[k];
+          tx_band_start = j*size_b;
 
-	}
-	else if ( !strcmp(task->name, "rod") ) {
+        }
+        else if ( !strcmp(task->name, "rod") ) {
     
-	  if ( (*data_idxs)[k] == 2 ) { // input elements
-	    if (j == 0) {
-	      tx_band_start = 0;
-	      size_b = tx_band_size_in_first;
-	    }
-	    else {
-	      tx_band_start = tx_band_size_in_first + tx_band_size_in * (j-1) - (overlap * (2 + (j-1)*2));
-	      if (j == n_stripes-1 )	    
-		size_b = tx_band_size_in_last;
-	      else
-		size_b = tx_band_size_in;
-	    }
-	  }
-	  else {// 3, output elements
-	    tx_band_start = tx_band_size_out * (j-1);
-	    if (j == n_stripes ) 
-	      size_b = tx_band_size_out_last;
-	    else
-	      size_b = tx_band_size_out;
-	  }
+          if ( (*data_idxs)[k] == 2 ) { // input elements
+            if (j == 0) {
+              tx_band_start = 0;
+              size_b = tx_band_size_in_first;
+            }
+            else {
+              tx_band_start = tx_band_size_in_first + tx_band_size_in * (j-1) - (overlap * (2 + (j-1)*2));
+              if (j == n_stripes-1 )      
+                size_b = tx_band_size_in_last;
+              else
+                size_b = tx_band_size_in;
+            }
+          }
+          else {// 3, output elements
+            tx_band_start = tx_band_size_out * (j-1);
+            if (j == n_stripes ) 
+              size_b = tx_band_size_out_last;
+            else
+              size_b = tx_band_size_out;
+          }
 
-	}
-	else if ( !strcmp(task->name, "ct") ) {
+        }
+        else if ( !strcmp(task->name, "ct") ) {
     
-	  tx_band_start = j*band_size_3ch;
-	  size_b = band_size_3ch;
+          tx_band_start = j*band_size_3ch;
+          size_b = band_size_3ch;
 
-	}
-	else if ( !strcmp(task->name, "jpeg") ) {
+        }
+        else if ( !strcmp(task->name, "jpeg") ) {
     
-	  tx_band_start = j*max_stripe_size_b[0];
-	  size_b = max_stripe_size_b[0];
+          tx_band_start = j*max_stripe_size_b[0];
+          size_b = max_stripe_size_b[0];
 
-	}
-	else {
-	  printf("ERROR: Unknown task name %s\n",task->name);
-	}
+        }
+        else {
+          printf("ERROR: Unknown task name %s\n",task->name);
+        }
 
-	addr_start += tx_band_start;
-	addr_end = addr_start + size_b;
+        addr_start += tx_band_start;
+        addr_end = addr_start + size_b;
       }
  
       // write the rab_stripes table
       *(rab_stripes[i] + j*n_fields + 0) = addr_start;
       for (m = 1; m<(n_fields-1); m++)
-	*(rab_stripes[i] + j*n_fields + m) = 0;
+        *(rab_stripes[i] + j*n_fields + m) = 0;
       *(rab_stripes[i] + j*n_fields + n_fields-1) = addr_end; 
     }
 
@@ -827,13 +827,13 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
       printf("RAB stripe table @ %#x\n",(unsigned)rab_stripes[i]);
       printf("Shared Element %d: \n",k);
       for (j=0; j<(n_stripes+1); j++) {
-	if (j>2 && j<(n_stripes+1-3))
-	  continue;
-	printf("%d\t",j);
-	for (m=0; m<n_fields; m++) {
-	  printf("%#x\t",*(rab_stripes[i] + j*n_fields + m));
-	}
-	printf("\n");
+        if (j>2 && j<(n_stripes+1-3))
+          continue;
+        printf("%d\t",j);
+        for (m=0; m<n_fields; m++) {
+          printf("%#x\t",*(rab_stripes[i] + j*n_fields + m));
+        }
+        printf("\n");
       }
     }
   }
@@ -902,8 +902,8 @@ void pulp_rab_mh_disable(PulpDev *pulp)
  * @host_read : 0: Host -> PULP, 1: PULP -> Host (not tested)
  */
 int pulp_dma_xfer(PulpDev *pulp,
-		  unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
-		  unsigned host_read)
+                  unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
+                  unsigned host_read)
 { 
   unsigned request[3];
   
@@ -1034,14 +1034,14 @@ void pulp_reset(PulpDev *pulp, unsigned full)
   else {
     // enable reset
     pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b',
-		 slcr_value | (0x1 << SLCR_FPGA_OUT_RST));
+                 slcr_value | (0x1 << SLCR_FPGA_OUT_RST));
     
     // wait
     usleep(100000);
     
     // disable reset
     pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 
-		 slcr_value & (0xF & (0x0 << SLCR_FPGA_OUT_RST)));
+                 slcr_value );
 
     // reset using GPIO register
     pulp_write32(pulp->gpio.v_addr,0x8,'b',0x00000000);
@@ -1309,7 +1309,8 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
 
   }
   else {
-    printf("ERROR: Unknown task name %s\n",task->name);
+    if ( strcmp(task->name, "face_detect") )
+      printf("ERROR: Unknown task name %s\n",task->name);
   }
 
   // !!!!TO DO: check type and set protections!!!
@@ -1341,9 +1342,9 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   for (i=n_idxs;i>1;i--) {
     for (j=0;j<i-1;j++) {
       if (task->data_desc[j].ptr > task->data_desc[j+1].ptr) {
-	temp = order[j];
-	order[j] = order[j+1];
-	order[j+1] = temp;
+        temp = order[j];
+        order[j] = order[j+1];
+        order[j+1] = temp;
       }
     }
   }
@@ -1351,8 +1352,8 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
     printf("Reordered %d data elements: \n",n_idxs);
     for (i=0;i<n_idxs;i++) {
       printf("%d \t %#x \t %#x \n", order[i],
-	     (unsigned)task->data_desc[order[i]].ptr,
-	     (unsigned)task->data_desc[order[i]].size);
+             (unsigned)task->data_desc[order[i]].ptr,
+             (unsigned)task->data_desc[order[i]].size);
     }
   }
 
@@ -1362,7 +1363,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   for (i=1;i<n_idxs;i++) {
     j = order[i];
     gap_size = (unsigned)task->data_desc[j].ptr - (v_addr_int[n_data_int-1]
-						      + size_int[n_data_int-1]);
+                                                   + size_int[n_data_int-1]);
     // !!!!TO DO: check protections, check dates!!!
     if ( gap_size > RAB_CONFIG_MAX_GAP_SIZE_B ) { 
       // the gap is too large, create a new mapping
@@ -1403,7 +1404,8 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
     pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
   }
   else {
-    printf("ERROR: Unknown task name %s\n",task->name);
+    if ( strcmp(task->name, "face_detect") )
+      printf("ERROR: Unknown task name %s\n",task->name);
   }
 
   // free memory
@@ -1441,13 +1443,13 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
       status = 1;
       // wait for not full or timeout
       while ( status && (timeout > 0) ) {
-	usleep(us_delay);
-	timeout--;
-	status = (pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x2);
+        usleep(us_delay);
+        timeout--;
+        status = (pulp_read32(pulp->mailbox.v_addr, MAILBOX_STATUS_OFFSET_B, 'b') & 0x2);
       }
       if ( status ) {
-	printf("ERROR: mailbox timeout.\n");
-	return i;
+        printf("ERROR: mailbox timeout.\n");
+        return i;
       } 
     }
 
@@ -1455,16 +1457,16 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
     if ( (*data_idxs)[i] ) {
       // pass data element by reference
       pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',
-		   (unsigned)(task->data_desc[i].ptr));
+                   (unsigned)(task->data_desc[i].ptr));
       //if (DEBUG_LEVEL > 2)
-	printf("Element %d: wrote %#x to mailbox.\n",i,(unsigned) (task->data_desc[i].ptr));
+        printf("Element %d: wrote %#x to mailbox.\n",i,(unsigned) (task->data_desc[i].ptr));
     }
     else {
       // pass data element by value
       pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',
-		   *(unsigned *)(task->data_desc[i].ptr));
+                   *(unsigned *)(task->data_desc[i].ptr));
       //if (DEBUG_LEVEL > 2)
-	printf("Element %d: wrote %#x to mailbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
+        printf("Element %d: wrote %#x to mailbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
     }    
   }
   
@@ -1750,30 +1752,30 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
       // we are going to abuse type to store the virtual host address and
       // ptr to store the physical address in contiguous L3 used by PULP
 
-      switch(data_type)	{
+      switch(data_type) {
       case 0:
-	//INOUT
-	(*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
-							  (unsigned *)&((*ftask)->data_desc[i].ptr));
-	memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
-	break;
+        //INOUT
+        (*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
+                                                          (unsigned *)&((*ftask)->data_desc[i].ptr));
+        memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
+        break;
                     
       case 1:
-	//IN
-	(*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
-							  (unsigned *)&((*ftask)->data_desc[i].ptr));
-	memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
-	break;
+        //IN
+        (*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
+                                                          (unsigned *)&((*ftask)->data_desc[i].ptr));
+        memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
+        break;
                     
       case 2:
-	//OUT
-	(*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
-							  (unsigned *)&((*ftask)->data_desc[i].ptr));
-	break;
+        //OUT
+        (*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
+                                                          (unsigned *)&((*ftask)->data_desc[i].ptr));
+        break;
                     
       default:
-	//NONE
-	break;
+        //NONE
+        break;
       }
     }
     
@@ -1831,25 +1833,25 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 
       switch(task->data_desc[i].type) {
       case 0:
-	//INOUT
-	memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
-	pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
-	break;
+        //INOUT
+        memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
+        pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
+        break;
                     
       case 1:
-	//IN                    
-	pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
-	break;
+        //IN                    
+        pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
+        break;
 
       case 2:
-	//OUT
-	memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
-	pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
-	break;
+        //OUT
+        memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
+        pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
+        break;
                     
       default:
-	//NONE
-	break;
+        //NONE
+        break;
       }
     }
   }
@@ -1864,9 +1866,9 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 
 /****************************************************************************************/
 int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned char port,
-				   unsigned p_height, unsigned p_width, unsigned i_step,
-				   unsigned n_channels, unsigned char **channels,
-				   unsigned *s_height)
+                                   unsigned p_height, unsigned p_width, unsigned i_step,
+                                   unsigned n_channels, unsigned char **channels,
+                                   unsigned *s_height)
 {
   int i,j,k;
 
@@ -1936,7 +1938,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
       addr_end += 0x4;
       *(*rab_stripes + i*n_stripes_per_channel*n_fields + j*n_fields + 0) = addr_start; 
       for (k=1; k<(n_fields-1); k++) {
-	*(*rab_stripes + i*n_stripes_per_channel*n_fields + j*n_fields + k) = 0;
+        *(*rab_stripes + i*n_stripes_per_channel*n_fields + j*n_fields + k) = 0;
       }
       *(*rab_stripes + i*n_stripes_per_channel*n_fields + j*n_fields + n_fields-1) = addr_end;
     }
@@ -1946,10 +1948,10 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
     printf("RAB stripe table @ %#x\n",(unsigned)rab_stripes);
     for (i=0; i<(n_stripes+1); i++) {
       if (i>2 && i<(n_stripes+1-3))
-	continue;
+        continue;
       printf("%d\t",i);
       for (j=0; j<n_fields; j++) {
-	printf("%#x\t",*(*rab_stripes + i*n_fields + j));
+        printf("%#x\t",*(*rab_stripes + i*n_fields + j));
       }
       printf("\n");
     }
@@ -1981,7 +1983,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
     fprintf(fp,"// Channel %d: \n",i);
     for (j=0; j<p_height; j++) {
       for (k=0; k<p_width; k++) {
-  	fprintf(fp,"\t%#x,",(unsigned) *(channels[i]+j*i_step+k));
+        fprintf(fp,"\t%#x,",(unsigned) *(channels[i]+j*i_step+k));
       }
       fprintf(fp,"\n");
     }
@@ -1994,20 +1996,18 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   i_width = 37;
 
   // write start
-  //fprintf(fp, "unsigned char img[%d] = {\n",i_height * i_step * n_channels);
-  fprintf(fp, "unsigned char img[%d] = {\n",i_height * i_step * 2);
+  fprintf(fp, "unsigned char img[%d] = {\n",i_height * i_step * n_channels);
 
   for (i=0; i<n_channels; i++) {
-
-    if ((i == 0) || (i == 16)) {
-      fprintf(fp,"// Channel %d: \n",i);
-      for (j=0; j<i_height; j++) {
-	for (k=0; k<i_step; k++) {
-	  fprintf(fp,"\t%#x,",(unsigned) *(channels[i]+j*i_step+k));
-	}
-	fprintf(fp,"\n");
+    //if ((i == 0) || (i == 16)) {
+    fprintf(fp,"// Channel %d: \n",i);
+    for (j=0; j<i_height; j++) {
+      for (k=0; k<i_step; k++) {
+        fprintf(fp,"\t%#x,",(unsigned) *(channels[i]+j*i_step+k));
       }
+      fprintf(fp,"\n");
     }
+    //}
   }
 
   // write end
@@ -2119,7 +2119,7 @@ void pulp_stdout_print(PulpDev *pulp, unsigned pe)
 
   char *string_ptr = (char *) (pulp->stdout.v_addr + STDOUT_PE_SIZE_B*pe);
   char *pulp_str = replace_str2((const char *) string_ptr, 
-				"\n", "\n[" ANSI_BRED "PULP" ANSI_RESET "] ");
+                                "\n", "\n[" ANSI_BRED "PULP" ANSI_RESET "] ");
   PULP_PRINTF("%s\n", pulp_str);
   fflush(stdout);
 }
