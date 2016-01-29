@@ -8,7 +8,7 @@ vivado-2015.1 make all
 
 # Copy
 # Host executable
-scp ${NAME} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/random_forest/.
+scp ${NAME} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/random_forest/.
 # Scripts
 #scp *.sh ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/random_forest/.
 # Sample files

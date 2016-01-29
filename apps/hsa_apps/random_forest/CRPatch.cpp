@@ -64,8 +64,14 @@ void CRPatch::extractFeatureChannels(IplImage *img, std::vector<IplImage*>& vImg
 	// 7+9 channels: L, a, b, |I_x|, |I_y|, |I_xx|, |I_yy|, HOGlike features with 9 bins (weighted orientations 5x5 neighborhood)
 	// 16+16 channels: minfilter + maxfilter on 5x5 neighborhood 
 
+#if defined(PULP) && defined (FILT_LOCAL)
+	// 16+16+16 channels: minfilter + maxfilter on 5x5 neighborhood, unfiltered for FILT_LOCAL
+	vImg.resize(48);
+#else
 	vImg.resize(32);
-	for(unsigned int c=0; c<vImg.size(); ++c)
+#endif
+	
+	for(unsigned int c=0; c<32; ++c)
 		vImg[c] = cvCreateImage(cvSize(img->width,img->height), IPL_DEPTH_8U , 1); 
 
 	// Get intensity
@@ -150,16 +156,19 @@ void CRPatch::extractFeatureChannels(IplImage *img, std::vector<IplImage*>& vImg
 	
 	cvSplit( img, vImg[0], vImg[1], vImg[2], 0);
 
+#if defined(PULP) && defined(FILT_LOCAL)
+	for (int c=0; c<16; ++c)
+		vImg[32+c] = cvCloneImage(vImg[c]);
+#endif
+
 	// min filter
 	for(int c=0; c<16; ++c)
 		minfilt(vImg[c], vImg[c+16], 5);
-
+	
 	//max filter
 	for(int c=0; c<16; ++c)
 		maxfilt(vImg[c], 5);
 
-
-	
 #if 0
 	// for debugging only
 	char buffer[40];
@@ -215,7 +224,12 @@ void CRPatch::maxfilt(IplImage *src, IplImage *dst, unsigned int width) {
 	for(int  y = 0; y < size.height; y++)
 		maxfilt(s_data+y*step, d_data+y*step, 1, size.width, width);
 
-	cvGetRawData( src, (uchar**)&d_data);
+	/* 
+ 	 * bug in original implementation: second phase should work on
+	 * output of first phase
+	 */
+	// cvGetRawData( src, (uchar**)&d_data);
+	cvGetRawData( dst, (uchar**)&d_data); 
 
 	for(int  x = 0; x < size.width; x++)
 		maxfilt(d_data+x, step, size.height, width);
@@ -253,12 +267,17 @@ void CRPatch::minfilt(IplImage *src, IplImage *dst, unsigned int width) {
 	step /= sizeof(s_data[0]);
 
 	for(int  y = 0; y < size.height; y++)
-		minfilt(s_data+y*step, d_data+y*step, 1, size.width, width);
+	  minfilt(s_data+y*step, d_data+y*step, 1, size.width, width);
 
-	cvGetRawData( src, (uchar**)&d_data);
+	/* 
+ 	 * bug in original implementation: second phase should work on
+	 * output of first phase
+	 */
+	// cvGetRawData( src, (uchar**)&d_data);
+	cvGetRawData( dst, (uchar**)&d_data);
 
 	for(int  x = 0; x < size.width; x++)
-		minfilt(d_data+x, step, size.height, width);
+	  minfilt(d_data+x, step, size.height, width);
 
 }
 
@@ -437,67 +456,78 @@ void CRPatch::minfilt(uchar* data, uchar* minvalues, unsigned int step, unsigned
 
 void CRPatch::minfilt(uchar* data, unsigned int step, unsigned int size, unsigned int width) {
 
-	unsigned int d = int((width+1)/2)*step; 
-	size *= step;
-	width *= step;
+  unsigned int d = int((width+1)/2)*step; 
+  size *= step;
+  width *= step;
 
-	deque<uchar> tmp;
+  deque<uchar> tmp;
 
-	tmp.push_back(data[0]);
-	for(unsigned int k=step; k<d; k+=step) {
-		if(data[k]<tmp.back()) tmp.back() = data[k];
-	}
+  // step 0
+  tmp.push_back(data[0]);
+  for(unsigned int k=step; k<d; k+=step) {
+    if(data[k]<tmp.back()) tmp.back() = data[k];
+  }
+  //
 
-	for(unsigned int i=step; i < d-step; i+=step) {
-		tmp.push_back(tmp.back());
-		if(data[i+d-step]<tmp.back()) tmp.back() = data[i+d-step];
-	}
-
-
-    deque<int> minfifo;
-    for(unsigned int i = step; i < size; i+=step) {
-		if(i >= width) {
-			tmp.push_back(data[minfifo.size()>0 ? minfifo.front(): i-step]);
-			data[i-width] = tmp.front();
-			tmp.pop_front();
-		}
+  // step 1
+  for(unsigned int i=step; i < d-step; i+=step) {
+    tmp.push_back(tmp.back());
+    if(data[i+d-step]<tmp.back()) tmp.back() = data[i+d-step];
+  }
+  //
+  
+  // step 2
+  deque<int> minfifo;
+  for(unsigned int i = step; i < size; i+=step) {
+    if(i >= width) {
+      tmp.push_back(data[minfifo.size()>0 ? minfifo.front(): i-step]);
+      data[i-width] = tmp.front();
+      tmp.pop_front();
+    }
     
-		if(data[i] > data[i-step]) { 
+    if(data[i] > data[i-step]) { 
+  
+      minfifo.push_back(i-step);
+      if(i==  width+minfifo.front()) 
+  	minfifo.pop_front();
+  
+    } else {
+  
+      while(minfifo.size() > 0) {
+  	if(data[i] >= data[minfifo.back()]) {
+  	  if(i==  width+minfifo.front()) 
+  	    minfifo.pop_front();
+  	  break;
+  	}
+  	minfifo.pop_back();
+      }
+  
+    }
+  
+  }  
+  
+  tmp.push_back(data[minfifo.size()>0 ? minfifo.front():size-step]);
+  //
+  
+  // step 3
+  for(unsigned int k=size-step-step; k>=size-d; k-=step) {
+    if(data[k]<data[size-step]) data[size-step] = data[k];
+  }
+  //
 
-			minfifo.push_back(i-step);
-			if(i==  width+minfifo.front()) 
-				minfifo.pop_front();
-
-		} else {
-
-			while(minfifo.size() > 0) {
-				if(data[i] >= data[minfifo.back()]) {
-					if(i==  width+minfifo.front()) 
-						minfifo.pop_front();
-				break;
-				}
-				minfifo.pop_back();
-			}
-
-		}
-
-    }  
-
-	tmp.push_back(data[minfifo.size()>0 ? minfifo.front():size-step]);
-	
-	for(unsigned int k=size-step-step; k>=size-d; k-=step) {
-		if(data[k]<data[size-step]) data[size-step] = data[k];
-	}
-
-	for(unsigned int i=size-step-step; i >= size-d; i-=step) {
-		data[i] = data[i+step];
-		if(data[i-d+step]<data[i]) data[i] = data[i-d+step];
-	}
- 
-	for(unsigned int i=size-width; i<=size-d; i+=step) {
-		data[i] = tmp.front();
-		tmp.pop_front();
-	}
+  // step 4
+  for(unsigned int i=size-step-step; i >= size-d; i-=step) {
+    data[i] = data[i+step];
+    if(data[i-d+step]<data[i]) data[i] = data[i-d+step];
+  }
+  // 
+  
+  // step 5
+  for(unsigned int i=size-width; i<=size-d; i+=step) {
+    data[i] = tmp.front();
+    tmp.pop_front();
+  }
+  //
 }
 
 void CRPatch::maxminfilt(uchar* data, uchar* maxvalues, uchar* minvalues, unsigned int step, unsigned int size, unsigned int width) {

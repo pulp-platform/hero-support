@@ -33,7 +33,7 @@ LIBDIRS = 	-L$(shell echo $(ARM_LIB_EXT_DIR))/lib \
 		-L/usr/pack/vivado-2015.1-kgf/SDK/2015.1/gnu/arm/lin/arm-xilinx-linux-gnueabi/libc/lib
 
 # Flags
-OPT = -O3 -Wno-deprecated -DPULP
+OPT = -O3 -Wno-deprecated -DPULP -DFILT_LOCAL
 FLAGS = -Wall -O2 -g
 
 .PHONY: lib all clean

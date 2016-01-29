@@ -40,8 +40,7 @@ class CRForest {
   unsigned int GetNumCenter() const {return vTrees[0]->GetNumCenter();}
 	
   // Regression 
-  //void regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg) const;
-  void regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg, IplImage *img) const;
+  void regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg) const;
 
   // Training
   void trainForest(int min_s, int max_d, CvRNG* pRNG, const CRPatch& TrData, int samples);
@@ -55,95 +54,24 @@ class CRForest {
   std::vector<CRTree*> vTrees;
 };
 
-//inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg) const {
-inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg, IplImage *img) const {
+inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** ptFCh, int stepImg) const {
   result.resize( vTrees.size() );
-
-  //#define TEST
-#ifdef TEST // Test to pass unfiltered image patch to PULP and extract features on a patch basis on PULP
-
-  IplImage *img_new;
-
-  img_new = cvLoadImage("/media/nfs/programs/random_forest/example/testimages/test0_0.png",CV_LOAD_IMAGE_COLOR);
-  
-  CvRect setRect = cvRect(0,0,16,16);
-  cvSetImageROI(img,setRect);
-  
-  cvCopy(img, img_new, NULL);
-  cvResetImageROI(img);
-
-  //printf("width = %d\n",img->width);
-  //printf("height = %d\n",img->height);
-  //printf("widthStep = %d\n",img->widthStep);
-  //printf("stepImg = %d\n",stepImg);
-  //printf("depth = %d\n",img->depth);
-  //printf("nChannels = %d\n",img->nChannels);
-  //printf("imageSize = %d\n",img->imageSize);
-  //printf("roi = %d\n",img->roi);
-  //
-  //int i_width, i_height;
-  //int stepImg_bkp, imageSize_bkp, widthStep_bkp;
-  //
-  //i_width = img->width;
-  //i_height = img->height;
-  //stepImg_bkp = stepImg;
-  //imageSize_bkp = img->imageSize;
-  //widthStep_bkp = img->widthStep;
-  //
-  //img->width = 16;
-  //img->height = 16;
-  //img->widthStep = 16*3;
-  //
-  //img->imageSize = img->height * img->widthStep;
-  //
-  //unsigned char * img_ptr = (unsigned char *)img->imageData;
-  //unsigned char * patch_ptr = (unsigned char *)malloc(img->widthStep*img->height*sizeof(unsigned char));
-  //
-  //// extract patch from input image
-  //img->imageData = (char *)patch_ptr;
-  //// for (unsigned i_y = 0; i_y < img->height; i_y++) {
-  ////   for (unsigned i_c = 0; i_c < img->nChannels; i_c++) {
-  ////     for (unsigned i_x = 0; i_x < img->width; i_x++) {
-  //// patch_ptr[i_y*img->widthStep+i_c*img->width+i_x] = img_ptr[i_y*widthStep_bkp+i_c*i_width+i_x];
-  ////     }
-  ////   }
-  //// }
-  //for (unsigned i_y = 0; i_y < img->height; i_y++) {
-  //  for (unsigned i_x = 0; i_x < img->width*img->nChannels; i_x++) {
-  //    patch_ptr[i_y*img->nChannels+i_x] = img_ptr[i_y*widthStep_bkp+i_x];
-  //  }
-  //}
-  //
-  //
-  //img->imageDataOrigin = (char *)patch_ptr;
-
-  // extract features on patch basis
-  std::vector<IplImage*> vImg;
-  CRPatch::extractFeatureChannels(img_new, vImg);
-
-  // adjust feature pointers
-  for(unsigned int c=0; c<vImg.size(); ++c) {
-    cvGetRawData( vImg[c], (uchar**)&(ptFCh[c]), &stepImg);
-  }
-  stepImg /= sizeof(ptFCh[0][0]);
-
-#endif //TEST
 
 #ifdef PULP
   unsigned int n_failed = 0;
-      
+
   // setup time measurement
   struct timespec res, tp1, tp2, tp3, tp4, tp5, tp6, tp7, tp8;
   float start, end, duration;
-  
+
   clock_getres(CLOCK_REALTIME,&res);
-  
+
   if (PULP_pulp) {
-  
+
     // need pointer to PulpDev struct
     PulpDev * pulp;
     int width, height;
-    
+
     pulp = PULP_pulp;
     width = PULP_width;
     height = PULP_height;
@@ -160,8 +88,16 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     for (int i=0; i<n_trees; i++) {
       crtrees[i] = this->vTrees[i];
     }
+
     int n_features = 32; // hardcoded in CRPatch.cpp
-  
+#ifndef FILT_LOCAL
+    int n_features_in = 32; // hardcoded in CRPatch.cpp
+    uchar ** ptFCh_in = &ptFCh[0];
+#else
+    int n_features_in = 16;
+    uchar ** ptFCh_in = &ptFCh[32];
+#endif
+
     int * leaf_indices = (int *)malloc(n_trees*sizeof(int));
     if (!leaf_indices) {
       printf("Malloc failed for leaf_indices.\n");
@@ -169,28 +105,23 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     }
     memset((void *)leaf_indices, 0, (size_t)(n_trees*sizeof(int)));
 
-    // set up a RAB slice for features pointers -- striping TOGETHER with miss_handling NOT SAVE!!!
-    pulp_rab_req(pulp, (unsigned int)ptFCh, n_features*sizeof(unsigned int *), 0x3, 0x1, 0xFD, 0xFE);
+    // set up a RAB slice for features pointers -- striping TOGETHER with miss_handling NOT SAFE!!!
+    pulp_rab_req(pulp, (unsigned int)ptFCh_in, n_features_in*sizeof(unsigned int *), 0x3, 0x1, 0xFD, 0xFE);
 
-
-    printf("width = %d\n",img->width);
-    printf("height = %d\n",img->height);
-    printf("widthStep = %d\n",img->widthStep);
-    printf("stepImg = %d\n",stepImg);
-
+#define MEM_SHARING_PATCH 2 // 2 -> striping, 3 -> lazy, 1 not implemented (-> 3)
+#if MEM_SHARING_PATCH == 2
 
     // set up striped RAB slices for patch
     unsigned s_height;
-    // //pulp_rab_req_striped_mchan_img(pulp, 0x3, 1,
-    // //   (unsigned)height, (unsigned)width + (unsigned)stepImg,
-    // //   (unsigned)n_features, ptFCh, &s_height);
     pulp_rab_req_striped_mchan_img(pulp, 0x3, 1,
-				   (unsigned)height, (unsigned)width, (unsigned)stepImg,
-				   (unsigned)n_features, ptFCh, &s_height);
+                                   (unsigned)height, (unsigned)width, (unsigned)stepImg,
+                                   (unsigned)n_features_in, ptFCh_in, &s_height);
 
-#define PRINT_ARGS
-#define MEM_SHARING 3
-#if MEM_SHARING == 1
+#endif // MEM_SHARING_PATCH
+
+    //#define PRINT_ARGS
+#define MEM_SHARING_TABLE 3
+#if MEM_SHARING_TABLE == 1
     CRTree ** crtree_cv = (CRTree **)malloc(n_trees*sizeof(CRTree *));
     unsigned * crtree_cp = (unsigned *)malloc(n_trees*sizeof(unsigned));
     if (!crtree_cv || !crtree_cp)
@@ -208,7 +139,7 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     unsigned leaf_indices_cp;
 
     int size;
-    
+
     // copy the crtrees to L3
     for (int i = 0; i<n_trees; i++) {
       // allocate memory for the CRTree structure
@@ -216,7 +147,7 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
       printf("CRTree %d phys_addr = %#x\n",i,crtree_cp[i]);
       // copy the CRTree structure
       memcpy((void *)crtree_cv[i], (void *)crtrees[i], sizeof(CRTree));
-     
+
       // allocate memory for the treetable
       size = crtrees[i]->num_nodes*7*sizeof(int);
       treetables_cv[i] = (int *)pulp_l3_malloc(pulp, size, &(treetables_cp[i]));
@@ -229,7 +160,7 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     }
 
     printf("Trees copied to contiguous L3.\n");
-    
+
     // adjust crtrees
     crtrees_cv = (unsigned int *)pulp_l3_malloc(pulp, n_trees*sizeof(unsigned int *),&crtrees_cp);
     printf("crtrees phys_addr = %#x\n",crtrees_cp);
@@ -243,12 +174,12 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     leaf_indices_cv = (int *)pulp_l3_malloc(pulp, n_trees*sizeof(int), &leaf_indices_cp);
     printf("leaf_indices phys_addr = %#x\n",leaf_indices_cp);
     memset((void *)leaf_indices_cv, 0, (size_t)(n_trees*sizeof(int)));
-#endif // MEM_SHARING
+#endif // MEM_SHARING_TABLE
 
     // start offload
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', PULP_START);
-    
-#if MEM_SHARING == 1
+
+#if MEM_SHARING_TABLE == 1
     // pass shared data elements to PULP
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', n_trees);
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', (unsigned int)crtrees_cp);
@@ -258,7 +189,7 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', stepImg);
 
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', n_features);
-    pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', (unsigned int)ptFCh);
+    pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', (unsigned int)ptFCh_in);
 
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', (unsigned int)leaf_indices_cp); 
 
@@ -271,7 +202,7 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     //printf("Wrote to mailbox: stepImg = %d\n",stepImg);
 
     //printf("Wrote to mailbox: n_features   = %d\n",n_features);
-    printf("Wrote to mailbox: features     @ %#x\n",(unsigned int)ptFCh);
+    printf("Wrote to mailbox: features     @ %#x\n",(unsigned int)ptFCh_in);
 
     printf("Wrote to mailbox: leaf_indices @ %#x\n",(unsigned int)leaf_indices_cp);
 #endif
@@ -286,7 +217,7 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', stepImg);
 
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', n_features);
-    pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', (unsigned int)ptFCh);
+    pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', (unsigned int)ptFCh_in);
 
     pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', (unsigned int)leaf_indices);
 
@@ -299,59 +230,59 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
     //printf("Wrote to mailbox: stepImg = %d\n",stepImg);
 
     //printf("Wrote to mailbox: n_features   = %d\n",n_features);
-    printf("Wrote to mailbox: features     @ %#x\n",(unsigned int)ptFCh);
+    printf("Wrote to mailbox: features     @ %#x\n",(unsigned int)ptFCh_in);
 
     printf("Wrote to mailbox: leaf_indices @ %#x\n",(unsigned int)leaf_indices);
 #endif
-#endif // MEM_SHARING
+#endif // MEM_SHARING_TABLE
 
-    printf("crrees[0]->treetable[0] = %#x @ %#x \n",
-	   (unsigned int)(crtrees[0]->treetable[0]),(unsigned int)(&(crtrees[0]->treetable[0])));
-    printf("crrees[0]->treetable[6] = %#x @ %#x \n",
-	   (unsigned int)(crtrees[0]->treetable[6]),(unsigned int)(&(crtrees[0]->treetable[6])));
+    // printf("crtrees[0]->treetable[0] = %#x @ %#x \n",
+    //  (unsigned int)(crtrees[0]->treetable[0]),(unsigned int)(&(crtrees[0]->treetable[0])));
+    // printf("crtrees[0]->treetable[6] = %#x @ %#x \n",
+    //  (unsigned int)(crtrees[0]->treetable[6]),(unsigned int)(&(crtrees[0]->treetable[6])));
 
     clock_gettime(CLOCK_REALTIME,&tp2);
- 
+
 #define DMA_CHECK 1
 #if DMA_CHECK == 1
     // check DMA transfer
     unsigned int tcdm_patch;
     unsigned char pixel_l3, pixel_tcdm;
     unsigned int word_tcdm, offset_tcdm;
-        
+
     pulp_mailbox_read(pulp, &tcdm_patch, 1);
     if (tcdm_patch >= 0x10000000 && tcdm_patch <= 0x10012000) {
       printf("Patch in TCDM @ %#x.\n",tcdm_patch);
 
       printf("DMA Check: Starting comparison.\n");
-      for (int i=0; i<n_features; i++) {
-	for (int j=0; j<height; j++) {
-	  for (int k=0; k<width; k++) {
-	    pixel_l3 = *(ptFCh[i]+j*stepImg+k);
-	    offset_tcdm = i*(width*height)+j*width+k;
-	    word_tcdm = pulp_read32(pulp->clusters.v_addr, tcdm_patch-0x10000000+offset_tcdm, 'b');
-	    if (BF_GET(offset_tcdm,0,2) == 0)
-	      pixel_tcdm = (unsigned char)BF_GET(word_tcdm,0,8);
-	    else if (BF_GET(offset_tcdm,0,2) == 1)
-	      pixel_tcdm = (unsigned char)BF_GET(word_tcdm,8,8);
-	    else if (BF_GET(offset_tcdm,0,2) == 2)
-	      pixel_tcdm = (unsigned char)BF_GET(word_tcdm,16,8);
-	    else // (BF_GET(offset_tcdm,0,2) == 3)
-	      pixel_tcdm = (unsigned char)BF_GET(word_tcdm,24,8);
+      for (int i=0; i<n_features_in; i++) {
+        for (int j=0; j<height; j++) {
+          for (int k=0; k<width; k++) {
+            pixel_l3 = *(ptFCh_in[i]+j*stepImg+k);
+            offset_tcdm = i*(width*height)+j*width+k;
+            word_tcdm = pulp_read32(pulp->clusters.v_addr, tcdm_patch-0x10000000+offset_tcdm, 'b');
+            if (BF_GET(offset_tcdm,0,2) == 0)
+              pixel_tcdm = (unsigned char)BF_GET(word_tcdm,0,8);
+            else if (BF_GET(offset_tcdm,0,2) == 1)
+              pixel_tcdm = (unsigned char)BF_GET(word_tcdm,8,8);
+            else if (BF_GET(offset_tcdm,0,2) == 2)
+              pixel_tcdm = (unsigned char)BF_GET(word_tcdm,16,8);
+            else // (BF_GET(offset_tcdm,0,2) == 3)
+              pixel_tcdm = (unsigned char)BF_GET(word_tcdm,24,8);
 
-	    if ( pixel_l3 != pixel_tcdm) {
-	      n_failed++;
-	      if (n_failed < 100) {
-		printf("Channel %i, Height %i, Width %i @ %#x | %#x: L3 = %#x, TCDM = %#x\n",
-		       i,j,k,ptFCh[i]+j*stepImg+k, tcdm_patch+i*width*height+j*width+k ,pixel_l3, pixel_tcdm);
-      
-	      }
-	    }
-	  }
-	}
+            if ( pixel_l3 != pixel_tcdm) {
+              n_failed++;
+              if (n_failed < 100) {
+                printf("Channel %i, Height %i, Width %i @ %#x | %#x: L3 = %#x, TCDM = %#x\n",
+                       i,j,k,ptFCh_in[i]+j*stepImg+k, tcdm_patch+i*width*height+j*width+k ,pixel_l3, pixel_tcdm);
+
+              }
+            }
+          }
+        }
       }
       printf("Comparison failed for %i pixels.\n",n_failed);
-        
+
       pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', HOST_READY);
     }
 #endif // DMA_CHECK
@@ -390,11 +321,11 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
 #ifndef PROFILE
     printf("PULP result[.]: ");
     for (int i=0; i<n_trees; i++) {
-#if MEM_SHARING != 1
+#if MEM_SHARING_TABLE != 1
       result[i] = &(vTrees[i]->leaf[leaf_indices[i]]);
 #else
       result[i] = &(vTrees[i]->leaf[leaf_indices_cv[i]]);
-#endif // MEM_SHARING
+#endif // MEM_SHARING_TABLE
       printf("%#x\t",result[i]);
     }
     printf("\n");
@@ -419,7 +350,7 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
 #endif
 
   /*************************************************************************/
-  //#define ZYNQ_PMM 1
+#define ZYNQ_PMM 1
 #if ZYNQ_PMM == 1
   int ret;
   int *zynq_pmm_fd;
@@ -489,39 +420,27 @@ inline void CRForest::regression(std::vector<const LeafNode*>& result, uchar** p
 
 #ifdef PROFILE
   if (PULP_pulp)  {
-    start = ((double)tp7.tv_sec)*1000000000 + (double)tp7.tv_nsec; 
-    end = ((double)tp8.tv_sec)*1000000000 + (double)tp8.tv_nsec; 
+    start = ((double)tp7.tv_sec)*1000000000 + (double)tp7.tv_nsec;
+    end = ((double)tp8.tv_sec)*1000000000 + (double)tp8.tv_nsec;
     duration = (end - start)/1000000000;
     printf("Host execution time = %.6f s \n",duration);
 
-    start = ((double)tp1.tv_sec)*1000000000 + (double)tp1.tv_nsec; 
-    end = ((double)tp2.tv_sec)*1000000000 + (double)tp2.tv_nsec; 
+    start = ((double)tp1.tv_sec)*1000000000 + (double)tp1.tv_nsec;
+    end = ((double)tp2.tv_sec)*1000000000 + (double)tp2.tv_nsec;
     duration = (end - start)/1000000000;
     printf("Offload out time    = %.6f s \n",duration);
 
-    //start = ((double)tp3.tv_sec)*1000000000 + (double)tp3.tv_nsec; 
-    //end = ((double)tp4.tv_sec)*1000000000 + (double)tp4.tv_nsec; 
+    //start = ((double)tp3.tv_sec)*1000000000 + (double)tp3.tv_nsec;
+    //end = ((double)tp4.tv_sec)*1000000000 + (double)tp4.tv_nsec;
     //duration = (end - start)/1000000000;
     //printf("Execution time      = %.6f s \n",duration);
 
-    start = ((double)tp5.tv_sec)*1000000000 + (double)tp5.tv_nsec; 
-    end = ((double)tp6.tv_sec)*1000000000 + (double)tp6.tv_nsec; 
+    start = ((double)tp5.tv_sec)*1000000000 + (double)tp5.tv_nsec;
+    end = ((double)tp6.tv_sec)*1000000000 + (double)tp6.tv_nsec;
     duration = (end - start)/1000000000;
     printf("Offload in time     = %.6f s \n",duration);
   }
 #endif // PROFILE
-
-#ifdef TEST
-  // img->width = i_width;
-  // img->height = i_height;
-  // stepImg = stepImg_bkp;
-  // img->imageSize = imageSize_bkp;
-  // img->widthStep = widthStep_bkp; 
-  // 
-  // img->imageData = (char *)img_ptr;
-  // 
-  // free(patch_ptr);
-#endif //TEST
 
 #else  // PULP
   /*************************************************************************/
