@@ -1458,14 +1458,14 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
       // pass data element by reference
       pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',
                    (unsigned)(task->data_desc[i].ptr));
-      //if (DEBUG_LEVEL > 2)
+      if (DEBUG_LEVEL > 2)
         printf("Element %d: wrote %#x to mailbox.\n",i,(unsigned) (task->data_desc[i].ptr));
     }
     else {
       // pass data element by value
       pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',
                    *(unsigned *)(task->data_desc[i].ptr));
-      //if (DEBUG_LEVEL > 2)
+      if (DEBUG_LEVEL > 2)
         printf("Element %d: wrote %#x to mailbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
     }    
   }
