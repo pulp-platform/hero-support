@@ -207,10 +207,9 @@ bool execute_cascade_liiw(const uint32_t * integral_image, uint32_t x, uint32_t 
             	break;
             }
         }
-    } // for
+    } // for n
 
-
-    // Here we have the ending  score level + info if to skip all next cascade
+    // Here we have the ending score level + info if to skip all next cascade
     if (HitCount > 0) {
 
 #ifdef FIND_HIT_ACCURATE_POSITION
@@ -232,17 +231,19 @@ bool execute_cascade_liiw(const uint32_t * integral_image, uint32_t x, uint32_t 
         sy = yinc / 2;
 #endif
 
-        pSol = RegisterHit(x + sx,  y + sy, patchWidth, patchHeight, ScalFactor, pList, HitCount, ((rotation-1) << 4 | cascade) );
-
+	pSol = RegisterHit(x + sx,  y + sy, patchWidth, patchHeight, ScalFactor, pList, HitCount, ((rotation-1) << 4 | cascade) );
+	
+	printf("x+sx = %i, y+sy = %i, HitCount = %i, pSol = %p, score = %i\n", x+sx, y+sy, HitCount, pSol, pSol->score);
+ 
         if (pSol != NULL) {
             // Then we know this solution get scraped ! and all score test is avoided
             // solution reach required level clear do it and break all pending/on going cacade execution
             // Sufficiently valid, no additional cascade should be executed
             if (pSol->score >= ScanStopScore) {
-                return true;
+	      return true;
             }
         }
-    }
+    } // if HitCount
 
     return false;
 }
@@ -283,9 +284,24 @@ void execute_cascade(const uint32_t * integral_image, uint32_t x, uint32_t y, ca
   // Stage 0
   pResult->level = 0;
   WeakNo = currentCascade->stages[pResult->level].WeaksOffset;
+
   pWeak = currentCascade->weaks + WeakNo;
   pResult->value = Cascade_GetFeatureValue(pWeak, integral_image, wWindow, symmetry, patchWidth, patchHeight, x, y, yOff, rotation);
   pResult->result = Cascade_CheckThreshold(pWeak, pResult->value, Norm);
+
+#define PRINT
+#if defined(PRINT) && defined(PULP)
+  //printf("currentCascade = 0x%X\n",(unsigned int)currentCascade);
+  //printf("currentCascade->stages @ 0x%X\n",(unsigned int)&(currentCascade->stages));
+  //printf("currentCascade->stages = 0x%X\n",(unsigned int)(currentCascade->stages));
+  //printf("currentCascade->stages[%d].WeaksOffset @ 0x%X\n",pResult->level,(unsigned int)&(currentCascade->stages[pResult->level].WeaksOffset));
+  //
+  //printf("WeakNo = %d\n", WeakNo);
+  printf("pWeak = 0x%X, result = 0x%X, value = 0x%X\n",
+         (unsigned int)pWeak, (unsigned int)(pResult->result), (unsigned int)(pResult->value));
+#endif 
+
+
   if (!pResult->result) {
     return;
   }
@@ -615,6 +631,12 @@ int Cascade_GetFeatureValue(weak_t * pWeak, const uint32_t * integral_image, int
     x1 = (x0 + jump_c);
     y0 = off_r + wWindow; // 1 line more for zeroExtend //y0 = off_r;
     y1 = y0 + jump_r;
+
+    //
+    //printf("x0 = 0x%X, x1 = 0x%X, y0 = 0x%X, y1 = 0x%X\n",
+    //       (unsigned int)x0,(unsigned int)x1,(unsigned int)y0,(unsigned int)y1);
+    //printf("type = 0x%X\n",(unsigned int)type);
+    //
 
     switch (type) {
     case 0:

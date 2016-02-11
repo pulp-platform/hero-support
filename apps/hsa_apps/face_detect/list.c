@@ -731,6 +731,9 @@ void FinalMerge(RectList_t *pResult, int16_t validScore)
 		p = pResult->pHeadRect;
 		RectListRemoveItem(pResult, pResult->pHeadRect);
 
+		  //
+		  printf("p->score = %i\n",p->score);
+
 		if (p->score >= ClassMergeScore  ) {
 			RectListAddMergeItem(&Final, p, validScore, 1);
 			// *p got duplicated for insertion so delete !
@@ -778,15 +781,15 @@ void ValidateResultList(RectList_t *pResult, RectList_t *pFinalList, int16_t val
         //move out head item of list
 		p = pResult->pHeadRect;
 		RectListRemoveItem(pResult, p);
-//    	printf("\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
+    	printf("\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
 
         if (p->score >= validScore) { //KeepMinScore ) {
-//        	printf("keep:\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
+        	printf("keep:\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
         	RectListAddSortItem(pFinalList, p);
         	//RectListAddItem(pFinalList, p);
         } else {
             // score too low scrap item
-//        	printf("free:\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
+        	printf("free:\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
         	RectFree(p);
         }
     }//while head

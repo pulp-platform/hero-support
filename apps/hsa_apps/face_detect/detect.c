@@ -178,6 +178,10 @@ void detect(const IMG_image_t *input, detect_param_t *param)
   // Allocate the scaled image
   IMG_Create(&scaled_output, input->width, input->height, IMG_TYPE_GREY, 8);
 
+  // for debugging
+  printf("stepNumber = %d\n",(int)stepNumber);
+  //stepNumber = 1;
+
   i=0;
   do{
     // Compute output size
