@@ -11,7 +11,7 @@ ssh ${SCP_TARGET_MACHINE} "mkdir -p ${SCP_TARGET_PATH}/programs/${APP}"
 
 # Copy
 # Host executable
-scp ${APP} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/${APP}/.
+scp ${APP} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/${APP}/.
 # Scripts
 #scp *.sh ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/random_forest/.
 # Sample files
