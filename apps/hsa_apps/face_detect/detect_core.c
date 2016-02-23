@@ -25,6 +25,8 @@
 extern PulpDev* PULP_pulp;
 #endif
 
+#define DEBUG_LEVEL 1
+
 //#define DEBUG_CASCADE
 #define LIIW_SCAN_CENTERED 1
 
@@ -270,8 +272,10 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
 
   //xEnd = xStart+xStep;
 
+#if DEBUG_LEVEL > 1
   printf("xEnd = 0x%X, xStep = 0x%X\n",(unsigned int)xEnd, (unsigned int)xStep);
   printf("yEnd = 0x%X\n",(unsigned int)yEnd);
+#endif
 
   // loop by raw
   for(x=xStart ; x<xEnd ; x+=xStep) {
@@ -279,8 +283,7 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
     // compute integral image for the current stripe
     compute_integral(input, &integral_param);
 
-#ifdef PULP
-    
+#ifdef PULP  
     unsigned int failed = 0;
 
     if (PULP_pulp) {
@@ -329,6 +332,105 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
 
       task.data_desc = &data_desc[0];
 
+#if MEM_SHARING == 1
+      /*
+       * core_param
+       */ 
+      // allocate, copy & change pointers
+      core_param_t * core_param_cv; // host accesses the structure in contiguous L3 through virtual memory
+      unsigned core_param_cp; // PULP accesses directly using the physical address   
+      core_param_cv = (core_param_t *)pulp_l3_malloc(pulp, sizeof(core_param_t), &(core_param_cp));
+      memcpy((void *)core_param_cv, (void *)core_param, sizeof(core_param_t));
+      
+      detector_t * detector_cv;
+      unsigned  detector_cp;
+      detector_cv = (detector_t *)pulp_l3_malloc(pulp, sizeof(detector_t), &(detector_cp));
+      memcpy((void *)detector_cv, (void *)core_param->detector, sizeof(detector_t));
+      
+      core_param_cv->detector = (detector_t *)detector_cp;
+
+      cascade_t * cascade_cv;
+      unsigned cascade_cp;
+      cascade_cv = (cascade_t *)pulp_l3_malloc(pulp, NbCascades*sizeof(cascade_t), &(cascade_cp));
+      memcpy((void *)cascade_cv, (void *)core_param->detector->cascade, NbCascades*sizeof(cascade_t));
+
+      detector_cv->cascade = (cascade_t *)cascade_cp;
+
+      stage_t ** c_stages_cv = (stage_t **)malloc(NbCascades*sizeof(stage_t *));
+      unsigned * c_stages_cp = (unsigned *)malloc(NbCascades*sizeof(unsigned *));
+      if (!c_stages_cv || !c_stages_cp)
+        printf("Malloc failed for c_stages_cv/c_stages_cp.\n"); 
+
+      weak_t ** c_weaks_cv = (weak_t **)malloc(NbCascades*sizeof(weak_t *));
+      unsigned * c_weaks_cp = (unsigned *)malloc(NbCascades*sizeof(unsigned *));
+      if (!c_weaks_cv || !c_weaks_cp)
+        printf("Malloc failed for c_weaks_cv/c_weaks_cp.\n"); 
+
+      int i;
+      int NbStages;
+      int NbWeaks;
+      for (i=0; i<NbCascades; i++) {
+        NbStages = (int)(core_param->detector->cascade[i].nb_stage);
+        NbWeaks = (int)(core_param->detector->cascade[i].stages[NbStages-1].nWeak)
+          + (int)(core_param->detector->cascade[i].stages[NbStages-1].WeaksOffset);
+
+        // allocate, copy and change pointers
+        c_stages_cv[i] = (stage_t *)pulp_l3_malloc(pulp, NbStages*sizeof(stage_t), &(c_stages_cp[i]));  
+        memcpy((void *)c_stages_cv[i], (void *)(core_param->detector->cascade[i].stages), NbStages*sizeof(stage_t));
+        
+        cascade_cv[i].stages = (stage_t *)c_stages_cp[i];
+
+        c_weaks_cv[i] = (weak_t *)pulp_l3_malloc(pulp, NbWeaks*sizeof(weak_t), &(c_weaks_cp[i]));  
+        memcpy((void *)c_weaks_cv[i], (void *)(core_param->detector->cascade[i].weaks), NbWeaks*sizeof(weak_t));
+        
+        cascade_cv[i].weaks = (weak_t *)c_weaks_cp[i];
+      }
+      
+      uint8_t * scanOrder_cv;
+      unsigned  scanOrder_cp;
+      if (core_param->scanOrder == ScanOrder1x1) {
+        scanOrder_cv = (uint8_t *)pulp_l3_malloc(pulp, 1*2*sizeof(uint8_t), &(scanOrder_cp));
+        memcpy((void *)scanOrder_cv, (void *)(core_param->scanOrder), 1*2*sizeof(uint8_t));
+      }
+      else {
+        scanOrder_cv = (uint8_t *)pulp_l3_malloc(pulp, 25*2*sizeof(uint8_t), &(scanOrder_cp));
+        memcpy((void *)scanOrder_cv, (void *)(core_param->scanOrder), 25*2*sizeof(uint8_t));
+      }
+      core_param_cv->scanOrder = (uint8_t *)scanOrder_cp;
+ 
+      /*
+       * integral_param
+       */ 
+      // allocate, copy & change pointers
+      unsigned size = (integral_param.stripeWidth+1) * height;
+      integral_param_t * integral_param_cv;
+      unsigned integral_param_cp;
+      integral_param_cv = (integral_param_t *)pulp_l3_malloc(pulp, sizeof(integral_param_t), &(integral_param_cp));
+      memcpy((void *)integral_param_cv, (void *)&integral_param, sizeof(integral_param_t));
+      
+      // integral_param->integral_image
+      uint32_t * integral_image_cv;
+      unsigned integral_image_cp;
+      integral_image_cv = (uint32_t *)pulp_l3_malloc(pulp, size*sizeof(uint32_t), &(integral_image_cp));
+      memcpy((void *)integral_image_cv, (void *)integral_param.integral_image, size*sizeof(uint32_t));
+
+      integral_param_cv->integral_image = (uint32_t *)integral_image_cp;
+
+      // integral_param->sq_integral_image
+      uint64_t * sq_integral_image_cv;
+      unsigned sq_integral_image_cp;
+      sq_integral_image_cv = (uint64_t *)pulp_l3_malloc(pulp, size*sizeof(uint64_t), &(sq_integral_image_cp));
+      memcpy((void *)sq_integral_image_cv, (void *)integral_param.sq_integral_image, size*sizeof(uint64_t));
+      
+      integral_param_cv->sq_integral_image = (uint64_t *)sq_integral_image_cp;
+
+      // change pointers in task struct
+      data_desc[0].ptr  = (void *)core_param_cp;
+      data_desc[2].ptr  = (void *)integral_param_cp;
+
+      //printf("__LINE__ = %d\n",__LINE__);
+#endif
+
       // start offload
       pulp_write32(pulp->mailbox.v_addr, MAILBOX_WRDATA_OFFSET_B, 'b', PULP_START);
     
@@ -336,7 +438,7 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
       pulp_offload_out(pulp, &task);
 
       // debug prints
-#define PRINT
+      //#define PRINT
 #ifdef PRINT
       printf("----\n");
 
@@ -347,6 +449,16 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
  
       printf("integral_image    @ 0x%X = 0x%X\n",(unsigned int)&(integral_param.integral_image)   , (unsigned int)(integral_param.integral_image));
       printf("sq_integral_image @ 0x%X = 0x%X\n",(unsigned int)&(integral_param.sq_integral_image), (unsigned int)(integral_param.sq_integral_image));
+
+#if (MEM_SHARING == 1)
+      printf("xStart            @ 0x%X = 0x%X\n",(unsigned int)&(integral_param_cv->xStart)           , (unsigned int)(integral_param_cv->xStart));
+      printf("zeroExtend        @ 0x%X = 0x%X\n",(unsigned int)&(integral_param_cv->zeroExtend)       , (unsigned int)(integral_param_cv->zeroExtend));
+      printf("stripeWidth       @ 0x%X = 0x%X\n",(unsigned int)&(integral_param_cv->stripeWidth)      , (unsigned int)(integral_param_cv->stripeWidth));
+      printf("currentWidth      @ 0x%X = 0x%X\n",(unsigned int)&(integral_param_cv->currentWidth)     , (unsigned int)(integral_param_cv->currentWidth));
+ 
+      printf("integral_image    @ 0x%X = 0x%X\n",(unsigned int)&(integral_param_cv->integral_image)   , (unsigned int)(integral_param_cv->integral_image));
+      printf("sq_integral_image @ 0x%X = 0x%X\n",(unsigned int)&(integral_param_cv->sq_integral_image), (unsigned int)(integral_param_cv->sq_integral_image));
+#endif
      
       printf("----\n");
       
@@ -371,16 +483,41 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
         failed = 1;
         pulp_rab_free(pulp, (unsigned char)0xFF);
       }
-    
+
+      usleep(100000);
+
       // free RAB slices
       unsigned char date_cur = (unsigned char)(task.task_id + 4);
       pulp_rab_free(pulp, date_cur);
+    
+#if (MEM_SHARING == 1)
+      // free
+      pulp_l3_free(pulp, (unsigned)sq_integral_image_cv, sq_integral_image_cp);
+      pulp_l3_free(pulp, (unsigned)integral_image_cv, integral_image_cp);
+      pulp_l3_free(pulp, (unsigned)integral_param_cv, integral_param_cp);
+      pulp_l3_free(pulp, (unsigned)scanOrder_cv, scanOrder_cp);
+      for (i=0; i<NbCascades; i++) {
+        pulp_l3_free(pulp, (unsigned)c_weaks_cv[i], c_weaks_cp[i]);
+        pulp_l3_free(pulp, (unsigned)c_stages_cv[i], c_stages_cp[i]);
+      }
+      free(c_weaks_cp);
+      free(c_weaks_cv);
+      free(c_stages_cv);
+      free(c_stages_cp);
+      pulp_l3_free(pulp, (unsigned)cascade_cv, cascade_cp);
+      pulp_l3_free(pulp, (unsigned)detector_cv, detector_cp);
+      pulp_l3_free(pulp, (unsigned)core_param_cv, core_param_cp);
+#endif
     }
 
     if (PULP_pulp) {
       // loop by line
       for(y=yStart ; y<yEnd ; y+=yStep) {
-       
+
+#if DEBUG_LEVEL > 1
+        printf("y = %d\n", (int)y);
+#endif       
+
         int32_t X, Y;
 
         // to be compatible with RAID algo version
@@ -399,7 +536,9 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
 
         for (c = 0, stop = false; !stop && (c < NbCascades); c++){
 
-          printf("y = %d, c = %d\n", (int)y, (int)c);
+#if DEBUG_LEVEL > 3
+          printf("x = %d, y = %d, c = %d\n", (int)x, (int)y, (int)c);
+#endif
 
           // get current cascade
           currentCascade = &(core_param->detector->cascade[c]);

@@ -732,7 +732,7 @@ void FinalMerge(RectList_t *pResult, int16_t validScore)
 		RectListRemoveItem(pResult, pResult->pHeadRect);
 
 		  //
-		  printf("p->score = %i\n",p->score);
+		  //printf("p->score = %i\n",p->score);
 
 		if (p->score >= ClassMergeScore  ) {
 			RectListAddMergeItem(&Final, p, validScore, 1);
@@ -781,7 +781,7 @@ void ValidateResultList(RectList_t *pResult, RectList_t *pFinalList, int16_t val
         //move out head item of list
 		p = pResult->pHeadRect;
 		RectListRemoveItem(pResult, p);
-    	printf("\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
+    	//printf("\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
 
         if (p->score >= validScore) { //KeepMinScore ) {
         	printf("keep:\t\tp.x:%d, p.y:%d, p.w:%d, p->score:%d\n", p->x0, p->y0, p->x1 - p->x0, p->score);
