@@ -8,23 +8,29 @@
 int main(int argc, char *argv[]){
 
   double fixed_miss_rate = 1;
-  unsigned zynq_pmm = 0;
-  unsigned loop_forever = 1;
+  unsigned zynq_pmm = 1;
+  unsigned loop_forever = 0;
+  unsigned n_repetitions = 100;
+
   //#define WRITE_L3
 
-  if (argc < 3) {
-    if (argc == 2)
-      fixed_miss_rate = strtod(argv[1],NULL);
-  }
-  else  {
-    printf("Please specify exactly one input argument, i.e., the desired cache miss rate.\n");
+  if (argc > 4) {
+    printf("Arguments are: [desired cache miss rate] [loop_forever (0/1)] [number of repetitions]\n");
     return -1;
-  }  
+  }
+  
+  if (argc > 1)
+    fixed_miss_rate = strtod(argv[1],NULL);
+  
+  if (argc > 2)
+    loop_forever = atoi(argv[2]);
+
+  if (argc > 3)
+    n_repetitions = atoi(argv[3]);
  
   // Loop variables
   unsigned i,j,k;
-  unsigned n_chunks,n_repetitions,n_tests;
-  n_repetitions = 100;
+  unsigned n_chunks,n_tests;
   n_chunks = 1;
   
   // Setup cache miss rate measurement
@@ -102,7 +108,7 @@ int main(int argc, char *argv[]){
     }
   }
     
-  printf("Effective Miss Rate: %.2f\n",miss_rate[k]);
+  printf("Effective Miss Rate: %.4f\n",miss_rate[k]);
 
   // Extract the number of lines to shift
   shift = n_lines_shift[k];
