@@ -26,7 +26,7 @@
 //#define PIPELINE
 
 int  CT_init   (CT_kernel_t *, int, int);
-inline void CT_offload_out(CT_kernel_t *ctInstance, uint8_t *frame, int offload_id);
+inline void CT_offload_out(CT_kernel_t *ctInstance, uint8_t *frame, int offload_id, unsigned char use_acp);
 //inline void CT_exe_start(CT_kernel_t *ctInstance);
 inline int CT_exe_start(CT_kernel_t *ctInstance);
 //inline void CT_exe_wait(CT_kernel_t *ctInstance);
@@ -148,9 +148,17 @@ int main(int argc, char *argv[]) {
   TaskDesc task_desc;
   task_desc.name = &name[0];
   int pulp_clk_freq_mhz = 50;
+  unsigned char use_acp = 0;
+  unsigned int repetitions = REPETITIONS;
 
   if (argc>1)
     pulp_clk_freq_mhz = atoi(argv[1]);
+
+  if (argc>2)
+    use_acp = atoi(argv[2]);
+
+  if (argc>3)
+    repetitions = atoi(argv[3]);
   
   /*
    * Initialization
@@ -196,7 +204,7 @@ int main(int argc, char *argv[]) {
 
 #if (MEM_SHARING == 3)
   // enable RAB miss handling
-  pulp_rab_mh_enable(pulp);
+  pulp_rab_mh_enable(pulp, use_acp);
 #endif
 
   // setup time measurement
@@ -262,7 +270,7 @@ int main(int argc, char *argv[]) {
 
 #endif
   
-  for (i = 0; i < REPETITIONS; ++i){        
+  for (i = 0; i < repetitions; ++i){        
     if (DEBUG_LEVEL > 0) printf("\n[APP ] Execute offload nbclusters %d\n", CT_instance.n_clusters);
 
     // write command to make PULP continue
@@ -271,7 +279,7 @@ int main(int argc, char *argv[]) {
 
     // offload
     clock_gettime(CLOCK_REALTIME,&tp1_local);
-    CT_offload_out(&CT_instance, inputImage.data,i);
+    CT_offload_out(&CT_instance, inputImage.data,i, use_acp);
     clock_gettime(CLOCK_REALTIME,&tp2_local);
     accumulate_time(&tp1_local,&tp2_local,&s_duration1,ACC_CTRL);
     
@@ -373,12 +381,12 @@ if (DEBUG_LEVEL > 0)  {
 
   if (DEBUG_LEVEL > 0) printf("[APP ] Offload %d scheduled\n", 0);
 
-  for (i = 0; i < REPETITIONS; ++i){
+  for (i = 0; i < repetitions; ++i){
 
     buff_id = (buff_id == 0) ? 1 : 0;
     next_i++;
     
-    if (next_i < REPETITIONS) {
+    if (next_i < repetitions) {
 
       if (DEBUG_LEVEL > 0) printf("\n[APP ] Execute offload nbclusters %d\n", CT_instance[buff_id].n_clusters);
 
@@ -458,14 +466,14 @@ if (DEBUG_LEVEL > 0)  {
   printf("\n######################################################################\n");
   //double dma_time = (double)acc_read32(acc->mb_mem.v_addr,DMA_TIME_REG_OFFSET_B,'b')/(MB_CLK_FREQ_MHZ * 1000000);
   //printf("Total DMA Time \t\t : %.9f seconds\n", dma_time);
-  //double pmca_time = (double)(REPETITIONS*N_STRIPES*KERNEL_CYCLES_PER_STRIPE)/(STHORM_CLK_FREQ_MHZ * 1000000);
+  //double pmca_time = (double)(repetitions*N_STRIPES*KERNEL_CYCLES_PER_STRIPE)/(STHORM_CLK_FREQ_MHZ * 1000000);
   //printf("Total PMCA Kernel Time \t : %.9f seconds\n", pmca_time );
   //printf("\n######################################################################\n");
-  ////printf("Avg. Offload Time \t : %u.%09llu seconds\n",s_duration1/REPETITIONS,ns_duration1/REPETITIONS+(((unsigned long long)(s_duration1 % REPETITIONS)*1000000000) / REPETITIONS));
-  ////printf("Avg. Host Wait Time \t : %u.%09llu seconds\n",s_duration3/REPETITIONS,ns_duration3/REPETITIONS+(((unsigned long long)(s_duration3 % REPETITIONS)*1000000000) / REPETITIONS));
-  ////printf("Avg. Host Kernel Time \t : %u.%09llu seconds\n",s_duration2/REPETITIONS,ns_duration2/REPETITIONS+(((unsigned long long)(s_duration2 % REPETITIONS)*1000000000) / REPETITIONS));
+  ////printf("Avg. Offload Time \t : %u.%09llu seconds\n",s_duration1/repetitions,ns_duration1/repetitions+(((unsigned long long)(s_duration1 % repetitions)*1000000000) / repetitions));
+  ////printf("Avg. Host Wait Time \t : %u.%09llu seconds\n",s_duration3/repetitions,ns_duration3/repetitions+(((unsigned long long)(s_duration3 % repetitions)*1000000000) / repetitions));
+  ////printf("Avg. Host Kernel Time \t : %u.%09llu seconds\n",s_duration2/repetitions,ns_duration2/repetitions+(((unsigned long long)(s_duration2 % repetitions)*1000000000) / repetitions));
   ////printf("\n######################################################################\n");
-  //double dma_bandwidth = (double)(REPETITIONS*N_STRIPES*(DMA_IN_SIZE_B+DMA_OUT_SIZE_B))/(dma_time*1000000);
+  //double dma_bandwidth = (double)(repetitions*N_STRIPES*(DMA_IN_SIZE_B+DMA_OUT_SIZE_B))/(dma_time*1000000);
   //printf("Achieved DMA Bandwidth \t : %.2f MiB/s\n",dma_bandwidth);
   //double dma_bw_util = dma_bandwidth/2400*100;
   //printf("DMA Bandwidth Utilization: %.2f %% \n",dma_bw_util);
@@ -541,32 +549,40 @@ int CT_init(CT_kernel_t *ctInstance, int width, int height){
   return 0;
 }
 
-void CT_offload_out(CT_kernel_t *ctInstance, uint8_t *frame, int offload_id) {
+void CT_offload_out(CT_kernel_t *ctInstance, uint8_t *frame, int offload_id, unsigned char use_acp) {
   ctInstance->data_desc[0].ptr  = (void *) frame;
   ctInstance->data_desc[0].size = ctInstance->w*ctInstance->h*sizeof(uint8_t)*3;
   ctInstance->data_desc[0].type = 1;
+  ctInstance->data_desc[0].use_acp = use_acp;
   ctInstance->data_desc[1].ptr  = &ctInstance->w;
   ctInstance->data_desc[1].size = sizeof(int);
   ctInstance->data_desc[1].type = 1;
+  ctInstance->data_desc[1].use_acp = use_acp;
   ctInstance->data_desc[2].ptr  = &ctInstance->h;
   ctInstance->data_desc[2].size = sizeof(int);
   ctInstance->data_desc[2].type = 1;
+  ctInstance->data_desc[2].use_acp = use_acp;
   ctInstance->data_desc[3].ptr  = &ctInstance->Bh;
   ctInstance->data_desc[3].size = sizeof(int);
   ctInstance->data_desc[3].type = 1;
+  ctInstance->data_desc[3].use_acp = use_acp;
   ctInstance->data_desc[4].ptr  = ctInstance->mom;
   ctInstance->data_desc[4].size = 3*sizeof(unsigned int);
   ctInstance->data_desc[4].type = 2;
+  ctInstance->data_desc[4].use_acp = use_acp;
   ctInstance->data_desc[5].ptr  = &ctInstance->cycles;
   ctInstance->data_desc[5].size = sizeof(unsigned int);
   ctInstance->data_desc[5].type = 2;
+  ctInstance->data_desc[5].use_acp = use_acp;
 #ifdef PROFILE    
   ctInstance->data_desc[6].ptr  = &ctInstance->t_comp;
   ctInstance->data_desc[6].size = sizeof(unsigned int);
   ctInstance->data_desc[6].type = 2;
+  ctInstance->data_desc[6].use_acp = use_acp;
   ctInstance->data_desc[7].ptr  = &ctInstance->t_dma_in;
   ctInstance->data_desc[7].size = sizeof(unsigned int);
   ctInstance->data_desc[7].type = 2;
+  ctInstance->data_desc[7].use_acp = use_acp;
 #endif // PROFILE
     
   ctInstance->desc              = (TaskDesc *)malloc(sizeof(TaskDesc));
