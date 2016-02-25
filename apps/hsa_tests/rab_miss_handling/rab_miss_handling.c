@@ -25,7 +25,7 @@ int main(int argc, char *argv[]){
   char app_name[30];
   int timeout_s = 10;  
   int pulp_clk_freq_mhz = 50;
-  unsigned use_acp = 1;
+  unsigned use_acp = 0;
 
   strcpy(app_name,"rab_miss_handling");
   

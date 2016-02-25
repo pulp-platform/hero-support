@@ -10,7 +10,7 @@
 
 //#define BOARD ZC706
 #ifndef BOARD
-#define BOARD ZEDBOARD
+#define BOARD MINI_ITX
 #endif // BOARD
 
 /*

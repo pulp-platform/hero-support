@@ -8,7 +8,7 @@
 int main(int argc, char *argv[]){
 
   double fixed_miss_rate = 1;
-  unsigned zynq_pmm = 1;
+  unsigned zynq_pmm = 0;
   unsigned loop_forever = 0;
   unsigned n_repetitions = 100;
 

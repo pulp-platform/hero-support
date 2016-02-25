@@ -872,9 +872,6 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   unsigned ** rab_stripe_ptrs;
   unsigned shift, type;
 
-  // needed for RAB miss handling
-  unsigned mh_use_acp;
-  
   // needed for DMA management
   struct dma_async_tx_descriptor ** descs;
   unsigned addr_l3, addr_pulp;
@@ -1323,7 +1320,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
               offset_start = BF_GET(addr_start_vec[j],0,PAGE_SHIFT);
             else
               offset_start = 0;
-            
+
             if (j == (n_segments-1) )
               offset_end = BF_GET(addr_end_vec[j],0,PAGE_SHIFT);
             else 
@@ -1741,21 +1738,20 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   case PULP_IOCTL_RAB_MH_ENA:
 
-    if(!arg) {
-      printk(KERN_WARNING "PULP: ioctl RAB miss handling enable requires an argument!\n");
-      return -EINVAL;
+    // get slice data from user space - arg already checked above
+    ret = 1;
+    byte = 0;
+    n_bytes_left = sizeof(unsigned); 
+    while (ret > 0) {
+      ret = __copy_from_user((void *)((char *)rab_mh_use_acp+byte),
+                             (void __user *)((char *)arg+byte), n_bytes_left);
+      if (ret < 0) {
+        printk(KERN_WARNING "PULP: Cannot copy ACP flag from user space.\n");
+        return ret;
+      }
+      byte += (n_bytes_left - ret);
+      n_bytes_left = ret;
     }
-    
-    // get use_acp argument from userspace - arg was checked above
-    ret = __copy_from_user(&mh_use_acp, (void __user *)arg, sizeof(unsigned));
-    if(ret != 0)
-    {
-      printk(KERN_WARNING "PULP: Could not copy ioctl argument from user space. %lu, %#lx, %#lx, %d\n",
-             ret, (unsigned long)&mh_use_acp, arg, sizeof(unsigned));
-      return -EFAULT;
-    }
-
-    rab_mh_use_acp = mh_use_acp; // save argument to global variable
 
     // create workqueue for RAB miss handling
     //rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
