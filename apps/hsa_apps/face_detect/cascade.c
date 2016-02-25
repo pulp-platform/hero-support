@@ -12,7 +12,7 @@
  *  Revision: 1.1 Tue Oct 16 13:56:53 2012 odile.rey@st.com
  *  Initial version
  ******************************************************************************/
-#define DEBUG_LEVEL 1
+#define DEBUG_LEVEL 3 //1
 
 #include "raid.h"
 #include "cascade.h"
@@ -95,6 +95,7 @@ static const detector_t detector_rom[DETECTOR_TYPE_NUMBER] = {
 //!
 //-----------------------------------------------------------------------------
 const detector_t * get_detector(uint8_t cascade) {
+
   if (cascade < DETECTOR_TYPE_NUMBER) {
     return &detector_rom[cascade] ;
   }
@@ -316,7 +317,7 @@ void execute_cascade(const uint32_t * integral_image, uint32_t x, uint32_t y, ca
   // for each other stage
   while (pResult->level < currentCascade->nb_stage){
 
-#if DEBUG_LEVEL > 2
+#if DEBUG_LEVEL > 3
     printf("pResult->level = %d\n",(int)(pResult->level));
 #endif
 

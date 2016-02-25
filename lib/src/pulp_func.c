@@ -1551,7 +1551,7 @@ int pulp_offload_out(PulpDev *pulp, TaskDesc *task)
   // only remap addresses belonging to data elements larger than 32 bit
   n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
   
-#if (MEM_SHARING != 3)
+#if (MEM_SHARING != 1)
   // RAB setup
   err = pulp_offload_rab_setup(pulp, task, &data_idxs, n_idxs);
   if (err) {

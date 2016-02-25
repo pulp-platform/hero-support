@@ -80,10 +80,10 @@ int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
 
   if (DEBUG_LEVEL_RAB > 2) {
     printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Testing.\n",
-	   rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
+           rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
   }
   RAB_GET_DATE_EXP(date_exp_i,rab_slices[off_slices+rab_slice_req->rab_port*RAB_N_SLICES
-					 *RAB_TABLE_WIDTH+rab_slice_req->rab_slice*RAB_TABLE_WIDTH]);
+                                         *RAB_TABLE_WIDTH+rab_slice_req->rab_slice*RAB_TABLE_WIDTH]);
   if ( (rab_slice_req->date_cur > date_exp_i) || // found an expired slice
        ((rab_slice_req->date_cur == 0) && ( RAB_MAX_DATE_MH == date_exp_i)) ) // wrap around in RAB miss handling mode
     expired = 1;
@@ -135,12 +135,12 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 
   if (DEBUG_LEVEL_RAB > 0) {
     printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Freeing.\n",
-	   rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
+           rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
   }
 
   // get old configuration of the selected slice
   page_ptr_idx_old = rab_slices[off_slices+rab_slice_req->rab_port*RAB_N_SLICES
-				*RAB_TABLE_WIDTH+rab_slice_req->rab_slice*RAB_TABLE_WIDTH+2];
+                                *RAB_TABLE_WIDTH+rab_slice_req->rab_slice*RAB_TABLE_WIDTH+2];
   pages_old = page_ptrs[off_ptrs+page_ptr_idx_old];
 
   if (pages_old) { // not used for a constant mapping
@@ -157,18 +157,18 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 
     // unlock remapped pages and invalidate caches
     if ( !(rab_slice_req->flags & 0x2) &&   // do not unlock pages in striped mode until the last slice is freed
-      	 !(rab_slice_req->flags & 0x4) ) {  // only unlock pages in multi-mapping rule when the last mapping is removed 
+         !(rab_slice_req->flags & 0x4) ) {  // only unlock pages in multi-mapping rule when the last mapping is removed 
       for (i=page_idx_start_old;i<=page_idx_end_old;i++) {
-	if (DEBUG_LEVEL_RAB > 0) {
-	  printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Unlocking Page %d.\n",
-		  rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice, i);
-	}
-	// invalidate caches --- invalidates entire pages only --- really needed?
-	//pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
-	// unlock
-	if (!PageReserved(pages_old[i])) 
-	  SetPageDirty(pages_old[i]);
-	page_cache_release(pages_old[i]);
+        if (DEBUG_LEVEL_RAB > 0) {
+          printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Unlocking Page %d.\n",
+                 rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice, i);
+        }
+        // invalidate caches --- invalidates entire pages only --- really needed?
+        //pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
+        // unlock
+        if (!PageReserved(pages_old[i])) 
+          SetPageDirty(pages_old[i]);
+        page_cache_release(pages_old[i]);
       }
     }
     // lower reference counter
@@ -177,24 +177,24 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
     // free memory if no more references exist
     if ( !page_ptr_ref_cntrs[off_ptrs+page_ptr_idx_old] ) {
       if  ( !(rab_slice_req->flags & 0x4) ) // only free pages ptr in multi-mapping rule when the last mapping is removed 
-	kfree(pages_old);
+        kfree(pages_old);
       page_ptrs[off_ptrs+page_ptr_idx_old] = 0;
     }
     if (DEBUG_LEVEL_RAB > 0) {
       printk(KERN_INFO "PULP - RAB: Number of references to pages pointer = %d.\n",
-	     page_ptr_ref_cntrs[off_ptrs+page_ptr_idx_old]);
+             page_ptr_ref_cntrs[off_ptrs+page_ptr_idx_old]);
     }
   }
 
   // delete entries in the slices table
   for (i=0;i<RAB_TABLE_WIDTH;i++) {
     rab_slices[off_slices+rab_slice_req->rab_port*RAB_N_SLICES*RAB_TABLE_WIDTH
-	       +rab_slice_req->rab_slice*RAB_TABLE_WIDTH+i] = 0;
+               +rab_slice_req->rab_slice*RAB_TABLE_WIDTH+i] = 0;
   }
   // delete entries in the mappings table
   for (i=0;i<3;i++) {
     rab_mappings[off_mappings+rab_slice_req->rab_port*RAB_N_SLICES*3
-		 +rab_slice_req->rab_slice*3+i] = 0;
+                 +rab_slice_req->rab_slice*3+i] = 0;
   }
 }
 
@@ -234,13 +234,13 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
   if ( page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx] & !rab_slice_req->page_idx_start 
        & !(rab_slice_req->flags & 0x2) ) { 
     printk(KERN_WARNING "PULP - RAB: Selected reference list entry not free. Number of references = %d.\n"
-	   , page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx]);
+           , page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx]);
     return -EIO;
   }
   page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx]++;
   if (DEBUG_LEVEL_RAB > 0) {
     printk(KERN_INFO "PULP - RAB: Number of references to pages pointer = %d.\n",
-	   page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx]);
+           page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx]);
   }
 
   if (rab_slice_req->flags & 0x1) {
@@ -260,7 +260,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
 
   if (DEBUG_LEVEL_RAB > 0)
     printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Setting up.\n", 
-	   rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
+           rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
 
   // set up new slice, configure the hardware
   if (rab_mapping_active == rab_slice_req->rab_mapping) {
@@ -303,11 +303,11 @@ void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
       RAB_GET_PROT(prot, rab_slices[off_slices+i*RAB_TABLE_WIDTH*RAB_N_SLICES+j*RAB_TABLE_WIDTH+0]);
       if (prot) { // de-activate slices with old active config
 
-  	offset = 0x10*(i*RAB_N_SLICES+j);
-  	iowrite32(0x0,(void *)((unsigned)rab_config+offset+0x1c));
+        offset = 0x10*(i*RAB_N_SLICES+j);
+        iowrite32(0x0,(void *)((unsigned)rab_config+offset+0x1c));
 
-	if (DEBUG_LEVEL_RAB > 0)
-  	  printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Disabling.\n",rab_mapping_active,i,j);
+        if (DEBUG_LEVEL_RAB > 0)
+          printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Disabling.\n",rab_mapping_active,i,j);
       }
     }
   }
@@ -320,19 +320,19 @@ void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
     for (j=0; j<RAB_N_SLICES; j++) {
       RAB_GET_PROT(prot, rab_slices[off_slices+i*RAB_TABLE_WIDTH*RAB_N_SLICES+j*RAB_TABLE_WIDTH+0]);
       if (prot & 0x1) { // activate slices with new active config
-  	offset =  0x10*(i*RAB_N_SLICES+j);
-  	iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0], (void *)((unsigned)rab_config+offset+0x10));
-  	iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1], (void *)((unsigned)rab_config+offset+0x14));
-  	iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2], (void *)((unsigned)rab_config+offset+0x18));
-  	iowrite32(prot, (void *)((unsigned)rab_config+offset+0x1c));
-	
-  	if (DEBUG_LEVEL_RAB > 0)
-  	  printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Setting up.\n",rab_mapping,i,j);
-	if (DEBUG_LEVEL_RAB > 1) {
-  	  printk(KERN_INFO "PULP - RAB: addr_start  %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0]);
-  	  printk(KERN_INFO "PULP - RAB: addr_end    %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1]);
-  	  printk(KERN_INFO "PULP - RAB: addr_offset %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2]);
-	}
+        offset =  0x10*(i*RAB_N_SLICES+j);
+        iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0], (void *)((unsigned)rab_config+offset+0x10));
+        iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1], (void *)((unsigned)rab_config+offset+0x14));
+        iowrite32(rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2], (void *)((unsigned)rab_config+offset+0x18));
+        iowrite32(prot, (void *)((unsigned)rab_config+offset+0x1c));
+  
+        if (DEBUG_LEVEL_RAB > 0)
+          printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Setting up.\n",rab_mapping,i,j);
+        if (DEBUG_LEVEL_RAB > 1) {
+          printk(KERN_INFO "PULP - RAB: addr_start  %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0]);
+          printk(KERN_INFO "PULP - RAB: addr_end    %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1]);
+          printk(KERN_INFO "PULP - RAB: addr_offset %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2]);
+        }
       }
     }
   }
@@ -375,15 +375,15 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
 
     for (i=0; i<RAB_N_PORTS; i++) {
       for (j=0; j<RAB_N_SLICES; j++) {
-	addr_start   = rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0];
-	addr_end     = rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1];
-	addr_offset  = rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2];
-	RAB_GET_PROT(prot, rab_slices[off_slices+i*RAB_TABLE_WIDTH*RAB_N_SLICES
-				      +j*RAB_TABLE_WIDTH+0]);
+        addr_start   = rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0];
+        addr_end     = rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1];
+        addr_offset  = rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2];
+        RAB_GET_PROT(prot, rab_slices[off_slices+i*RAB_TABLE_WIDTH*RAB_N_SLICES
+                                      +j*RAB_TABLE_WIDTH+0]);
 
-	if (prot)
-	  printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x\n",
-		 i,j,addr_start,addr_end,addr_offset,prot);
+        if (prot)
+          printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x\n",
+                 i,j,addr_start,addr_end,addr_offset,prot);
       }
     }
   } 
@@ -393,17 +393,17 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
     
     for (i=0; i<RAB_N_PORTS; i++) {
       for (j=0; j<RAB_N_SLICES; j++) {
-	offset = 0x10*(i*RAB_N_SLICES+j);
-	prot         = ioread32((void *)((unsigned)rab_config+offset+0x1C));
+        offset = 0x10*(i*RAB_N_SLICES+j);
+        prot         = ioread32((void *)((unsigned)rab_config+offset+0x1C));
 
-	if (prot) {
-	  addr_start   = ioread32((void *)((unsigned)rab_config+offset+0x10));
-	  addr_end     = ioread32((void *)((unsigned)rab_config+offset+0x14));
-	  addr_offset  = ioread32((void *)((unsigned)rab_config+offset+0x18));
-	  
-	  printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x\n",
-		 i,j,addr_start,addr_end,addr_offset,prot);
-	}
+        if (prot) {
+          addr_start   = ioread32((void *)((unsigned)rab_config+offset+0x10));
+          addr_end     = ioread32((void *)((unsigned)rab_config+offset+0x14));
+          addr_offset  = ioread32((void *)((unsigned)rab_config+offset+0x18));
+    
+          printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x\n",
+                 i,j,addr_start,addr_end,addr_offset,prot);
+        }
       }
     }
   }
@@ -415,10 +415,10 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
 
     for (i=0; i<RAB_N_PORTS; i++) {
       for (j=0; j<RAB_N_SLICES; j++) {
-	if (page_ptr_ref_cntrs[off_ptrs+i*RAB_N_SLICES+j])
-	  printk(KERN_INFO "Port %d, Slice %d: page_ptrs[i] = %#x, page_ptr_ref_cntrs[i] = %d\n",
-		 i,j,(unsigned int)page_ptrs[off_ptrs+i*RAB_N_SLICES+j],
-		 page_ptr_ref_cntrs[off_ptrs+i*RAB_N_SLICES+j]);
+        if (page_ptr_ref_cntrs[off_ptrs+i*RAB_N_SLICES+j])
+          printk(KERN_INFO "Port %d, Slice %d: page_ptrs[i] = %#x, page_ptr_ref_cntrs[i] = %d\n",
+                 i,j,(unsigned int)page_ptrs[off_ptrs+i*RAB_N_SLICES+j],
+                 page_ptr_ref_cntrs[off_ptrs+i*RAB_N_SLICES+j]);
       }
     }
   }

@@ -4,7 +4,7 @@
 #include "pulp.h"
 #include "pulpemu.h"
 
-#define DEBUG_LEVEL 2
+#define DEBUG_LEVEL 0
 
 #define ZEDBOARD 1
 #define ZC706    2
@@ -262,6 +262,8 @@
 #define SYNC_OFFSET_B 0xB000
 
 #define MAX_STRIPE_SIZE 0x4000
+
+#define MEM_SHARING 3
 
 // needed for ROD, CT, JPEG
 //#define PROFILE
