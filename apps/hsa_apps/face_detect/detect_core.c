@@ -25,7 +25,7 @@
 extern PulpDev* PULP_pulp;
 #endif
 
-#define DEBUG_LEVEL 2 //1
+#define DEBUG_LEVEL 1
 
 //#define DEBUG_CASCADE
 #define LIIW_SCAN_CENTERED 1
@@ -272,7 +272,7 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
 
   //xEnd = xStart+xStep;
 
-#if DEBUG_LEVEL > 3 //1
+#if DEBUG_LEVEL > 1
   printf("xEnd = 0x%X, xStep = 0x%X\n",(unsigned int)xEnd, (unsigned int)xStep);
   printf("yEnd = 0x%X\n",(unsigned int)yEnd);
 #endif
@@ -539,7 +539,7 @@ void detect_core(const IMG_image_t * input, detect_param_t * param, core_param_t
 
         for (c = 0, stop = false; !stop && (c < NbCascades); c++){
 
-#if DEBUG_LEVEL > 1 //3
+#if DEBUG_LEVEL > 3
           printf("x = %d, y = %d, c = %d\n", (int)x, (int)y, (int)c);
 #endif
 

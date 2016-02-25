@@ -12,7 +12,7 @@
  *  Revision: 1.1 Tue Oct 16 13:56:53 2012 odile.rey@st.com
  *  Initial version
  ******************************************************************************/
-#define DEBUG_LEVEL 3 //1
+#define DEBUG_LEVEL 1
 
 #include "raid.h"
 #include "cascade.h"
