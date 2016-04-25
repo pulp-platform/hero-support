@@ -6,9 +6,11 @@
 
 #define DEBUG_LEVEL 0
 
+// PLATFORM is exported in sourceme.sh and passed by the Makefile
 #define ZEDBOARD 1
 #define ZC706    2
 #define MINI_ITX 3
+#define JUNO     4
 
 // mailbox communication
 #define PULP_READY 0x0
@@ -121,50 +123,89 @@
 #define L3_MEM_BASE_ADDR 0x80000000
 
 /*
- * Board selection
+ * Platform specific settings
  */
-//#define BOARD MINI_ITX/ZC706 or ZEDBOARD
-#ifndef BOARD
-#define BOARD MINI_ITX
-#endif // BOARD
+// PLATFORM is exported in sourceme.sh and passed by the Makefile
 
-/*
- * Board specific settings
- */
-#if BOARD == ZEDBOARD 
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX 
 
-// L3
-#define L3_MEM_SIZE_MB 8
-// PULP system address map
-#define PULP_H_BASE_ADDR 0x40000000 // Address at which the host sees PULP
-#define N_CLUSTERS 1
-#define N_CORES 2
-#define L2_MEM_SIZE_KB 64
-#define L1_MEM_SIZE_KB 36
-#define RAB_N_SLICES              12
+  #define PULP_H_BASE_ADDR 0x40000000 // Address at which the host sees PULP
+  #define N_CLUSTERS       1
 
-#elif BOARD == ZC706 || BOARD == MINI_ITX
+  // PULP system address map
+  #define H_GPIO_BASE_ADDR     0x51000000
+  #define CLKING_BASE_ADDR     0x51010000
+  #define STDOUT_H_BASE_ADDR   0x51020000
+  #define RAB_CONFIG_BASE_ADDR 0x51030000
+  //#define TRACE_CTRL_BASE_ADDR 0x51040000 // not yet used
+  //#define INTR_REG_BASE_ADDR   0x51050000 // not yet used on ZYNQ
 
-// L3
-#define L3_MEM_SIZE_MB 128
+  #define END_OF_COMPUTATION_IRQ 61
+  #define MAILBOX_IRQ            62
+  #define RAB_MISS_IRQ           63
+  #define RAB_MULTI_IRQ          64
+  #define RAB_PROT_IRQ           65
 
-// PULP system address map
-#define PULP_H_BASE_ADDR 0x40000000 // Address at which the host sees PULP
-#define N_CLUSTERS 1
-#define N_CORES 4
-#define L2_MEM_SIZE_KB 256
-#define L1_MEM_SIZE_KB 72
-#define RAB_N_SLICES              32
+  #if PLATFORM == ZEDBOARD
 
-#endif // BOARD
+    // L3
+    #define L3_MEM_SIZE_MB 8
+    
+    // Cluster + RAB config
+    #define N_CORES          2
+    #define L2_MEM_SIZE_KB  64
+    #define L1_MEM_SIZE_KB  36
+    #define RAB_N_SLICES    12
+  
+  #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  
+    // L3
+    #define L3_MEM_SIZE_MB 128
+    
+    // Cluster + RAB config
+    #define N_CORES 4
+    #define L2_MEM_SIZE_KB 256
+    #define L1_MEM_SIZE_KB 72
+    #define RAB_N_SLICES   32
+  
+  #endif // PLATFORM
+
+#else // JUNO
+
+  #define PULP_H_BASE_ADDR 0x60000000 // Address at which the host sees PULP
+  #define N_CLUSTERS       4
+
+  // PULP system address map
+  #define H_GPIO_BASE_ADDR     0x6E000000
+  #define CLKING_BASE_ADDR     0x6E010000
+  #define STDOUT_H_BASE_ADDR   0x6E020000
+  #define RAB_CONFIG_BASE_ADDR 0x6E030000
+  //#define TRACE_CTRL_BASE_ADDR 0x6E040000 // not yet used
+  #define INTR_REG_BASE_ADDR   0x6E050000
+
+  //#define END_OF_COMPUTATION_IRQ 61 // not used on JUNO  
+  //#define MAILBOX_IRQ            62
+  //#define RAB_MISS_IRQ           63 // not used on JUNO
+  //#define RAB_MULTI_IRQ          64 // not used on JUNO
+  //#define RAB_PROT_IRQ           65 // not used on JUNO
+  #define INTR_REG_IRQ             0xFFFFFFFF // check value in doc
+  
+  // L3
+  #define L3_MEM_SIZE_MB 128
+
+  // Cluster + RAB config
+  #define N_CORES 8
+  #define L2_MEM_SIZE_KB 256
+  #define L1_MEM_SIZE_KB 72
+  #define RAB_N_SLICES   32
+
+#endif // PLATFORM
 
 /*
  * Independent parameters
  */
-#define H_GPIO_BASE_ADDR 0x51000000
-#define H_GPIO_SIZE_B    0x1000
+#define H_GPIO_SIZE_B 0x1000
 
-#define CLKING_BASE_ADDR              0x51010000
 #define CLKING_SIZE_B                 0x1000
 #define CLKING_CONFIG_REG_0_OFFSET_B  0x200 
 #define CLKING_CONFIG_REG_2_OFFSET_B  0x208
@@ -174,17 +215,15 @@
 #define CLKING_STATUS_REG_OFFSET_B    0x4 
 
 // CLKING_INPUT_FREQ_MHZ only supports 50 and 100 at the moment
-#if BOARD == ZEDBOARD
+#if PLATFORM == ZEDBOARD
 #define CLKING_INPUT_FREQ_MHZ         50
-#elif BOARD == ZC706 || BOARD == MINI_ITX
+#elif PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == JUNO
 #define CLKING_INPUT_FREQ_MHZ         100
 #endif
 
-#define STDOUT_H_BASE_ADDR 0x51020000
-#define STDOUT_SIZE_B      0x10000
-#define STDOUT_PE_SIZE_B   0x1000
+#define STDOUT_SIZE_B    0x10000
+#define STDOUT_PE_SIZE_B 0x1000
 
-#define RAB_CONFIG_BASE_ADDR      0x51030000
 #define RAB_CONFIG_SIZE_B         0x1000
 #define RAB_N_MAPPINGS            2
 #define RAB_N_PORTS               2
@@ -222,12 +261,6 @@
 #define MAILBOX_ERROR_OFFSET_B  0x14
 #define MAILBOX_IS_OFFSET_B     0x20
 #define MAILBOX_IE_OFFSET_B     0x24
-
-#define END_OF_COMPUTATION_IRQ 61
-#define MAILBOX_IRQ            62
-#define RAB_MISS_IRQ           63
-#define RAB_MULTI_IRQ          64
-#define RAB_PROT_IRQ           65
 
 // required for RAB miss handling
 #define AXI_ID_WIDTH         10
