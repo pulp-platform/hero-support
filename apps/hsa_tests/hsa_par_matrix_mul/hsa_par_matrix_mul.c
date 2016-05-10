@@ -9,7 +9,7 @@
 
 #ifndef SIZE
 #define SIZE   16
-//#define SIZE   32
+//#define SIZE   64
 #endif
 
 int main(int argc, char **argv) {
@@ -19,11 +19,15 @@ int main(int argc, char **argv) {
    */
 
   unsigned char use_acp = 0;
+  unsigned char rab_lvl = 0;
+  unsigned char compute_err = 0;
 
-  if (argc > 2) {
+  if (argc > 3) {
     printf("Too many arguments.");
     return 0;
   }
+  if (argc > 2)
+    rab_lvl = atoi(argv[2]);
 
   if (argc > 1)
     use_acp = atoi(argv[1]);
@@ -111,12 +115,15 @@ int main(int argc, char **argv) {
   data_desc[0].ptr = (unsigned *)&mat_a;
   data_desc[0].size   = SIZE*SIZE*sizeof(int);
   data_desc[0].use_acp = use_acp;
+  data_desc[0].rab_lvl = rab_lvl;
   data_desc[1].ptr = (unsigned *)&mat_b;
   data_desc[1].size   = SIZE*SIZE*sizeof(int);
   data_desc[1].use_acp = use_acp;
+  data_desc[1].rab_lvl = rab_lvl;
   data_desc[2].ptr = (unsigned *)&mat_c;
   data_desc[2].size   = SIZE*SIZE*sizeof(int);
   data_desc[2].use_acp = use_acp;
+  data_desc[2].rab_lvl = rab_lvl;
   
   task_desc.data_desc = data_desc;
  
@@ -143,7 +150,7 @@ int main(int argc, char **argv) {
   for(i=0; i<SIZE; i++) {
     for (j=0; j<SIZE; j++) {
       if (mat_c[i][j] != mat_d[i][j])
- 	printf("ERROR: computation wrong!\n");
+        printf("ERROR: Computation Wrong!\n");
     }
   }
    

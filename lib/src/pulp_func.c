@@ -512,12 +512,12 @@ int pulp_init(PulpDev *pulp)
 
   // RAB setup
   // port 0: Host -> PULP
-  pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0);     // L2
-  //pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0); // Mailbox, Interface 0
-  pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B*2,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0); // Mailbox, Interface 0 and Interface 1
-  pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0);     // TCDM + Cluster Peripherals
+  pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);     // L2
+  //pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1); // Mailbox, Interface 0
+  pulp_rab_req(pulp,MAILBOX_H_BASE_ADDR,MAILBOX_SIZE_B*2,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1); // Mailbox, Interface 0 and Interface 1
+  pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);     // TCDM + Cluster Peripherals
   // port 1: PULP -> Host
-  //pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,RAB_MAX_DATE,RAB_MAX_DATE, 0);       // L3 memory (contiguous)
+  pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);       // L3 memory (contiguous)
   
   // enable mailbox interrupts
   pulp_write32(pulp->mailbox.v_addr,MAILBOX_IE_OFFSET_B,'b',0x6);
@@ -582,7 +582,7 @@ void pulp_mailbox_clear_is(PulpDev *pulp)
 int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
                  unsigned char prot, unsigned char port,
                  unsigned char date_exp, unsigned char date_cur,
-                 unsigned char use_acp)
+                 unsigned char use_acp, unsigned char rab_lvl)
 {
   unsigned request[3];
 
@@ -591,6 +591,7 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
   RAB_SET_PROT(request[0], prot);
   RAB_SET_PORT(request[0], port);
   RAB_SET_USE_ACP(request[0], use_acp);
+  RAB_SET_RAB_LVL(request[0], rab_lvl);
   RAB_SET_DATE_EXP(request[0], date_exp);
   RAB_SET_DATE_CUR(request[0], date_cur);
   request[1] = addr_start;
@@ -889,10 +890,12 @@ void pulp_rab_free_striped(PulpDev *pulp)
   return;
 } 
 
-void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp)
+void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl)
 {
-  unsigned int arg = (unsigned int)use_acp;
-  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,&arg);
+  unsigned rab_mh_cfg[2];
+  rab_mh_cfg[0] = (unsigned)use_acp;
+  rab_mh_cfg[1] = (unsigned)rab_mh_lvl;
+  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,rab_mh_cfg);
   
   return;
 }
@@ -987,11 +990,9 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
    */
   pulp_load_bin(pulp, task->name);
   pulp_exe_start(pulp);
-    
 #ifdef PROFILE_RAB
   pulp_write32(pulp->mailbox.v_addr,MAILBOX_WRDATA_OFFSET_B,'b',PULP_START);
 #endif
-
   // poll l2_mem address for finish
   volatile int done;
   done = 0;
@@ -1142,7 +1143,6 @@ void pulp_exe_start(PulpDev *pulp)
 {
   printf("Starting program execution.\n");
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000001);
-
   return;
 }
 
@@ -1287,6 +1287,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   unsigned * v_addr_int;
   unsigned * size_int;
   unsigned char * use_acp_int;
+  unsigned char * rab_lvl_int;
   unsigned * order;
 
   n_data_int = 1;
@@ -1339,6 +1340,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   v_addr_int = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
   size_int = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
   use_acp_int = (unsigned char *)malloc((size_t)n_idxs*sizeof(unsigned char));
+  rab_lvl_int = (unsigned char *)malloc((size_t)n_idxs*sizeof(unsigned char));
   order = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
   if (!v_addr_int | !size_int | !order) {
     printf("Malloc failed for RAB setup.\n");
@@ -1375,25 +1377,27 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   v_addr_int[0] = (unsigned)task->data_desc[order[0]].ptr; 
   size_int[0] = (unsigned)task->data_desc[order[0]].size;
   use_acp_int[0] = task->data_desc[order[0]].use_acp;
+  rab_lvl_int[0] = task->data_desc[order[0]].rab_lvl;
   for (i=1;i<n_idxs;i++) {
     j = order[i];
     gap_size = (unsigned)task->data_desc[j].ptr - (v_addr_int[n_data_int-1]
                                                    + size_int[n_data_int-1]);
     // !!!!TO DO: check protections, check dates!!!
     if ( gap_size > RAB_CONFIG_MAX_GAP_SIZE_B
-         || task->data_desc[j].use_acp != use_acp_int[n_data_int-1]) { 
-      // the gap is too large or different ACP setting is used, create a new mapping
+         || task->data_desc[j].use_acp != use_acp_int[n_data_int-1]
+         || task->data_desc[j].rab_lvl != rab_lvl_int[n_data_int-1]) { 
+      // the gap is too large or different ACP setting is used or different RAB level is requested, create a new mapping
       n_data_int++;
       v_addr_int[n_data_int-1] = (unsigned)task->data_desc[j].ptr;
       size_int[n_data_int-1] = (unsigned)task->data_desc[j].size;
       use_acp_int[n_data_int-1] = task->data_desc[j].use_acp;
+      rab_lvl_int[n_data_int-1] = task->data_desc[j].rab_lvl;
     }
     else {
       // extend the previous mapping
       size_int[n_data_int-1] += (gap_size + task->data_desc[j].size);  
     }
   }
-
   // set up the RAB
   if (DEBUG_LEVEL > 2) {
     printf("Requesting %d remapping(s):\n",n_data_int);
@@ -1403,7 +1407,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
       printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
       usleep(1000000);
     }
-    pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur, use_acp_int[i]);
+    pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur, use_acp_int[i], rab_lvl_int[i]);
   }
 
   // set up RAB stripes
@@ -1424,11 +1428,11 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
     if ( strcmp(task->name, "face_detect") )
       printf("ERROR: Unknown task name %s\n",task->name);
   }
-
   // free memory
   free(v_addr_int);
   free(size_int);
   free(use_acp_int);
+  free(rab_lvl_int);
   free(order);
   
   return 0;

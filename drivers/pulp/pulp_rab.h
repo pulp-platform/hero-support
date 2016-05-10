@@ -39,6 +39,9 @@
 #define RAB_SLICE_FLAGS_PROT      3
 #define RAB_SLICE_FLAGS_USE_ACP   1
 
+#define TLBL2_NUM_ENTRIES_PER_SET 32
+#define TLBL2_NUM_SETS 32
+
 // type definitions
 typedef struct {
   unsigned rab_mapping;
@@ -77,6 +80,25 @@ typedef struct {
   unsigned stripe_idx;
 } RabStripeReq;
 
+// L2TLB structs
+typedef struct {
+  unsigned char flags; 
+  unsigned pfn_v; 
+  unsigned pfn_p; 
+  //  unsigned page_idx;
+  struct page * page_ptr;   
+} TlbL2Entry_t;
+
+typedef struct {
+  TlbL2Entry_t entry[TLBL2_NUM_ENTRIES_PER_SET];
+  unsigned char next_entry_idx;
+  unsigned char is_full;
+} TlbL2Set_t;
+
+typedef struct {
+  TlbL2Set_t set[TLBL2_NUM_SETS];
+} TlbL2_t;
+
 
 // methods declarations
 void pulp_rab_init(void);
@@ -90,5 +112,16 @@ int  pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct p
 
 void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping);
 void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping);
+
+void pulp_l2tlb_init_zero(void *rab_config, char port);
+int pulp_l2tlb_setup_entry(void *rab_config, TlbL2Entry_t *tlb_entry, char port, char enable_replace);
+int pulp_l2tlb_check_availability(TlbL2Entry_t *tlb_entry, char port);
+
+int pulp_l2tlb_invalidate_all_entries(void *rab_config, char port);
+int pulp_l2tlb_invalidate_entry(void *rab_config, char port, int set_num, int entry_num);
+int pulp_l2tlb_print_all_entries(char port);
+int pulp_l2tlb_print_valid_entries(char port);
+int pulp_rab_num_free_slices(RabSliceReq *rab_slice_req);
+
 
 #endif/*_PULP_RAB_H_*/

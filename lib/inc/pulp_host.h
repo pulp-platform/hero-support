@@ -62,19 +62,26 @@
   ( BF_SET(request, use_acp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
 	   RAB_CONFIG_N_BITS_USE_ACP) )
 
+#define RAB_GET_RAB_LVL(rab_lvl, request) \
+  ( rab_lvl = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+		       + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_RAB_LVL) )
+#define RAB_SET_RAB_LVL(request, rab_lvl) \
+  ( BF_SET(request, rab_lvl, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
+	         + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_RAB_LVL) )
+
 #define RAB_GET_DATE_EXP(date_exp, request) \
   ( date_exp = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-           + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_DATE) )
+           + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_RAB_LVL, RAB_CONFIG_N_BITS_DATE) )
 #define RAB_SET_DATE_EXP(request, date_exp) \
   ( BF_SET(request, date_exp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	         + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_DATE) )
+	         + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_RAB_LVL, RAB_CONFIG_N_BITS_DATE) )
 
 #define RAB_GET_DATE_CUR(date_cur, request) \
   ( date_cur = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-		       + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_DATE) )
+		       + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_RAB_LVL, RAB_CONFIG_N_BITS_DATE) )
 #define RAB_SET_DATE_CUR(request, date_cur) \
   ( BF_SET(request, date_cur, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	         + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_DATE) )
+	         + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_RAB_LVL, RAB_CONFIG_N_BITS_DATE) )
 
 // for RAB striping - ATTENTION: not compatible with date_exp, date_cur!!!
 #define RAB_GET_OFFLOAD_ID(offload_id, request) \
@@ -185,11 +192,12 @@
 #define STDOUT_PE_SIZE_B   0x1000
 
 #define RAB_CONFIG_BASE_ADDR      0x51030000
-#define RAB_CONFIG_SIZE_B         0x1000
+#define RAB_CONFIG_SIZE_B         0x10000
 #define RAB_N_MAPPINGS            2
 #define RAB_N_PORTS               2
 #define RAB_CONFIG_N_BITS_PORT    1
 #define RAB_CONFIG_N_BITS_USE_ACP 1
+#define RAB_CONFIG_N_BITS_RAB_LVL 2 
 #define RAB_CONFIG_N_BITS_PROT    3
 #define RAB_CONFIG_N_BITS_DATE    8
 #define RAB_CONFIG_N_BITS_PAGE    16
@@ -279,7 +287,7 @@
 
 #define MAX_STRIPE_SIZE 0x4000
 
-#define MEM_SHARING 3
+//#define MEM_SHARING 3
 
 // needed for ROD, CT, JPEG
 //#define PROFILE

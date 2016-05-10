@@ -43,6 +43,7 @@ typedef struct {
   size_t size;
   int type;
   unsigned char use_acp;
+  unsigned char rab_lvl;
 } DataDesc;
 
 // task descriptor created by the compiler
@@ -77,7 +78,7 @@ void pulp_stdout_clear(PulpDev *pulp, unsigned pe);
 
 int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
 		         unsigned char prot, unsigned char port,
-                 unsigned char date_exp, unsigned char date_cur, unsigned char use_acp);
+                 unsigned char date_exp, unsigned char date_cur, unsigned char use_acp, unsigned char rab_lvl);
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur);
 
 int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
@@ -85,7 +86,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
                          unsigned char prot, unsigned char port);
 void pulp_rab_free_striped(PulpDev *pulp);
 
-void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp);
+void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
 void pulp_rab_mh_disable(PulpDev *pulp);
 
 int pulp_dma_xfer(PulpDev *pulp, 

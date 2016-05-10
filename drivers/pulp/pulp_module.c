@@ -16,7 +16,7 @@
 #include <linux/ioctl.h>        /* ioctl */
 #include <linux/slab.h>         /* kmalloc */
 #include <linux/errno.h>        /* errno */
-
+#include <linux/delay.h>  /* msleep */
 #include <linux/sched.h>
 #include <linux/delay.h>        /* udelay */
 #include <linux/device.h>       // class_create, device_create
@@ -115,6 +115,7 @@ static unsigned rab_mh_addr[RAB_MH_FIFO_DEPTH];
 static unsigned rab_mh_id[RAB_MH_FIFO_DEPTH];
 static unsigned rab_mh_date;
 static unsigned rab_mh_use_acp = 0;
+static unsigned rab_mh_lvl = 0;
 #ifdef PROFILE_RAB_MH
 static unsigned clk_cntr_resp_tmp[N_CORES];
 static unsigned clk_cntr_resp[N_CORES];
@@ -123,7 +124,6 @@ static unsigned clk_cntr_refill[N_CORES];
 static unsigned n_misses = 0;
 static unsigned n_first_misses = 0;
 #endif
-
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
 static DmaCleanup pulp_dma_cleanup[2];
@@ -180,11 +180,6 @@ static int __init pulp_init(void)
    * ioremap
    *
    **********/
-  my_dev.rab_config = ioremap_nocache(RAB_CONFIG_BASE_ADDR, RAB_CONFIG_SIZE_B);
-  printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.rab_config); 
-  pulp_rab_init();
-  rab_mapping_active = 0;
 
   my_dev.mailbox = ioremap_nocache(MAILBOX_H_BASE_ADDR, MAILBOX_SIZE_B);
   printk(KERN_INFO "PULP: Mailbox mapped to virtual kernel space @ %#lx.\n",
@@ -201,7 +196,7 @@ static int __init pulp_init(void)
       goto fail_ioremap;
     }
   }
-    
+   
   my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
   printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
          (long unsigned int) my_dev.mpcore); 
@@ -211,6 +206,14 @@ static int __init pulp_init(void)
          (long unsigned int) my_dev.gpio); 
   // remove GPIO reset, the driver and the runtime use the SLCR resets
   iowrite32(0xC0000000,(void *)((unsigned)my_dev.gpio+0x8));
+
+  my_dev.rab_config = ioremap_nocache(RAB_CONFIG_BASE_ADDR, RAB_CONFIG_SIZE_B);
+  printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",
+         (long unsigned int) my_dev.rab_config); 
+  pulp_rab_init();
+  rab_mapping_active = 0;
+  pulp_l2tlb_init_zero(my_dev.rab_config, 0);
+  pulp_l2tlb_init_zero(my_dev.rab_config, 1);
 
   // PULP timer used for RAB performance monitoring
   my_dev.clusters = ioremap_nocache(CLUSTERS_H_BASE_ADDR, CLUSTERS_SIZE_B);
@@ -236,8 +239,8 @@ static int __init pulp_init(void)
   }
   printk(KERN_INFO "PULP: Shared L3 memory (DRAM) mapped to virtual kernel space @ %#lx.\n",
          (long unsigned int) my_dev.l3_mem);
- 
-  /*********************
+
+  /***********************
    *
    * interrupts
    *
@@ -556,7 +559,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   
   // map physical kernel space addresses to virtual user space addresses
   remap_pfn_range(vma, vma->vm_start, physical, vsize, vma->vm_page_prot);
-  
+
   return 0;
 }
 
@@ -806,7 +809,6 @@ irqreturn_t pulp_isr_rab(int irq, void *ptr)
 #endif
       // for debugging
       //pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
-
       schedule_work(&rab_mh_w);
     }
   }
@@ -817,11 +819,13 @@ irqreturn_t pulp_isr_rab(int irq, void *ptr)
     do_gettimeofday(&time);
     printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
            rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-
     // for debugging
-    pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+    //    pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+    if (RAB_MULTI_IRQ == irq){
+      pulp_l2tlb_print_valid_entries(1);
+    }
+      
   }
-
   return IRQ_HANDLED;
 }
 
@@ -878,6 +882,16 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   unsigned char dma_cmd;
   unsigned addr_src, addr_dst;
 
+  // needed for L2TLB
+  unsigned char rab_use_l1;
+  unsigned * pfn_v_vec;
+  unsigned * pfn_p_vec;
+  TlbL2Entry_t l2tlb_entry_request;
+  TlbL2Entry_t *l2tlb_entry = &l2tlb_entry_request;
+  unsigned n_free_slices;
+
+  unsigned char rab_lvl;
+
 #ifdef PROFILE_DMA
   ktime_t time_dma_start, time_dma_end;
   unsigned time_dma_acc;
@@ -911,6 +925,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     ret = 1;
     byte = 0;
     n_bytes_left = 3*sizeof(unsigned); 
+    
     while (ret > 0) {
       ret = __copy_from_user((void *)((char *)request+byte),
                              (void __user *)((char *)arg+byte), n_bytes_left);
@@ -926,9 +941,12 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     RAB_GET_PROT(rab_slice_req->prot, request[0]);    
     RAB_GET_PORT(rab_slice_req->rab_port, request[0]);
     RAB_GET_USE_ACP(rab_slice_req->use_acp, request[0]);
+    RAB_GET_RAB_LVL(rab_lvl, request[0]);
     RAB_GET_OFFLOAD_ID(rab_slice_req->rab_mapping, request[0]);
     RAB_GET_DATE_EXP(rab_slice_req->date_exp, request[0]);
     RAB_GET_DATE_CUR(rab_slice_req->date_cur, request[0]);
+
+    
 
     rab_slice_req->addr_start = request[1];
     size_b = request[2];
@@ -938,6 +956,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     if (DEBUG_LEVEL_RAB > 1) {
       printk(KERN_INFO "PULP: New RAB request:\n");
+      printk(KERN_INFO "PULP: addr start = %#x.\n",rab_slice_req->addr_start);
+      printk(KERN_INFO "PULP: addr end = %#x.\n",rab_slice_req->addr_end);
       printk(KERN_INFO "PULP: rab_port = %d.\n",rab_slice_req->rab_port);
       printk(KERN_INFO "PULP: use_acp = %d.\n",rab_slice_req->use_acp);
       printk(KERN_INFO "PULP: date_exp = %d.\n",rab_slice_req->date_exp);
@@ -952,8 +972,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     else
       rab_slice_req->flags = 0x4;
     
+    rab_use_l1 = 0;
     if (rab_slice_req->flags & 0x1) { // constant remapping
-
       switch(rab_slice_req->addr_start) {
       
       case MAILBOX_H_BASE_ADDR:
@@ -973,9 +993,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }
 
       len = 1;
+      rab_use_l1 = 1;
     }
-    else { // address translation required
-            
+    else { // address translation required    
       // number of pages
       len = pulp_mem_get_num_pages(rab_slice_req->addr_start,size_b);
       
@@ -985,90 +1005,133 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         printk(KERN_WARNING "PULP: Locking of user-space pages failed.\n");
         return err;
       }
- 
-      // virtual to physcial address translation + segmentation
-      n_segments = pulp_mem_map_sg(&addr_start_vec, &addr_end_vec, &addr_offset_vec,
-                                   &page_idxs_start, &page_idxs_end, &pages, len, 
-                                   rab_slice_req->addr_start, rab_slice_req->addr_end);
-      if ( n_segments < 1 ) {
-        printk(KERN_WARNING "PULP: Virtual to physical address translation failed.\n");
-        return n_segments;
-      }
+      
+      // where to place the mapping ?
+      if (rab_lvl == 0) {
+        // Check the number of segments and the number of available slices.
+        n_segments = pulp_mem_check_num_sg(&pages, len);
+        n_free_slices = pulp_rab_num_free_slices(rab_slice_req);
+        if (n_free_slices < n_segments)
+          rab_use_l1 = 0; // use L2 if number of free slices in L1 is not sufficient.
+        else
+          rab_use_l1 = 1;
+      } else {
+        rab_use_l1 = rab_lvl % 2;
+      }        
     }
 
-    /*
-     *  setup the slices
-     */ 
-    // to do: protect with semaphore!?
-    for (i=0;i<n_segments;i++) {
-      
-      if ( !(rab_slice_req->flags & 0x1) ) {
-        rab_slice_req->addr_start = addr_start_vec[i];
-        rab_slice_req->addr_end = addr_end_vec[i];
-        rab_slice_req->addr_offset = addr_offset_vec[i];
-        rab_slice_req->page_idx_start = page_idxs_start[i];
-        rab_slice_req->page_idx_end = page_idxs_end[i];
+    if (rab_use_l1 == 1) { // Use L1 TLB
+
+      if ( !(rab_slice_req->flags & 0x1) ) { // not constant remapping
+        // virtual to physcial address translation + segmentation
+        n_segments = pulp_mem_map_sg(&addr_start_vec, &addr_end_vec, &addr_offset_vec,
+                                     &page_idxs_start, &page_idxs_end, &pages, len, 
+                                     rab_slice_req->addr_start, rab_slice_req->addr_end);
+        if ( n_segments < 1 ) {
+          printk(KERN_WARNING "PULP: Virtual to physical address translation failed.\n");
+          return n_segments;
+        }
       }
 
-      // some requests need to be set up for every mapping
-      for (j=0; j<RAB_N_MAPPINGS; j++) {
-
-        if ( rab_slice_req->flags & 0x4 )
-          rab_slice_req->rab_mapping = j;
-
-        if ( rab_slice_req->rab_mapping == j ) {
-  
-          //  check for free field in page_ptrs list
-          if ( !i ) {
-            err = pulp_rab_page_ptrs_get_field(rab_slice_req);
+      /*
+       *  setup the slices
+       */ 
+      // to do: protect with semaphore!?
+      for (i=0;i<n_segments;i++) {
+        
+        if ( !(rab_slice_req->flags & 0x1) ) {
+          rab_slice_req->addr_start = addr_start_vec[i];
+          rab_slice_req->addr_end = addr_end_vec[i];
+          rab_slice_req->addr_offset = addr_offset_vec[i];
+          rab_slice_req->page_idx_start = page_idxs_start[i];
+          rab_slice_req->page_idx_end = page_idxs_end[i];
+        }
+        
+        // some requests need to be set up for every mapping
+        for (j=0; j<RAB_N_MAPPINGS; j++) {
+          
+          if ( rab_slice_req->flags & 0x4 )
+            rab_slice_req->rab_mapping = j;
+          
+          if ( rab_slice_req->rab_mapping == j ) {
+            
+            //  check for free field in page_ptrs list
+            if ( !i ) {
+              err = pulp_rab_page_ptrs_get_field(rab_slice_req);
+              if (err) {
+                return err;
+              }
+            }
+            
+            // get a free slice
+            err = pulp_rab_slice_get(rab_slice_req);
+            if (err) {
+              return err;
+            }
+            
+            // free memory of slices to be re-configured
+            pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
+            
+            // setup slice
+            err = pulp_rab_slice_setup(my_dev.rab_config, rab_slice_req, pages);
             if (err) {
               return err;
             }
           }
-    
-          // get a free slice
-          err = pulp_rab_slice_get(rab_slice_req);
-          if (err) {
-            return err;
-          }
-    
-          // free memory of slices to be re-configured
-          pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
-      
-          // setup slice
-          err = pulp_rab_slice_setup(my_dev.rab_config, rab_slice_req, pages);
-          if (err) {
-            return err;
+        }
+
+        // flush caches
+        if ( !(rab_slice_req->flags & 0x1) && !(rab_slice_req->use_acp) ) {
+          for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
+            // flush the whole page?
+            if (!i) 
+              offset_start = BF_GET(addr_start_vec[i],0,PAGE_SHIFT);
+            else
+              offset_start = 0;
+            
+            if (i == (n_segments-1) )
+              offset_end = BF_GET(addr_end_vec[i],0,PAGE_SHIFT);
+            else 
+              offset_end = PAGE_SIZE;
+            
+            pulp_mem_cache_flush(pages[j],offset_start,offset_end);
           }
         }
-      }
-
-      // flush caches
-      if ( !(rab_slice_req->flags & 0x1) && !(rab_slice_req->use_acp) ) {
-        for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
+      }      
+    } else { // Use L2 TLB
+      // Virtual to physical page frame number translation for each page
+      err = pulp_mem_l2tlb_get_entries(&pfn_v_vec, &pfn_p_vec, &pages, len, rab_slice_req->addr_start);
+      l2tlb_entry->flags = rab_slice_req->prot + (rab_slice_req->use_acp << 3);
+      for (i=0; i<len; i++) {
+        l2tlb_entry->pfn_v = pfn_v_vec[i];
+        l2tlb_entry->pfn_p = pfn_p_vec[i];
+        l2tlb_entry->page_ptr = pages[i];
+        //        l2tlb_entry->page_idx = i;
+        
+        // Setup entry
+        err = pulp_l2tlb_setup_entry(my_dev.rab_config, l2tlb_entry, rab_slice_req->rab_port, 0);
+        
+        // flush caches
+        if ( !(rab_slice_req->flags & 0x1) && !(rab_slice_req->use_acp) ) {
           // flush the whole page?
-          if (!i) 
-            offset_start = BF_GET(addr_start_vec[i],0,PAGE_SHIFT);
-          else
-            offset_start = 0;
-
-          if (i == (n_segments-1) )
-            offset_end = BF_GET(addr_end_vec[i],0,PAGE_SHIFT);
-          else 
-            offset_end = PAGE_SIZE;
-
-          pulp_mem_cache_flush(pages[j],offset_start,offset_end);
+          pulp_mem_cache_flush(pages[i],0,PAGE_SIZE);
         }
-      }
+
+      } // for (i=0; i<len; i++) {
+      kfree(pages); // No need of pages since we have the individual page ptr for L2 entry in page_ptr.
     }
-    
-    if ( !(rab_slice_req->flags & 0x1) ) {
+
+    if ( (!(rab_slice_req->flags & 0x1)) && rab_use_l1) {
       // kfree
       kfree(addr_start_vec);
       kfree(addr_end_vec);
       kfree(addr_offset_vec);
       kfree(page_idxs_start);
       kfree(page_idxs_end);
+    }    
+    if (rab_use_l1 == 0) {
+      kfree(pfn_v_vec);
+      kfree(pfn_p_vec);
     }
     break;
 
@@ -1105,9 +1168,12 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     }
     // reset rab_mapping_active
     rab_mapping_active = 0;
-
+    
     // for debugging
     //pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+
+    // Free L2TLB    
+    pulp_l2tlb_invalidate_all_entries(my_dev.rab_config, 1);
 
     break;
     
@@ -1741,10 +1807,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     // get slice data from user space - arg already checked above
     ret = 1;
     byte = 0;
-    n_bytes_left = sizeof(unsigned); 
+    n_bytes_left = 2*sizeof(unsigned); 
     while (ret > 0) {
-      ret = __copy_from_user((void *)((char *)rab_mh_use_acp+byte),
+      ret = __copy_from_user((void *)((char *)request+byte),
                              (void __user *)((char *)arg+byte), n_bytes_left);
+      
       if (ret < 0) {
         printk(KERN_WARNING "PULP: Cannot copy ACP flag from user space.\n");
         return ret;
@@ -1752,6 +1819,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       byte += (n_bytes_left - ret);
       n_bytes_left = ret;
     }
+    rab_mh_use_acp = request[0];
+    rab_mh_lvl = request[1];
 
     // create workqueue for RAB miss handling
     //rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
@@ -1760,7 +1829,6 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       printk(KERN_WARNING "PULP: Allocation of workqueue for RAB miss handling failed.\n");
       return -ENOMEM;
     }
-
     // initialize the workqueue
     INIT_WORK(&rab_mh_w, (void *)pulp_rab_handle_miss);
     
@@ -1937,6 +2005,8 @@ static void pulp_rab_handle_miss(unsigned unused)
   int err, i, j, handled, result;
   unsigned id, id_pe, id_cluster;
   unsigned addr_start, addr_phys;
+  
+  unsigned cycles;
     
   // what get_user_pages needs
   unsigned long start;
@@ -1946,15 +2016,19 @@ static void pulp_rab_handle_miss(unsigned unused)
   // needed for RAB management
   RabSliceReq rab_slice_request;
   RabSliceReq *rab_slice_req = &rab_slice_request;
+  // needed for L2TLB
+  TlbL2Entry_t l2tlb_entry_request;
+  TlbL2Entry_t *l2tlb_entry = &l2tlb_entry_request;
+  int rab_use_l1=1;
+  int err_l2 = 0;
 
   if (DEBUG_LEVEL_RAB_MH > 1)
     printk(KERN_INFO "PULP: RAB miss handling routine started.\n");
-
+  
   // empty miss-handling FIFOs
   for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
     rab_mh_addr[i] = ioread32((void *)((unsigned)my_dev.rab_config+RAB_MH_ADDR_FIFO_OFFSET_B));
     rab_mh_id[i]   = ioread32((void *)((unsigned)my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B));
-  
     // detect empty FIFOs
     if ( (rab_mh_addr[i] & 0x1) || (rab_mh_id[i] & 0x80000000) )
       break;
@@ -1987,9 +2061,8 @@ static void pulp_rab_handle_miss(unsigned unused)
          ( (id_cluster < 0) || (id_cluster > (N_CLUSTERS-1)) ) || 
          ( (id_pe < 0) || (id_pe > N_CORES-1) ) ) {
       printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces. id = %#x | addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
-
       // for debugging
-      pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+      //      pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
 
       continue;
     }
@@ -2022,7 +2095,7 @@ static void pulp_rab_handle_miss(unsigned unused)
     // check if there has been a miss to the same page before
     handled = 0;    
     for (j=0; j<i; j++) {
-      if ( addr_start == rab_mh_addr[j] ) {
+      if ( addr_start == rab_mh_addr[j]) {
         handled = 1;
         if (DEBUG_LEVEL_RAB_MH > 0) {
           printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
@@ -2111,26 +2184,47 @@ static void pulp_rab_handle_miss(unsigned unused)
 
       rab_slice_req->rab_mapping = rab_mapping_active;
 
-      // check for free field in page_ptrs list
-      err = pulp_rab_page_ptrs_get_field(rab_slice_req);
-      if (err) {
-        goto miss_handling_error;
+      // Check which TLB level to use.
+      // If rab_mh_lvl is 0, enter the entry in L1 if free slice is available. If not, enter in L2.
+      if (rab_mh_lvl == 2) {
+        rab_use_l1 = 0;
+      } else {
+        // get a free slice
+        rab_use_l1 = 1;
+        err = pulp_rab_slice_get(rab_slice_req);
+        if (err) {
+          if (rab_mh_lvl == 1) {
+            printk(KERN_WARNING "PULP: RAB miss handling error 2.\n");
+            goto miss_handling_error;
+          }
+          else
+            rab_use_l1 = 0;
+        }
       }
-
-      // get a free slice
-      err = pulp_rab_slice_get(rab_slice_req);
-      if (err) {
-        goto miss_handling_error;
-      }
- 
-      // free memory of slices to be re-configured
-      pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
-
-      // setup slice
-      err = pulp_rab_slice_setup(my_dev.rab_config, rab_slice_req, pages);
-      if (err) {
-        goto miss_handling_error;
-      }
+      err = 0;
+      if (rab_use_l1==0) { // Use L2
+        l2tlb_entry->flags = rab_slice_req->prot + (rab_slice_req->use_acp << 3);
+        l2tlb_entry->pfn_v = (unsigned)start >> PAGE_SHIFT;
+        l2tlb_entry->pfn_p = addr_phys >> PAGE_SHIFT;
+        l2tlb_entry->page_ptr = pages[0];
+        err_l2 = pulp_l2tlb_setup_entry(my_dev.rab_config, l2tlb_entry, rab_slice_req->rab_port, 1);   
+      } else { // Use L1
+        // check for free field in page_ptrs list
+        err = pulp_rab_page_ptrs_get_field(rab_slice_req);
+        if (err) {
+          printk(KERN_WARNING "PULP: RAB miss handling error 0.\n");
+          goto miss_handling_error;
+        } 
+        // free memory of slices to be re-configured
+        pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
+        
+        // setup slice
+        err = pulp_rab_slice_setup(my_dev.rab_config, rab_slice_req, pages);
+        if (err) {
+          printk(KERN_WARNING "PULP: RAB miss handling error 1.\n");
+          goto miss_handling_error;
+        }        
+      } // if (rab_use_l1==0)
 
 #ifdef PROFILE_RAB_MH
       arm_clk_cntr_value_start = arm_clk_cntr_value;
@@ -2144,12 +2238,16 @@ static void pulp_rab_handle_miss(unsigned unused)
       if (!rab_mh_use_acp)
         pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
 
-      if (rab_slice_req->rab_slice == (RAB_N_SLICES - 1)) {
-        rab_mh_date++;
-        if (rab_mh_date > RAB_MAX_DATE_MH)
-          rab_mh_date = 0;
-        //printk(KERN_INFO "rab_mh_date = %d\n",rab_mh_date);
-      }
+      if (rab_use_l1 == 0)
+        kfree(pages);
+
+      if (rab_mh_lvl == 1)
+        if (rab_slice_req->rab_slice == (RAB_N_SLICES - 1)) {
+          rab_mh_date++;
+          if (rab_mh_date > RAB_MAX_DATE_MH)
+            rab_mh_date = 0;
+          //printk(KERN_INFO "rab_mh_date = %d\n",rab_mh_date);
+        }
 
 #ifdef PROFILE_RAB_MH
       arm_clk_cntr_value_start = arm_clk_cntr_value;
@@ -2162,7 +2260,6 @@ static void pulp_rab_handle_miss(unsigned unused)
     
     // // for debugging
     // pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
-    // msleep(1000);
 
     // wake up the sleeping PE
     iowrite32(BIT_N_SET(id_pe),
@@ -2181,10 +2278,10 @@ static void pulp_rab_handle_miss(unsigned unused)
     // update counters in shared memory
     iowrite32(n_misses, (void *)((unsigned)my_dev.l3_mem+N_MISSES_OFFSET_B));
 #endif
-    
     // error handling
   miss_handling_error:
     if (err) {
+      printk(KERN_INFO "PULP: In miss handling error\n");
       printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
 
       // for debugging
@@ -2194,6 +2291,7 @@ static void pulp_rab_handle_miss(unsigned unused)
   }
   if (DEBUG_LEVEL_RAB_MH > 1)
     printk(KERN_INFO "PULP: RAB miss handling routine finished.\n");
+
  
 #ifdef PROFILE_RAB_MH
   // update counters in shared memory
@@ -2216,7 +2314,6 @@ static void pulp_rab_handle_miss(unsigned unused)
   }
 
 #endif
-
 }
 
 MODULE_LICENSE("GPL");
