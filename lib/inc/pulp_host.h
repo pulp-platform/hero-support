@@ -109,18 +109,16 @@
 
 // ioctl setup
 #define PULP_IOCTL_MAGIC 'p'
-#define PULP_IOCTL_RAB_REQ   _IOW(PULP_IOCTL_MAGIC,0xB0,int)
-#define PULP_IOCTL_RAB_FREE  _IOW(PULP_IOCTL_MAGIC,0xB1,int)
+#define PULP_IOCTL_RAB_REQ   _IOW(PULP_IOCTL_MAGIC,0xB0,unsigned) // ptr
+#define PULP_IOCTL_RAB_FREE  _IOW(PULP_IOCTL_MAGIC,0xB1,unsigned) // value
 
-#define PULP_IOCTL_RAB_REQ_STRIPED  _IOW(PULP_IOCTL_MAGIC,0xB2,int)
-#define PULP_IOCTL_RAB_FREE_STRIPED _IOW(PULP_IOCTL_MAGIC,0xB3,int)
+#define PULP_IOCTL_RAB_REQ_STRIPED  _IOW(PULP_IOCTL_MAGIC,0xB2,unsigned) // ptr
+#define PULP_IOCTL_RAB_FREE_STRIPED _IOW(PULP_IOCTL_MAGIC,0xB3,unsigned) // value
 
-#define PULP_IOCTL_RAB_MH_ENA  _IOW(PULP_IOCTL_MAGIC,0xB4,unsigned)
+#define PULP_IOCTL_RAB_MH_ENA  _IOW(PULP_IOCTL_MAGIC,0xB4,unsigned) // value
 #define PULP_IOCTL_RAB_MH_DIS  _IO(PULP_IOCTL_MAGIC,0xB5)
 
-#define PULP_IOCTL_DMAC_XFER _IOW(PULP_IOCTL_MAGIC,0xB6,int)
-
-#define L3_MEM_BASE_ADDR 0x80000000
+#define PULP_IOCTL_DMAC_XFER _IOW(PULP_IOCTL_MAGIC,0xB6,unsigned) // ptr
 
 /*
  * Platform specific settings
@@ -129,10 +127,9 @@
 
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX 
 
-  #define PULP_H_BASE_ADDR 0x40000000 // Address at which the host sees PULP
   #define N_CLUSTERS       1
 
-  // PULP system address map
+  // PULP address map
   #define H_GPIO_BASE_ADDR     0x51000000
   #define CLKING_BASE_ADDR     0x51010000
   #define STDOUT_H_BASE_ADDR   0x51020000
@@ -140,13 +137,19 @@
   //#define TRACE_CTRL_BASE_ADDR 0x51040000 // not yet used
   //#define INTR_REG_BASE_ADDR   0x51050000 // not yet used on ZYNQ
 
+  // IRQs
   #define END_OF_COMPUTATION_IRQ 61
-  #define MAILBOX_IRQ            62
+  #define MBOX_IRQ               62
   #define RAB_MISS_IRQ           63
   #define RAB_MULTI_IRQ          64
   #define RAB_PROT_IRQ           65
+  //#define RAB_MHR_FULL_IRQ       66 // not yet used
+
+  #define PULP_DEFAULT_FREQ_MHZ 50
 
   #if PLATFORM == ZEDBOARD
+
+    #define CLKING_INPUT_FREQ_MHZ 50
 
     // L3
     #define L3_MEM_SIZE_MB 8
@@ -159,6 +162,8 @@
   
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
   
+    #define CLKING_INPUT_FREQ_MHZ 100
+
     // L3
     #define L3_MEM_SIZE_MB 128
     
@@ -172,10 +177,9 @@
 
 #else // JUNO
 
-  #define PULP_H_BASE_ADDR 0x60000000 // Address at which the host sees PULP
   #define N_CLUSTERS       4
 
-  // PULP system address map
+  // PULP address map
   #define H_GPIO_BASE_ADDR     0x6E000000
   #define CLKING_BASE_ADDR     0x6E010000
   #define STDOUT_H_BASE_ADDR   0x6E020000
@@ -183,13 +187,20 @@
   //#define TRACE_CTRL_BASE_ADDR 0x6E040000 // not yet used
   #define INTR_REG_BASE_ADDR   0x6E050000
 
-  //#define END_OF_COMPUTATION_IRQ 61 // not used on JUNO  
-  //#define MAILBOX_IRQ            62
-  //#define RAB_MISS_IRQ           63 // not used on JUNO
-  //#define RAB_MULTI_IRQ          64 // not used on JUNO
-  //#define RAB_PROT_IRQ           65 // not used on JUNO
-  #define INTR_REG_IRQ             0xFFFFFFFF // check value in doc
-  
+  #define INTR_REG_SIZE_B 0x1000
+
+  #define INTR_EOC_0              0
+  #define INTR_EOC_N   N_CLUSTERS-1 // max 15
+
+  #define INTR_MBOX              16
+  #define INTR_RAB_MISS          17
+  #define INTR_RAB_MULTI         18
+  #define INTR_RAB_PROT          19
+  #define INTR_RAB_MHR_FULL      20
+
+  #define PULP_DEFAULT_FREQ_MHZ 25
+  #define CLKING_INPUT_FREQ_MHZ 100
+
   // L3
   #define L3_MEM_SIZE_MB 128
 
@@ -214,12 +225,7 @@
 #define CLKING_CONFIG_REG_23_OFFSET_B 0x25C 
 #define CLKING_STATUS_REG_OFFSET_B    0x4 
 
-// CLKING_INPUT_FREQ_MHZ only supports 50 and 100 at the moment
-#if PLATFORM == ZEDBOARD
-#define CLKING_INPUT_FREQ_MHZ         50
-#elif PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == JUNO
-#define CLKING_INPUT_FREQ_MHZ         100
-#endif
+#define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
 
 #define STDOUT_SIZE_B    0x10000
 #define STDOUT_PE_SIZE_B 0x1000
@@ -253,14 +259,14 @@
 
 #define SOC_PERIPHERALS_SIZE_B 0x50000
 
-#define MAILBOX_SIZE_B          0x1000 // Interface 0 only
-#define MAILBOX_FIFO_DEPTH      16
-#define MAILBOX_WRDATA_OFFSET_B 0x0 
-#define MAILBOX_RDDATA_OFFSET_B 0x8 
-#define MAILBOX_STATUS_OFFSET_B 0x10
-#define MAILBOX_ERROR_OFFSET_B  0x14
-#define MAILBOX_IS_OFFSET_B     0x20
-#define MAILBOX_IE_OFFSET_B     0x24
+#define MBOX_SIZE_B          0x1000 // Interface 0 only
+#define MBOX_FIFO_DEPTH      16
+#define MBOX_WRDATA_OFFSET_B 0x0 
+#define MBOX_RDDATA_OFFSET_B 0x8 
+#define MBOX_STATUS_OFFSET_B 0x10
+#define MBOX_ERROR_OFFSET_B  0x14
+#define MBOX_IS_OFFSET_B     0x20
+#define MBOX_IE_OFFSET_B     0x24
 
 // required for RAB miss handling
 #define AXI_ID_WIDTH         10
@@ -271,32 +277,53 @@
 /*
  * Dependent parameters
  */
-#define L3_MEM_SIZE_B    (L3_MEM_SIZE_MB*1024*1024)
-#define L3_MEM_H_BASE_ADDR \
-  (DRAM_SIZE_MB - L3_MEM_SIZE_MB)*1024*1024 // = 0x1C000000 for 512 MB DRAM and 64 MB L3
+#define L1_MEM_SIZE_B   (L1_MEM_SIZE_KB*1024)
+#define L2_MEM_SIZE_B   (L2_MEM_SIZE_KB*1024)
+#define L3_MEM_SIZE_B   (L3_MEM_SIZE_MB*1024*1024)
 
-#define L2_MEM_SIZE_B      (L2_MEM_SIZE_KB*1024)
-#define L2_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_ADDR + L2_MEM_BASE_ADDR)
+#define CLUSTER_SIZE_B  (CLUSTER_SIZE_MB*1024*1024)
+#define CLUSTERS_SIZE_B (N_CLUSTERS*CLUSTER_SIZE_B)
 
-#define L1_MEM_SIZE_B      (L1_MEM_SIZE_KB*1024)
-#define L1_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR)
+/*
+ * Host memory map 
+ */
+#if PLATFORM != JUNO
+  #define PULP_H_BASE_ADDR   0x40000000 // Address at which the host sees PULP
+  #define L1_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR)
+  #define L2_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_ADDR + L2_MEM_BASE_ADDR)  
+  #define L3_MEM_H_BASE_ADDR \
+    (DRAM_SIZE_MB - L3_MEM_SIZE_MB)*1024*1024 // = 0x38000000 for 1024 MB DRAM and 128 MB L3
+  #define MBOX_H_BASE_ADDR \
+    (PULP_H_BASE_ADDR - PULP_BASE_ADDR + MBOX_BASE_ADDR - MBOX_SIZE_B) // Interface 0 
+  #define SOC_PERIPHERALS_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_ADDR + SOC_PERIPHERALS_BASE_ADDR)
 
-#define SOC_PERIPHERALS_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_ADDR + SOC_PERIPHERALS_BASE_ADDR)
+#else // PLATFORM == JUNO
+  #define PULP_H_BASE_ADDR            0x60000000 // Address at which the host sees PULP
+  #define L1_MEM_H_BASE_ADDR          PULP_H_BASE_ADDR
+  #define L2_MEM_H_BASE_ADDR          0x67000000
+  #define L3_MEM_H_BASE_ADDR         (0x1000000000LL - L3_MEM_SIZE_B)
+  #define MBOX_H_BASE_ADDR            0x65120000 // Interface 0
+  #define SOC_PERIPHERALS_H_BASE_ADDR 0x65100000
+
+  // Redefine MBOX_BASE_ADDR -> edit pulpemu.h!!!!
+  #ifdef MBOX_BASE_ADDR
+    #undef MBOX_BASE_ADDR
+  #endif
+  #define MBOX_BASE_ADDR 0x1A121000 // Interface 1
+  
+#endif // PLATFORM != JUNO
 
 #define CLUSTERS_H_BASE_ADDR (PULP_H_BASE_ADDR)
-#define CLUSTER_SIZE_B       (CLUSTER_SIZE_MB*1024*1024)
-#define CLUSTERS_SIZE_B      (N_CLUSTERS*CLUSTER_SIZE_B)
+#define TIMER_H_OFFSET_B     (TIMER_BASE_ADDR - PULP_BASE_ADDR)
 
+/*
+ * Dependent parameters
+ */
 // RAB
 #define RAB_MAX_DATE     BIT_MASK_GEN(RAB_CONFIG_N_BITS_DATE)
 #define RAB_MAX_DATE_MH  (RAB_MAX_DATE-2)
 
-// mailbox
-#define MAILBOX_H_BASE_ADDR \
-  (PULP_H_BASE_ADDR - PULP_BASE_ADDR + MAILBOX_BASE_ADDR - MAILBOX_SIZE_B) // Interface 0
-
 // cluster peripherals, offsets compared to TCDM/clusters address
-#define TIMER_H_OFFSET_B           (TIMER_BASE_ADDR - PULP_BASE_ADDR)
 #define TIMER_START_OFFSET_B       (TIMER_H_OFFSET_B + 0x00) 
 #define TIMER_STOP_OFFSET_B        (TIMER_H_OFFSET_B + 0x04) 
 #define TIMER_RESET_OFFSET_B       (TIMER_H_OFFSET_B + 0x08) 
@@ -312,7 +339,7 @@
 
 #define MAX_STRIPE_SIZE 0x4000
 
-#define MEM_SHARING 3
+//#define MEM_SHARING 3
 
 // needed for ROD, CT, JPEG
 //#define PROFILE

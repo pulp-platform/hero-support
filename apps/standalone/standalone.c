@@ -1,6 +1,5 @@
 #include <stdlib.h>
 
-#include "zynq.h"
 #include "pulp_host.h"
 #include "pulp_func.h"
 
@@ -15,7 +14,7 @@ int main(int argc, char *argv[]) {
    */
   char app_name[50];
   int timeout_s = 1;  
-  int pulp_clk_freq_mhz = 50;
+  int pulp_clk_freq_mhz = PULP_DEFAULT_FREQ_MHZ;
   
   if (argc < 2) {
     printf("ERROR: Specify the name of the standalone PULP application to execute as first argument.\n");
@@ -29,7 +28,7 @@ int main(int argc, char *argv[]) {
   if (argc > 2)
     timeout_s = atoi(argv[2]);    
   if (argc > 3)
-    pulp_clk_freq_mhz = atoi(argv[3]);    
+    pulp_clk_freq_mhz = atoi(argv[3]);
 
   /*
    * Initialization
@@ -43,8 +42,11 @@ int main(int argc, char *argv[]) {
   // reserve virtual addresses overlapping with PULP's internal physical address space
   pulp_reserve_v_addr(pulp);
 
+  // memory map the device
   pulp_mmap(pulp);
+  
   //pulp_print_v_addr(pulp);
+  
   pulp_reset(pulp,1);
   
   // set desired clock frequency

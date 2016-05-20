@@ -20,17 +20,20 @@ export PLATFORM="4"
 if [ "${PLATFORM}" -eq "4" ]; then
     echo "Configuring for JUNO platform"
 
+    export LINARO_RELEASE=16.03
+    export OE_RELEASE=15.09
+
     # system workspace directory
-    export WORKSPACE_DIR=/usr/scratch/fliana/vogelpi/linaro-16.02/workspace
+    export WORKSPACE_DIR=/usr/scratch/fliana/vogelpi/linaro-${LINARO_RELEASE}
 
     # directory containing the kernel sources
-    export KERNEL_DIR=${WORKSPACE_DIR}/linux
+    export KERNEL_DIR=${WORKSPACE_DIR}/workspace/linux/out/juno-oe
 
     # machine to which the make_and_copy.sh scripts transfer the compiled stuff
     export SCP_TARGET_MACHINE="juno@bordcomputer"
 
     # base path to which the make_and_copy.sh scripts transfer the compiled stuff
-    export SCP_TARGET_PATH="~/juno/share/programs"
+    export SCP_TARGET_PATH="~/juno/share/apps"
     export SCP_TARGET_PATH_DRIVERS="~/juno/share/drivers"
 
     # path to external ARM libraries (on scratch)
@@ -38,20 +41,33 @@ if [ "${PLATFORM}" -eq "4" ]; then
 
     # number of cores on Linux host
     export N_CORES_COMPILE=4
+
+    # ARCH and CROSS_COMPILE variables
+    export KERNEL_ARCH="arm64"
+    export KERNEL_CROSS_COMPILE="aarch64-linux-gnu-"
+
+    export ARCH="arm"
+    export CROSS_COMPILE="arm-linux-gnueabihf-"
+
+    # GCC version 4.9, 5.2
+    GCC_VERSION="4.9" 
+
+    # Set up PATH variable
+    export PATH=/usr/scratch/fliana/vogelpi/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:/usr/scratch/fliana/vogelpi/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
 else 
     echo "Configuring for ZYNQ platform"
 
     # system workspace directory
-    export WORKSPACE_DIR=/usr/scratch/riseten/vogelpi/mini-itx/workspace
+    export WORKSPACE_DIR=/usr/scratch/riseten/vogelpi/mini-itx
 
     # directory containing the kernel sources
-    export KERNEL_DIR=${WORKSPACE_DIR}/linux-xlnx
+    export KERNEL_DIR=${WORKSPACE_DIR}/workspace/linux-xlnx
 
     # machine to which the make_and_copy.sh scripts transfer the compiled stuff
     export SCP_TARGET_MACHINE="vogelpi@bordcomputer"
 
     # base path to which the make_and_copy.sh scripts transfer the compiled stuff
-    export SCP_TARGET_PATH="~/pulp_on_fpga/share/programs"
+    export SCP_TARGET_PATH="~/pulp_on_fpga/share/apps"
     export SCP_TARGET_PATH_DRIVERS="~/pulp_on_fpga/share/drivers"
 
     # path to external ARM libraries (on scratch)
@@ -59,6 +75,16 @@ else
 
     # number of cores on Linux host
     export N_CORES_COMPILE=8
+
+    # ARCH and CROSS_COMPILE variables
+    export KERNEL_ARCH="arm"
+    export KERNEL_CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
+
+    export ARCH="arm"
+    export CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
+
+    # Set up PATH variable
+    #${VIVADO_VERSION} bash
 fi
 
 # top directory containing custom ARM libraries

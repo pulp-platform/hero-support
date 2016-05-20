@@ -1,54 +1,185 @@
-#include <linux/module.h> /* Needed by all modules */
-#include <linux/kernel.h> /* KERN_ALERT, container_of */
-#include <linux/kdev_t.h> /* major, minor */
-#include <linux/interrupt.h>    /* interrupt handling */
-#include <linux/workqueue.h>    /* schedule non-atomic work */
-#include <linux/spinlock.h>     /* locking in interrupt context*/
-#include <linux/wait.h>         /* wait_queue */
-#include <asm/io.h>   /* ioremap, iounmap, iowrite32 */
-#include <linux/cdev.h>   /* cdev struct */
-#include <linux/fs.h>   /* file_operations struct */
-#include <linux/mm.h>           /* vm_area_struct struct, page struct, PAGE_SHIFT, page_to_phys */
-#include <linux/pagemap.h>      /* page_cache_release() */
-#include <asm/cacheflush.h>     /* __cpuc_flush_dcache_area, outer_cache.flush_range */
-#include <asm/uaccess.h>  /* copy_to_user, copy_from_user, access_ok */
-#include <linux/time.h>         /* do_gettimeofday */
-#include <linux/ioctl.h>        /* ioctl */
-#include <linux/slab.h>         /* kmalloc */
-#include <linux/errno.h>        /* errno */
+/* --=========================================================================--
+ *
+ * ██████╗ ██╗   ██╗██╗     ██████╗     ██████╗ ██████╗ ██╗██╗   ██╗███████╗██████╗ 
+ * ██╔══██╗██║   ██║██║     ██╔══██╗    ██╔══██╗██╔══██╗██║██║   ██║██╔════╝██╔══██╗
+ * ██████╔╝██║   ██║██║     ██████╔╝    ██║  ██║██████╔╝██║██║   ██║█████╗  ██████╔╝
+ * ██╔═══╝ ██║   ██║██║     ██╔═══╝     ██║  ██║██╔══██╗██║╚██╗ ██╔╝██╔══╝  ██╔══██╗
+ * ██║     ╚██████╔╝███████╗██║         ██████╔╝██║  ██║██║ ╚████╔╝ ███████╗██║  ██║
+ * ╚═╝      ╚═════╝ ╚══════╝╚═╝         ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝
+ *                                                                                  
+ * 
+ * Author: Pirmin Vogel - vogelpi@iis.ee.ethz.ch
+ * 
+ * Purpose : Linux kernel-level driver for PULPonFPGA
+ *           RAB management for shared virtual memory between host and PULP
+ * 
+ * --=========================================================================--
+ *
+ * Copyright (C) 2016 Pirmin Vogel <vogelpi@iis.ee.ethz.ch>
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 1, or (at
+ * your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA
+ * 02110-1301 USA.
+ * 
+ */
+
+/***************************************************************************************/
+
+#include <linux/module.h>     /* Needed by all modules */
+#include <linux/kernel.h>     /* KERN_ALERT, container_of */
+#include <linux/kdev_t.h>     /* major, minor */
+#include <linux/interrupt.h>  /* interrupt handling */
+#include <linux/workqueue.h>  /* schedule non-atomic work */
+#include <linux/wait.h>       /* wait_queue */
+#include <asm/io.h>           /* ioremap, iounmap, iowrite32 */
+#include <linux/cdev.h>       /* cdev struct */
+#include <linux/fs.h>         /* file_operations struct */
+#include <linux/mm.h>         /* vm_area_struct struct, page struct, PAGE_SHIFT, page_to_phys */
+#include <linux/pagemap.h>    /* page_cache_release() */
+#include <asm/cacheflush.h>   /* __cpuc_flush_dcache_area, outer_cache.flush_range */
+#include <asm/uaccess.h>      /* copy_to_user, copy_from_user, access_ok */
+#include <linux/time.h>       /* do_gettimeofday */
+#include <linux/ioctl.h>      /* ioctl */
+#include <linux/slab.h>       /* kmalloc */
+#include <linux/errno.h>      /* errno */
 
 #include <linux/sched.h>
-#include <linux/delay.h>        /* udelay */
-#include <linux/device.h>       // class_create, device_create
+#include <linux/delay.h>      /* udelay */
+#include <linux/device.h>     // class_create, device_create
 
 /***************************************************************************************/
 //#include <linux/wait.h>
 #include <linux/ktime.h>      /* For ktime_get(), ktime_us_delta() */
 /***************************************************************************************/
 
-#include "zynq.h"
 #include "pulp_host.h"
+
+#if PLATFORM == JUNO
+  #include "juno.h"
+#else
+  #include "zynq.h"
+#endif
 
 #include "pulp_module.h"
 #include "pulp_mem.h"
 #include "pulp_rab.h"
 #include "pulp_dma.h"
+#include "pulp_mbox.h" 
+
+#if PLATFORM == JUNO
+  #include <linux/platform_device.h> /* for device tree stuff*/
+  #include <linux/device.h>
+  #include <linux/of_device.h>
+  #include <asm/compat.h>                /* for compat_ioctl */
+#endif
+
+/***************************************************************************************/
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Pirmin Vogel");
+MODULE_DESCRIPTION("PULPonFPGA driver");
+
+/***************************************************************************************/
+
+#if PLATFORM == JUNO
+  /***********************************************************************************
+   *
+   * ██████╗ ███████╗██╗   ██╗██╗ ██████╗███████╗    ████████╗██████╗ ███████╗███████╗
+   * ██╔══██╗██╔════╝██║   ██║██║██╔════╝██╔════╝    ╚══██╔══╝██╔══██╗██╔════╝██╔════╝
+   * ██║  ██║█████╗  ██║   ██║██║██║     █████╗         ██║   ██████╔╝█████╗  █████╗  
+   * ██║  ██║██╔══╝  ╚██╗ ██╔╝██║██║     ██╔══╝         ██║   ██╔══██╗██╔══╝  ██╔══╝  
+   * ██████╔╝███████╗ ╚████╔╝ ██║╚██████╗███████╗       ██║   ██║  ██║███████╗███████╗
+   * ╚═════╝ ╚══════╝  ╚═══╝  ╚═╝ ╚═════╝╚══════╝       ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝
+   *
+   * On JUNO, the IRQ is allocated through the device tree at boot time. In order to
+   * register the interrupt service routine, request_irq() needs the interrupt index
+   * reserved at boot time instead of the physical IRQ. This can be obtained through 
+   * the device tree. The addresses we still "pass" through the header files. 
+   *
+   * On ZYNQ, a simplified IRQ allocation is used. The interrupt index corresponds to
+   * the physical IRQ known at compile time. The device tree is not needed.
+   *
+   ***********************************************************************************/                                                                                 
+  
+  // static variables
+  static int intr_reg_irq; 
+
+  // connect to the device tree
+  static struct of_device_id pulp_of_match[] = {
+    {
+      .compatible = "pulp,pulpjuno",
+    }, { /* sentinel */}
+  };
+  
+  MODULE_DEVICE_TABLE(of, pulp_of_match);
+
+  // method definition
+  static int pulp_probe(struct platform_device *pdev)
+  {
+    printk(KERN_ALERT "PULP: Probing device.\n");
+
+    intr_reg_irq = platform_get_irq(pdev,0);
+    if (intr_reg_irq <= 0) {
+      printk(KERN_WARNING "PULP: Could not allocate IRQ resource.\n");
+      return -ENODEV;
+    }
+
+    return 0;
+  }
+
+  static int pulp_remove(struct platform_device *pdev)
+  {
+    printk(KERN_ALERT "PULP: Removing device.\n");
+
+    return 0;
+  }
+
+  // (un-)register to/from the device tree
+  static struct platform_driver pulp_platform_driver = {
+    .probe  = pulp_probe,
+    .remove = pulp_remove,
+    .driver = {
+      .name = "pulp",
+      .owner = THIS_MODULE,
+      .of_match_table = pulp_of_match,
+      },
+  };
+
+/***************************************************************************************/
+#endif
 
 // VM_RESERVERD for mmap
 #ifndef VM_RESERVED
-# define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
+  #define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
 
-// methods declarations
-static int     pulp_open        (struct inode *inode, struct file *filp);
-static int     pulp_release     (struct inode *p_inode, struct file *filp);
-static int     pulp_mmap        (struct file *filp, struct vm_area_struct *vma);
-static long    pulp_ioctl       (struct file *filp, unsigned int cmd, unsigned long arg);
-static ssize_t pulp_mailbox_read(struct file *filp, char __user *buf, size_t count, loff_t *offp);
+// method declarations
+static int  pulp_open   (struct inode *inode, struct file *filp);
+static int  pulp_release(struct inode *p_inode, struct file *filp);
+static int  pulp_mmap   (struct file *filp, struct vm_area_struct *vma);
+static long pulp_ioctl  (struct file *filp, unsigned int cmd, unsigned long arg);
+#ifdef CONFIG_COMPAT
+  static long pulp_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+#endif
 
-static irqreturn_t pulp_isr_eoc    (int irq, void *ptr);
-static irqreturn_t pulp_isr_mailbox(int irq, void *ptr);
-static irqreturn_t pulp_isr_rab    (int irq, void *ptr);
+#if PLATFORM == JUNO
+  static irqreturn_t pulp_isr        (int irq, void *ptr);
+#else
+  static irqreturn_t pulp_isr_eoc (int irq, void *ptr);
+  static irqreturn_t pulp_isr_mbox(int irq, void *ptr);
+  static irqreturn_t pulp_isr_rab (int irq, void *ptr);
+#endif // PLATFORM == JUNO
 
 static void pulp_rab_handle_miss(unsigned unused);
 
@@ -57,9 +188,12 @@ struct file_operations pulp_fops = {
   .owner          = THIS_MODULE,
   .open           = pulp_open,
   .release        = pulp_release,
+  .read           = pulp_mbox_read,
   .mmap           = pulp_mmap,
   .unlocked_ioctl = pulp_ioctl,
-  .read           = pulp_mailbox_read,
+#ifdef CONFIG_COMPAT
+  .compat_ioctl = pulp_compat_ioctl,
+#endif
 };
 
 // static variables
@@ -68,20 +202,10 @@ static PulpDev my_dev;
 static struct class *my_class; 
 
 // for ISR
-static struct timeval time;
-//static unsigned slcr_value;
-static unsigned mailbox_data;
-static unsigned mailbox_is;
-static unsigned long flags;
-static char rab_interrupt_type[6];
-
-// for mailbox
-static unsigned mailbox_fifo[MAILBOX_FIFO_DEPTH*2];
-static unsigned mailbox_fifo_full = 0;
-static unsigned * mailbox_fifo_rd = mailbox_fifo;
-static unsigned * mailbox_fifo_wr = mailbox_fifo;
-DEFINE_SPINLOCK(mailbox_fifo_lock);
-DECLARE_WAIT_QUEUE_HEAD(mailbox_wq);
+#if PLATFORM != JUNO
+  static struct timeval time;
+  static char rab_interrupt_type[9];
+#endif
 
 // for RAB
 static RabStripeElem * elem_cur;
@@ -89,19 +213,19 @@ static RabStripeReq rab_stripe_req[RAB_N_MAPPINGS];
 static unsigned rab_mapping;
 static unsigned rab_mapping_active;
 #if defined(PROFILE_RAB) || defined(PROFILE_RAB_MH)
-static unsigned arm_clk_cntr_value = 0;
-static unsigned arm_clk_cntr_value_start = 0;
-static unsigned clk_cntr_response = 0;
-static unsigned clk_cntr_update = 0;
-static unsigned clk_cntr_setup = 0;
-static unsigned clk_cntr_cleanup = 0;
-static unsigned clk_cntr_cache_flush = 0;
-static unsigned clk_cntr_get_user_pages = 0;
-static unsigned clk_cntr_map_sg = 0;
-static unsigned n_slices_updated = 0;
-static unsigned n_pages_setup = 0;
-static unsigned n_updates = 0;
-static unsigned n_cleanups = 0;            
+  static unsigned arm_clk_cntr_value = 0;
+  static unsigned arm_clk_cntr_value_start = 0;
+  static unsigned clk_cntr_response = 0;
+  static unsigned clk_cntr_update = 0;
+  static unsigned clk_cntr_setup = 0;
+  static unsigned clk_cntr_cleanup = 0;
+  static unsigned clk_cntr_cache_flush = 0;
+  static unsigned clk_cntr_get_user_pages = 0;
+  static unsigned clk_cntr_map_sg = 0;
+  static unsigned n_slices_updated = 0;
+  static unsigned n_pages_setup = 0;
+  static unsigned n_updates = 0;
+  static unsigned n_cleanups = 0;            
 #endif
 
 // for RAB miss handling
@@ -116,12 +240,12 @@ static unsigned rab_mh_id[RAB_MH_FIFO_DEPTH];
 static unsigned rab_mh_date;
 static unsigned rab_mh_use_acp = 0;
 #ifdef PROFILE_RAB_MH
-static unsigned clk_cntr_resp_tmp[N_CORES];
-static unsigned clk_cntr_resp[N_CORES];
-static unsigned clk_cntr_sched[N_CORES];
-static unsigned clk_cntr_refill[N_CORES];
-static unsigned n_misses = 0;
-static unsigned n_first_misses = 0;
+  static unsigned clk_cntr_resp_tmp[N_CORES];
+  static unsigned clk_cntr_resp[N_CORES];
+  static unsigned clk_cntr_sched[N_CORES];
+  static unsigned clk_cntr_refill[N_CORES];
+  static unsigned n_misses = 0;
+  static unsigned n_first_misses = 0;
 #endif
 
 // for DMA
@@ -131,13 +255,20 @@ static DmaCleanup pulp_dma_cleanup[2];
 // methods definitions
 /***********************************************************************************
  *
- * init 
+ * ██╗███╗   ██╗██╗████████╗
+ * ██║████╗  ██║██║╚══██╔══╝
+ * ██║██╔██╗ ██║██║   ██║   
+ * ██║██║╚██╗██║██║   ██║   
+ * ██║██║ ╚████║██║   ██║   
+ * ╚═╝╚═╝  ╚═══╝╚═╝   ╚═╝    
  *
  ***********************************************************************************/
 static int __init pulp_init(void)
 {
   int err;
-  unsigned mpcore_icdicfr3, mpcore_icdicfr4;
+  #if PLATFORM != JUNO
+    unsigned mpcore_icdicfr3, mpcore_icdicfr4;
+  #endif
 
   printk(KERN_ALERT "PULP: Loading device driver.\n");
 
@@ -182,132 +313,167 @@ static int __init pulp_init(void)
    **********/
   my_dev.rab_config = ioremap_nocache(RAB_CONFIG_BASE_ADDR, RAB_CONFIG_SIZE_B);
   printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.rab_config); 
-  pulp_rab_init();
+    (long unsigned int) my_dev.rab_config); 
+  
+  //pulp_rab_init();
   rab_mapping_active = 0;
 
-  my_dev.mailbox = ioremap_nocache(MAILBOX_H_BASE_ADDR, MAILBOX_SIZE_B);
+  my_dev.mbox = ioremap_nocache(MBOX_H_BASE_ADDR, MBOX_SIZE_B*2);
   printk(KERN_INFO "PULP: Mailbox mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.mailbox); 
- 
-  my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
-  printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.slcr);
-  // make sure to enable the PL clock
-  if ( !BF_GET(ioread32((void *)((unsigned)my_dev.slcr+SLCR_FPGA0_THR_STA_OFFSET_B)),16,1) ) {
-    iowrite32(0x0,(void *)((unsigned)my_dev.slcr+SLCR_FPGA0_THR_CNT_OFFSET_B));
-    if ( !BF_GET(ioread32((void *)((unsigned)my_dev.slcr+SLCR_FPGA0_THR_STA_OFFSET_B)),16,1) ) {
-      printk(KERN_WARNING "PULP: Could not enable reference clock for PULP.\n");
-      goto fail_ioremap;
+    (long unsigned int) my_dev.mbox);
+  pulp_mbox_init(my_dev.mbox);
+
+  #if PLATFORM == JUNO 
+    my_dev.intr_reg = ioremap_nocache(INTR_REG_BASE_ADDR,INTR_REG_SIZE_B);
+    printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.intr_reg);
+
+  #else // PLATFORM != JUNO 
+    my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
+    printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.slcr);
+  
+    // make sure to enable the PL clock
+    if ( !BF_GET(ioread32((void *)((unsigned long)my_dev.slcr+SLCR_FPGA0_THR_STA_OFFSET_B)),16,1) ) {
+      iowrite32(0x0,(void *)((unsigned long)my_dev.slcr+SLCR_FPGA0_THR_CNT_OFFSET_B));
+  
+      if ( !BF_GET(ioread32((void *)((unsigned long)my_dev.slcr+SLCR_FPGA0_THR_STA_OFFSET_B)),16,1) ) {
+        printk(KERN_WARNING "PULP: Could not enable reference clock for PULP.\n");
+        goto fail_ioremap;
+      }
     }
-  }
     
-  my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
-  printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.mpcore); 
+    my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
+    printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.mpcore);
+  #endif // PLATFORM == JUNO
 
   my_dev.gpio = ioremap_nocache(H_GPIO_BASE_ADDR, H_GPIO_SIZE_B);
   printk(KERN_INFO "PULP: Host GPIO mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.gpio); 
-  // remove GPIO reset, the driver and the runtime use the SLCR resets
-  iowrite32(0xC0000000,(void *)((unsigned)my_dev.gpio+0x8));
-
+    (long unsigned int) my_dev.gpio); 
+  
+  // remove GPIO reset
+  // On the ZYNQ, the driver and the runtime use the SLCR resets.
+  iowrite32(0xC0000000,(void *)((unsigned long)my_dev.gpio+0x8));
+  
   // PULP timer used for RAB performance monitoring
   my_dev.clusters = ioremap_nocache(CLUSTERS_H_BASE_ADDR, CLUSTERS_SIZE_B);
   printk(KERN_INFO "PULP: Clusters mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.clusters); 
-
+    (long unsigned int) my_dev.clusters); 
+  
   // actually not needed - handled in user space
   my_dev.soc_periph = ioremap_nocache(SOC_PERIPHERALS_H_BASE_ADDR, SOC_PERIPHERALS_SIZE_B);
   printk(KERN_INFO "PULP: SoC peripherals mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.soc_periph); 
+    (long unsigned int) my_dev.soc_periph); 
   
   // actually not needed - handled in user space
   my_dev.l2_mem = ioremap_nocache(L2_MEM_H_BASE_ADDR, L2_MEM_SIZE_B);
   printk(KERN_INFO "PULP: L2 memory mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.l2_mem); 
+    (long unsigned int) my_dev.l2_mem); 
 
-  // actually not needed - handled in user space
+  // for profiling
   my_dev.l3_mem = ioremap_nocache(L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B);
   if (my_dev.l3_mem == NULL) {
-    printk(KERN_WARNING "PULP: ioremap_nochache not allowed for non-reserved RAM.\n");
+    printk(KERN_WARNING "PULP: ioremap_nocache not allowed for non-reserved RAM.\n");
     err = EPERM;
     goto fail_ioremap;
   }
   printk(KERN_INFO "PULP: Shared L3 memory (DRAM) mapped to virtual kernel space @ %#lx.\n",
-         (long unsigned int) my_dev.l3_mem);
+    (long unsigned int) my_dev.l3_mem);
  
   /*********************
    *
    * interrupts
    *
    *********************/
-  // configure interrupt sensitivities: Zynq-7000 Technical Reference Manual, Section 7.2.4
-  // read configuration
-  mpcore_icdicfr3=ioread32((void *)((unsigned)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
-  mpcore_icdicfr4=ioread32((void *)((unsigned)my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B));
-   
-  // configure rising-edge active for 61-65
-  mpcore_icdicfr3 &= 0x03FFFFFF; // delete bits 31 - 26
-  mpcore_icdicfr3 |= 0xFC000000; // set bits 31 - 26: 11 11 11
-    
-  mpcore_icdicfr4 &= 0xFFFFFFF0; // delete bits 3 - 0
-  mpcore_icdicfr4 |= 0x0000000F; // set bits 3 - 0: 11 11
+
+  #if PLATFORM == JUNO
+
+    // register the device to get the interrupt index
+    err = platform_driver_register(&pulp_platform_driver);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error registering platform driver: %d\n",err);
+      goto fail_request_irq;
+    }
+
+    // request interrupts and install top-half handler
+    err = request_irq(intr_reg_irq, pulp_isr, 0 , "PULP", NULL);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+      goto fail_request_irq;
+    }
+
+  #else // PLATFORM != JUNO
+    // configure interrupt sensitivities: Zynq-7000 Technical Reference Manual, Section 7.2.4
+    // read configuration
+    mpcore_icdicfr3=ioread32((void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
+    mpcore_icdicfr4=ioread32((void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B));
      
-  // write configuration
-  iowrite32(mpcore_icdicfr3,(void *)((unsigned)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
-  iowrite32(mpcore_icdicfr4,(void *)((unsigned)my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B));
-  
-  // request interrupts and install handlers
-  // eoc
-  err = request_irq(END_OF_COMPUTATION_IRQ, pulp_isr_eoc, 0, "PULP", NULL);
-  if (err) {
-    printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-    goto fail_request_irq;
-  }
-  
-  // mailbox
-  err = request_irq(MAILBOX_IRQ, pulp_isr_mailbox, 0, "PULP", NULL);
-  if (err) {
-    printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-    goto fail_request_irq;
-  }
+    // configure rising-edge active for 61-65
+    mpcore_icdicfr3 &= 0x03FFFFFF; // delete bits 31 - 26
+    mpcore_icdicfr3 |= 0xFC000000; // set bits 31 - 26: 11 11 11
+      
+    mpcore_icdicfr4 &= 0xFFFFFFF0; // delete bits 3 - 0
+    mpcore_icdicfr4 |= 0x0000000F; // set bits 3 - 0: 11 11
+       
+    // write configuration
+    iowrite32(mpcore_icdicfr3,(void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
+    iowrite32(mpcore_icdicfr4,(void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B));
     
-  // RAB miss
-  err = request_irq(RAB_MISS_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-  if (err) {
-    printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-    goto fail_request_irq;
-  }
-  
-  // RAB multi
-  err = request_irq(RAB_MULTI_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-  if (err) {
-    printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-    goto fail_request_irq;
-  }
-  
-  // RAB prot
-  err = request_irq(RAB_PROT_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-  if (err) {
-    printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-    goto fail_request_irq;
-  }
+    // request interrupts and install handlers
+    // eoc
+    err = request_irq(END_OF_COMPUTATION_IRQ, pulp_isr_eoc, 0, "PULP", NULL);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+      goto fail_request_irq;
+    }
+    
+    // mailbox
+    err = request_irq(MBOX_IRQ, pulp_isr_mbox, 0, "PULP", NULL);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+      goto fail_request_irq;
+    }
+      
+    // RAB miss
+    err = request_irq(RAB_MISS_IRQ, pulp_isr_rab, 0, "PULP", NULL);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+      goto fail_request_irq;
+    }
+    
+    // RAB multi
+    err = request_irq(RAB_MULTI_IRQ, pulp_isr_rab, 0, "PULP", NULL);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+      goto fail_request_irq;
+    }
+    
+    // RAB prot
+    err = request_irq(RAB_PROT_IRQ, pulp_isr_rab, 0, "PULP", NULL);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+      goto fail_request_irq;
+    }
+  #endif // PLATFORM != JUNO
+
   /************************************
    *
    *  request DMA channels
    *
    ************************************/
-  err = pulp_dma_chan_req(&pulp_dma_chan[0],0);
-  if (err) {
-    printk(KERN_WARNING "PULP: Error requesting DMA channel.\n");
-    goto fail_request_dma;
-  }
-  err = pulp_dma_chan_req(&pulp_dma_chan[1],1);
-  if (err) {
-    printk(KERN_WARNING "PULP: Error requesting DMA channel.\n");
-    goto fail_request_dma;
-  }
+  #if PLATFORM != JUNO
+    err = pulp_dma_chan_req(&pulp_dma_chan[0],0);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting DMA channel.\n");
+      goto fail_request_dma;
+    }
+    err = pulp_dma_chan_req(&pulp_dma_chan[1],1);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting DMA channel.\n");
+      goto fail_request_dma;
+    }
+  #endif // PLATFORM != JUNO
 
   /************************************
    *
@@ -326,51 +492,83 @@ static int __init pulp_init(void)
   /*
    * error handling
    */
- fail_register_device:
-  pulp_dma_chan_clean(pulp_dma_chan[1]);
-  pulp_dma_chan_clean(pulp_dma_chan[0]);
- fail_request_dma: 
-  free_irq(END_OF_COMPUTATION_IRQ,NULL);
-  free_irq(MAILBOX_IRQ,NULL);
-  free_irq(RAB_MISS_IRQ,NULL);
-  free_irq(RAB_MULTI_IRQ,NULL);
-  free_irq(RAB_PROT_IRQ,NULL);
- fail_request_irq:
-  iounmap(my_dev.rab_config); 
-  iounmap(my_dev.mailbox);
-  iounmap(my_dev.slcr);
-  iounmap(my_dev.mpcore);
-  iounmap(my_dev.gpio);
-  iounmap(my_dev.clusters);
-  iounmap(my_dev.soc_periph);
-  iounmap(my_dev.l2_mem);
-  iounmap(my_dev.l3_mem);
- fail_ioremap:
-  cdev_del(&my_dev.cdev);
- fail_create_device: 
-  class_destroy(my_class);
- fail_create_class: 
-  unregister_chrdev_region(my_dev.dev, 1);
- fail_alloc_chrdev_region:
-  return err;
+  fail_register_device:
+    #if PLATFORM != JUNO
+      pulp_dma_chan_clean(pulp_dma_chan[1]);
+      pulp_dma_chan_clean(pulp_dma_chan[0]);
+  fail_request_dma:
+    #endif // PLATFORM != JUNO
+    #if PLATFORM == JUNO
+      free_irq(intr_reg_irq,NULL);
+      platform_driver_unregister(&pulp_platform_driver);
+    #else // PLATFORM != JUNO
+      free_irq(END_OF_COMPUTATION_IRQ,NULL);
+      free_irq(MBOX_IRQ,NULL);
+      free_irq(RAB_MISS_IRQ,NULL);
+      free_irq(RAB_MULTI_IRQ,NULL);
+      free_irq(RAB_PROT_IRQ,NULL);
+    #endif // PLATFORM == JUNO
+  fail_request_irq:
+    iounmap(my_dev.rab_config);
+    iounmap(my_dev.mbox);
+    #if PLATFORM == JUNO
+      iounmap(my_dev.intr_reg);
+    #else // PLATFORM != JUNO
+      iounmap(my_dev.slcr);
+      iounmap(my_dev.mpcore);
+    #endif // PLATFORM == JUNO
+    iounmap(my_dev.gpio);
+    iounmap(my_dev.clusters);
+    iounmap(my_dev.soc_periph);
+    iounmap(my_dev.l2_mem);
+    iounmap(my_dev.l3_mem);
+  fail_ioremap:
+    cdev_del(&my_dev.cdev);
+  fail_create_device: 
+    class_destroy(my_class);
+  fail_create_class: 
+    unregister_chrdev_region(my_dev.dev, 1);
+  fail_alloc_chrdev_region:
+    return err;
 }
 module_init(pulp_init);
 
+/***********************************************************************************
+ *
+ * ███████╗██╗  ██╗██╗████████╗
+ * ██╔════╝╚██╗██╔╝██║╚══██╔══╝
+ * █████╗   ╚███╔╝ ██║   ██║   
+ * ██╔══╝   ██╔██╗ ██║   ██║   
+ * ███████╗██╔╝ ██╗██║   ██║   
+ * ╚══════╝╚═╝  ╚═╝╚═╝   ╚═╝   
+ * 
+ ***********************************************************************************/
 static void __exit pulp_exit(void)
 {
+  pulp_mbox_clear();
+
   printk(KERN_ALERT "PULP: Unloading device driver.\n");
   // undo __init pulp_init
-  pulp_dma_chan_clean(pulp_dma_chan[1]);
-  pulp_dma_chan_clean(pulp_dma_chan[0]);
-  free_irq(END_OF_COMPUTATION_IRQ,NULL);
-  free_irq(MAILBOX_IRQ,NULL);
-  free_irq(RAB_MISS_IRQ,NULL);
-  free_irq(RAB_MULTI_IRQ,NULL);
-  free_irq(RAB_PROT_IRQ,NULL);
+  #if PLATFORM == JUNO
+    free_irq(intr_reg_irq,NULL);
+    platform_driver_unregister(&pulp_platform_driver);
+  #else // PLATFORM != JUNO
+    pulp_dma_chan_clean(pulp_dma_chan[1]);
+    pulp_dma_chan_clean(pulp_dma_chan[0]);
+    free_irq(END_OF_COMPUTATION_IRQ,NULL);
+    free_irq(MBOX_IRQ,NULL);
+    free_irq(RAB_MISS_IRQ,NULL);
+    free_irq(RAB_MULTI_IRQ,NULL);
+    free_irq(RAB_PROT_IRQ,NULL);
+  #endif // PLATFORM == JUNO
   iounmap(my_dev.rab_config);
-  iounmap(my_dev.mailbox);
-  iounmap(my_dev.slcr);
-  iounmap(my_dev.mpcore);
+  iounmap(my_dev.mbox);
+  #if PLATFORM == JUNO
+    iounmap(my_dev.intr_reg);
+  #else // PLATFORM != JUNO
+    iounmap(my_dev.slcr);
+    iounmap(my_dev.mpcore);
+  #endif // PLATFORM == JUNO
   iounmap(my_dev.gpio);
   iounmap(my_dev.clusters);
   iounmap(my_dev.soc_periph);
@@ -382,6 +580,17 @@ static void __exit pulp_exit(void)
   unregister_chrdev_region(my_dev.dev, 1);
 }
 module_exit(pulp_exit);
+
+/***********************************************************************************
+ *
+ *  ██████╗ ██████╗ ███████╗███╗   ██╗
+ * ██╔═══██╗██╔══██╗██╔════╝████╗  ██║
+ * ██║   ██║██████╔╝█████╗  ██╔██╗ ██║
+ * ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║
+ * ╚██████╔╝██║     ███████╗██║ ╚████║
+ *  ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝
+ * 
+ ***********************************************************************************/
 
 int pulp_open(struct inode *inode, struct file *filp)
 {
@@ -400,21 +609,20 @@ int pulp_open(struct inode *inode, struct file *filp)
   return 0;
 }
 
+/***********************************************************************************
+ *
+ * ██████╗ ███████╗██╗     ███████╗ █████╗ ███████╗███████╗
+ * ██╔══██╗██╔════╝██║     ██╔════╝██╔══██╗██╔════╝██╔════╝
+ * ██████╔╝█████╗  ██║     █████╗  ███████║███████╗█████╗  
+ * ██╔══██╗██╔══╝  ██║     ██╔══╝  ██╔══██║╚════██║██╔══╝  
+ * ██║  ██║███████╗███████╗███████╗██║  ██║███████║███████╗
+ * ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝
+ * 
+ ***********************************************************************************/
+
 int pulp_release(struct inode *p_inode, struct file *filp)
 {
-  int i;
-  
-  // empty mailbox_fifo
-  if ( (mailbox_fifo_wr != mailbox_fifo_rd) || mailbox_fifo_full) {
-    for (i=0; i<2*MAILBOX_FIFO_DEPTH; i++) {
-      printk(KERN_INFO "mailbox_fifo[%d]: %d %d %#x \n",i,
-             (&mailbox_fifo[i] == mailbox_fifo_wr) ? 1:0,
-             (&mailbox_fifo[i] == mailbox_fifo_rd) ? 1:0,
-             mailbox_fifo[i]);
-    }
-  }
-  mailbox_fifo_wr = mailbox_fifo;
-  mailbox_fifo_rd = mailbox_fifo;
+  pulp_mbox_clear();
 
   printk(KERN_INFO "PULP: Device released.\n");
  
@@ -423,15 +631,20 @@ int pulp_release(struct inode *p_inode, struct file *filp)
 
 /***********************************************************************************
  *
- * mmap 
+ * ███╗   ███╗███╗   ███╗ █████╗ ██████╗ 
+ * ████╗ ████║████╗ ████║██╔══██╗██╔══██╗
+ * ██╔████╔██║██╔████╔██║███████║██████╔╝
+ * ██║╚██╔╝██║██║╚██╔╝██║██╔══██║██╔═══╝ 
+ * ██║ ╚═╝ ██║██║ ╚═╝ ██║██║  ██║██║     
+ * ╚═╝     ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝     
  *
  ***********************************************************************************/
 int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 {
   unsigned long base_addr; // base address to use for the remapping
-  unsigned long size_b; // size for the remapping
-  unsigned long off; // address offset in VMA
-  unsigned long physical; // PFN of physical page
+  unsigned long size_b;    // size for the remapping
+  unsigned long off;       // address offset in VMA
+  unsigned long physical;  // PFN of physical page
   unsigned long vsize;
   unsigned long psize;
   char type[12]; 
@@ -455,84 +668,86 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
     size_b = SOC_PERIPHERALS_SIZE_B;
     strcpy(type,"Peripherals");
   }
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B)) {
+  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B)) {
     // Mailbox
-    base_addr = MAILBOX_H_BASE_ADDR;
+    base_addr = MBOX_H_BASE_ADDR;
     off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B;
-    size_b = MAILBOX_SIZE_B;
+    size_b = MBOX_SIZE_B;
     strcpy(type,"Mailbox");
   }
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B)) {
+  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B)) {
     // L2
     base_addr = L2_MEM_H_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MAILBOX_SIZE_B;
+    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B;
     size_b = L2_MEM_SIZE_B;
     strcpy(type,"L2");
   }
   // Platform
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B)) {
+  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B)) {
     // Shared L3
     base_addr = L3_MEM_H_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MAILBOX_SIZE_B - L2_MEM_SIZE_B;
+    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B;
     size_b = L3_MEM_SIZE_B;
     strcpy(type,"Shared L3");
   }
   // PULP external, PULPEmu 
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
+  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
                   + H_GPIO_SIZE_B)) {
     // H_GPIO
     base_addr = H_GPIO_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MAILBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B;
+    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B;
     size_b = H_GPIO_SIZE_B;
     strcpy(type,"Host GPIO");
   }
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
+  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
                   + H_GPIO_SIZE_B + CLKING_SIZE_B)) {
     // CLKING
     base_addr = CLKING_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MAILBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
+    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
       - H_GPIO_SIZE_B;
     size_b = CLKING_SIZE_B;
     strcpy(type,"Clking");
   }
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
+  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
                   + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B)) {
     // STDOUT
     base_addr = STDOUT_H_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MAILBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
+    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
       - H_GPIO_SIZE_B - CLKING_SIZE_B;
     size_b = STDOUT_SIZE_B;
     strcpy(type,"Stdout");
   }
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
+  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
                   + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B)) {
     // RAB config
     base_addr = RAB_CONFIG_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MAILBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
+    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
       - H_GPIO_SIZE_B - CLKING_SIZE_B - STDOUT_SIZE_B;
     size_b = RAB_CONFIG_SIZE_B;
     strcpy(type,"RAB config");
   }
-  // Zynq System
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
-                  + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B)) {
-    // Zynq SLCR
-    base_addr = SLCR_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MAILBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
-      - H_GPIO_SIZE_B - CLKING_SIZE_B - STDOUT_SIZE_B - RAB_CONFIG_SIZE_B;
-    size_b = SLCR_SIZE_B;
-    strcpy(type,"Zynq SLCR");
-  }
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MAILBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
-                  + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B 
-                  + MPCORE_SIZE_B)) {
-    // Zynq MPCore
-    base_addr = MPCORE_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MAILBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
-      - H_GPIO_SIZE_B - CLKING_SIZE_B - STDOUT_SIZE_B - RAB_CONFIG_SIZE_B - SLCR_SIZE_B;
-    size_b = MPCORE_SIZE_B;
-    strcpy(type,"Zynq MPCore");
-  }
+  #if PLATFORM != JUNO
+    // Zynq System
+    else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
+                    + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B)) {
+      // Zynq SLCR
+      base_addr = SLCR_BASE_ADDR;
+      off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
+        - H_GPIO_SIZE_B - CLKING_SIZE_B - STDOUT_SIZE_B - RAB_CONFIG_SIZE_B;
+      size_b = SLCR_SIZE_B;
+      strcpy(type,"Zynq SLCR");
+    }
+    else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
+                    + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B 
+                    + MPCORE_SIZE_B)) {
+      // Zynq MPCore
+      base_addr = MPCORE_BASE_ADDR;
+      off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
+        - H_GPIO_SIZE_B - CLKING_SIZE_B - STDOUT_SIZE_B - RAB_CONFIG_SIZE_B - SLCR_SIZE_B;
+      size_b = MPCORE_SIZE_B;
+      strcpy(type,"Zynq MPCore");
+    }
+  #endif // PLATFORM != JUNO
   else {
     printk(KERN_INFO "PULP: Invalid VMA offset for mmap.\n");
     return -EINVAL;
@@ -548,8 +763,8 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
   printk(KERN_INFO
-         "PULP: %s memory mapped. \nPhysical address = %#lx, user space virtual address = %#lx, vsize = %#lx.\n",
-         type, physical << PAGE_SHIFT, vma->vm_start, vsize);
+    "PULP: %s memory mapped. \nPhysical address = %#lx, user-space virtual address = %#lx, vsize = %#lx.\n",
+    type, physical << PAGE_SHIFT, vma->vm_start, vsize);
 
   if (vsize > psize)
     return -EINVAL; /*  spans too high */
@@ -569,268 +784,156 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 
 /***********************************************************************************
  *
- * interrupt service routines 
+ * ██╗███████╗██████╗ 
+ * ██║██╔════╝██╔══██╗
+ * ██║███████╗██████╔╝
+ * ██║╚════██║██╔══██╗
+ * ██║███████║██║  ██║
+ * ╚═╝╚══════╝╚═╝  ╚═╝
  *
  ***********************************************************************************/
-irqreturn_t pulp_isr_eoc(int irq, void *ptr)
-{  
-  // do something
-  do_gettimeofday(&time);
-  printk(KERN_INFO "PULP: End of Computation: %02li:%02li:%02li.\n",
-         (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
- 
-  // interrupt is just a pulse, no need to clear it
-  return IRQ_HANDLED;
-}
- 
-irqreturn_t pulp_isr_mailbox(int irq, void *ptr)
-{
-  int i,j;
-  unsigned idx, n_slices, n_fields, offset, read, flags;
+#if PLATFORM == JUNO
+  irqreturn_t pulp_isr(int irq, void *ptr)
+  {
+    unsigned long intr_reg_value;
+    struct timeval time;
+    int i;
 
-  if (DEBUG_LEVEL_MBOX > 0) {
-    printk(KERN_INFO "PULP: Mailbox interrupt.\n");
-  }
+    // read and clear the interrupt register
+    intr_reg_value = ioread64((void *)(unsigned long)my_dev.intr_reg);
 
-  // check interrupt status
-  mailbox_is = 0x7 & ioread32((void *)((unsigned)my_dev.mailbox+MAILBOX_IS_OFFSET_B));
-  
-  if (mailbox_is & 0x2) { // mailbox receive threshold interrupt
-    // clear the interrupt
-    iowrite32(0x2,(void *)((unsigned)my_dev.mailbox+MAILBOX_IS_OFFSET_B));
-
-    read = 0;
-
-    spin_lock(&mailbox_fifo_lock);
-    // while mailbox not empty and FIFO buffer not full
-    while ( !(0x1 & ioread32((void *)((unsigned)my_dev.mailbox+MAILBOX_STATUS_OFFSET_B)))
-            && !mailbox_fifo_full ) {
-      spin_unlock(&mailbox_fifo_lock);
-
-      // read mailbox
-      mailbox_data = ioread32((void *)((unsigned)my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B));
-
-      if (mailbox_data == RAB_UPDATE) {
-        if (DEBUG_LEVEL_RAB > 0) {
-          printk(KERN_INFO "PULP: RAB update requested.\n");
-        }
-
-#ifdef PROFILE_RAB 
-        // stop the PULP timer  
-        iowrite32(0x1,(void *)((unsigned)my_dev.clusters+TIMER_STOP_OFFSET_B));
-    
-        // read the PULP timer
-        clk_cntr_response += ioread32((void *)((unsigned)my_dev.clusters+TIMER_GET_TIME_LO_OFFSET_B));
-
-        // reset the ARM clock counter
-        asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
-#endif
-
-#if !defined(MEM_SHARING) || (MEM_SHARING == 2)
-        rab_stripe_req[rab_mapping_active].stripe_idx++;
-        idx = rab_stripe_req[rab_mapping_active].stripe_idx;
-  
-        // process every data element independently
-        for (i=0; i<rab_stripe_req[rab_mapping_active].n_elements; i++) {
-          elem_cur = rab_stripe_req[rab_mapping_active].elements[i];
-          n_slices = (elem_cur->n_slices_per_stripe);
-          n_fields = 1+elem_cur->n_slices;
-
-          // process every slice independently
-          for (j=0; j<n_slices; j++) {
-            offset = 0x10*(elem_cur->rab_port*RAB_N_SLICES+elem_cur->slices[(idx & 0x1)*n_slices+j]);
-  
-            // deactivate slices
-            iowrite32(0x0,(void *)((unsigned)my_dev.rab_config+offset+0x1c));
-     
-            // set up new translations rules
-            if ( elem_cur->rab_stripes[idx*n_fields+j*2+1] ) { // offset != 0
-              // set up the slice
-              RAB_SLICE_SET_FLAGS(flags, elem_cur->prot, elem_cur->use_acp);
-              iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],
-                        (void *)((unsigned)my_dev.rab_config+offset+0x10)); // start_addr
-              iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+2],
-                        (void *)((unsigned)my_dev.rab_config+offset+0x14)); // end_addr
-              iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+1],
-                        (void *)((unsigned)my_dev.rab_config+offset+0x18)); // offset  
-              // activate the slice
-              iowrite32(flags, (void *)((unsigned)my_dev.rab_config+offset+0x1c));
-#ifdef PROFILE_RAB 
-              n_slices_updated++;
-#endif
-            }
-          }
-        }
-#endif
-        // signal ready to PULP
-        iowrite32(HOST_READY,(void *)((unsigned)my_dev.mailbox+MAILBOX_WRDATA_OFFSET_B));
-      
-#ifdef PROFILE_RAB 
-        // read the ARM clock counter
-        asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
-        clk_cntr_update += arm_clk_cntr_value;
-
-        n_updates++;
-
-        // update counters in shared memory
-        iowrite32(clk_cntr_response,
-                  (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_RESPONSE_OFFSET_B));
-        iowrite32(clk_cntr_update,
-                  (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_UPDATE_OFFSET_B));
-        iowrite32(n_slices_updated,
-                  (void *)((unsigned)my_dev.l3_mem+N_SLICES_UPDATED_OFFSET_B));
-        iowrite32(n_updates,
-                  (void *)((unsigned)my_dev.l3_mem+N_UPDATES_OFFSET_B));
-#endif    
-
-#if defined(PROFILE_RAB) || defined(JPEG) 
-        if (idx == rab_stripe_req[rab_mapping_active].n_stripes) {
-          rab_stripe_req[rab_mapping_active].stripe_idx = 0;
-          if (DEBUG_LEVEL_RAB > 0) {
-            printk(KERN_INFO "PULP: RAB stripe table wrap around.\n");
-          }
-        }
-#endif
-        if (DEBUG_LEVEL_RAB > 0) {
-          printk(KERN_INFO "PULP: RAB update completed.\n");
-        }
-      }
-      else if (mailbox_data == RAB_SWITCH) {
-        if (DEBUG_LEVEL_RAB > 0) {
-          printk(KERN_INFO "PULP: RAB switch requested.\n");
-        }
-
-        // for debugging
-        //pulp_rab_print_mapping(my_dev.rab_config, 0xAAAA);
-
-        // switch RAB mapping
-        rab_mapping_active = (rab_mapping_active) ? 0 : 1;
-        pulp_rab_switch_mapping(my_dev.rab_config,rab_mapping_active);
-        // reset striping idx
-        rab_stripe_req[rab_mapping_active].stripe_idx = 0;
-
-        if (DEBUG_LEVEL_RAB > 0) {
-          printk(KERN_INFO "PULP: RAB switch completed.\n");
-        }
-          
-        // for debugging
-        //pulp_rab_print_mapping(my_dev.rab_config, 0xAAAA);
-
-        // signal ready to PULP
-        iowrite32(HOST_READY,(void *)((unsigned)my_dev.mailbox+MAILBOX_WRDATA_OFFSET_B));
-      }
-      else { // read to mailbox FIFO buffer
-        if (mailbox_data == TO_RUNTIME) { // don't write to FIFO
-          spin_lock(&mailbox_fifo_lock);
-          continue;
-        }
-        // write to mailbox_fifo
-        *mailbox_fifo_wr = mailbox_data;
-
-        spin_lock(&mailbox_fifo_lock);
-        // update write pointer
-        mailbox_fifo_wr++;
-        // wrap around?
-        if ( mailbox_fifo_wr >= (mailbox_fifo + 2*MAILBOX_FIFO_DEPTH) )
-          mailbox_fifo_wr = mailbox_fifo;
-        // full?
-        if ( mailbox_fifo_wr == mailbox_fifo_rd )
-          mailbox_fifo_full = 1;
-        if (DEBUG_LEVEL_MBOX > 0) {
-          printk(KERN_INFO "PULP: Written %#x to mailbox_fifo.\n",mailbox_data);
-          printk(KERN_INFO "PULP: mailbox_fifo_wr: %d\n",(unsigned)(mailbox_fifo_wr-mailbox_fifo));
-          printk(KERN_INFO "PULP: mailbox_fifo_rd: %d\n",(unsigned)(mailbox_fifo_rd-mailbox_fifo));
-          printk(KERN_INFO "PULP: mailbox_fifo_full %d\n",mailbox_fifo_full);
-          if (DEBUG_LEVEL_MBOX > 1) {
-            for (i=0; i<2*MAILBOX_FIFO_DEPTH; i++) {
-              printk(KERN_INFO "mailbox_fifo[%d]: %d %d %#x\n",i,
-                     (&mailbox_fifo[i] == mailbox_fifo_wr) ? 1:0,
-                     (&mailbox_fifo[i] == mailbox_fifo_rd) ? 1:0,
-                     mailbox_fifo[i]);
-            }
-          }
-        }
-        spin_unlock(&mailbox_fifo_lock);
-
-        read++;
-      }
-      spin_lock(&mailbox_fifo_lock);
-    } // while mailbox not empty and FIFO buffer not full
-    spin_unlock(&mailbox_fifo_lock);    
-
-    // wake up user space process
-    if ( read ) {
-      wake_up_interruptible(&mailbox_wq);
-      if (DEBUG_LEVEL_MBOX > 0)
-        printk(KERN_INFO "PULP: Read %d words from mailbox.\n",read);
-    }
-    // adjust receive interrupt threshold of mailbox interface
-    else if ( mailbox_fifo_full ) {
-      printk(KERN_INFO "PULP: mailbox_fifo_full %d\n",mailbox_fifo_full);
-    }
-  }
-  else if (mailbox_is & 0x4) // mailbox error
-    iowrite32(0x4,(void *)((unsigned)my_dev.mailbox+MAILBOX_IS_OFFSET_B));
-  else // mailbox send interrupt threshold - not used
-    iowrite32(0x1,(void *)((unsigned)my_dev.mailbox+MAILBOX_IS_OFFSET_B));
-
-  if (DEBUG_LEVEL_MBOX > 0) {
+   /*********************
+    *
+    * top-half handler
+    *
+    *********************/
     do_gettimeofday(&time);
-    printk(KERN_INFO "PULP: Mailbox interrupt status: %#x. Interrupt handled at: %02li:%02li:%02li.\n",
-           mailbox_is,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-  }
 
-  return IRQ_HANDLED;
-}
-
-irqreturn_t pulp_isr_rab(int irq, void *ptr)
-{    
-  // detect RAB interrupt type
-  if (RAB_MISS_IRQ == irq)
-    strcpy(rab_interrupt_type,"miss");
-  else if (RAB_MULTI_IRQ == irq)
-    strcpy(rab_interrupt_type,"multi");
-  else // RAB_PROT_IRQ == irq
-    strcpy(rab_interrupt_type,"prot");
-
-  if (RAB_MISS_IRQ == irq) {
-    if (rab_mh) {
-
+    if ( BF_GET(intr_reg_value,INTR_MBOX,1) ) { // mailbox
+      pulp_mbox_intr(my_dev.mbox);
+    }
+    if ( BF_GET(intr_reg_value,INTR_RAB_MISS,1) ) { // RAB miss
+      if (rab_mh) { 
 #ifdef PROFILE_RAB_MH
-      // read PE timers
-      int i;
-      for (i=0; i<N_CORES; i++) {
-        clk_cntr_resp_tmp[i] = ioread32((void *)((unsigned)my_dev.clusters+TIMER_GET_TIME_LO_OFFSET_B
-                                                 +(i+1)*PE_TIMER_OFFSET_B));
-      }
+        // read PE timers
+        for (i=0; i<N_CORES; i++) {
+          clk_cntr_resp_tmp[i] = ioread32((void *)((unsigned long)my_dev.clusters
+            +TIMER_GET_TIME_LO_OFFSET_B+(i+1)*PE_TIMER_OFFSET_B));
+        }
 #endif
+        schedule_work(&rab_mh_w);
+      }
+
+     if ( (DEBUG_LEVEL_RAB_MH > 1) || (0 == rab_mh) ) {
+      printk(KERN_INFO "PULP: RAB miss interrupt handled at %02li:%02li:%02li.\n",
+        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+  
       // for debugging
       //pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
-
-      schedule_work(&rab_mh_w);
+      }
     }
+    if ( BF_GET(intr_reg_value,INTR_RAB_MHR_FULL,1) ) { // RAB mhr full
+      printk(KERN_ALERT "PULP: RAB mhr full interrupt received at %02li:%02li:%02li.\n",
+        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+    } 
+    if ( BF_GET(intr_reg_value,INTR_RAB_MULTI,1) ) { // RAB multi
+      printk(KERN_ALERT "PULP: RAB multi interrupt received at %02li:%02li:%02li.\n",
+        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+    }
+    if ( BF_GET(intr_reg_value,INTR_RAB_PROT,1) ) { // RAB prot
+      printk(KERN_ALERT "PULP: RAB prot interrupt received at %02li:%02li:%02li.\n",
+        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+    } 
+    if ( BF_GET(intr_reg_value, INTR_EOC_0, INTR_EOC_N-INTR_EOC_0) ) { // EOC
+      for (i=0; i<N_CLUSTERS; i++) {
+        if ( BF_GET(intr_reg_value, INTR_EOC_0+i, 1) ) {
+          printk(KERN_INFO "PULP: End of Computation Cluster %i at %02li:%02li:%02li.\n",
+            i, (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+        }
+      }
+    }
+  
+    return IRQ_HANDLED;
   }
 
-  if ( (DEBUG_LEVEL_RAB_MH > 1) || 
-       ((RAB_MISS_IRQ == irq) && (0 == rab_mh)) ||
-       ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) ) {
+#else // PLATFORM != JUNO
+  irqreturn_t pulp_isr_eoc(int irq, void *ptr)
+  {  
+    // do something
     do_gettimeofday(&time);
-    printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
-           rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-
-    // for debugging
-    pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+    printk(KERN_INFO "PULP: End of Computation: %02li:%02li:%02li.\n",
+           (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+   
+    // interrupt is just a pulse, no need to clear it
+    return IRQ_HANDLED;
   }
-
-  return IRQ_HANDLED;
-}
-
+   
+  irqreturn_t pulp_isr_mbox(int irq, void *ptr)
+  {
+    pulp_mbox_intr();
+  
+    return IRQ_HANDLED;
+  }
+  
+  irqreturn_t pulp_isr_rab(int irq, void *ptr)
+  {    
+    // detect RAB interrupt type
+    if (RAB_MISS_IRQ == irq)
+      strcpy(rab_interrupt_type,"miss");
+    else if (RAB_MULTI_IRQ == irq)
+      strcpy(rab_interrupt_type,"multi");
+    else if (RAB_PROT_IRQ == irq)
+      strcpy(rab_interrupt_type,"prot");
+    else // RAB_MHR_FULL_IRQ == irq
+      strcpy(rab_interrupt_type,"mhr full");
+  
+    if (RAB_MISS_IRQ == irq) {
+      if (rab_mh) {
+  
+  #ifdef PROFILE_RAB_MH
+        // read PE timers
+        int i;
+        for (i=0; i<N_CORES; i++) {
+          clk_cntr_resp_tmp[i] = ioread32((void *)((unsigned long)my_dev.clusters+TIMER_GET_TIME_LO_OFFSET_B
+                                                   +(i+1)*PE_TIMER_OFFSET_B));
+        }
+  #endif
+        schedule_work(&rab_mh_w);
+      }
+    }
+  
+    if ( (DEBUG_LEVEL_RAB_MH > 1) || 
+         ((RAB_MISS_IRQ == irq) && (0 == rab_mh)) ||
+         ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) ) {
+      do_gettimeofday(&time);
+      printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
+             rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+  
+      // for debugging
+      pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+    }
+  
+    return IRQ_HANDLED;
+  }
+#endif // PLATFORM == JUNO
 
 /***********************************************************************************
  *
- * ioctl 
+ * ██╗ ██████╗  ██████╗████████╗██╗     
+ * ██║██╔═══██╗██╔════╝╚══██╔══╝██║     
+ * ██║██║   ██║██║        ██║   ██║     
+ * ██║██║   ██║██║        ██║   ██║     
+ * ██║╚██████╔╝╚██████╗   ██║   ███████╗
+ * ╚═╝ ╚═════╝  ╚═════╝   ╚═╝   ╚══════╝
  *
  ***********************************************************************************/
+#ifdef CONFIG_COMPAT
+long pulp_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+  return pulp_ioctl(filp, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
   int err = 0, i, j, k;
@@ -857,8 +960,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   unsigned n_segments;
 
   // needed for cache flushing
+#if PLATFORM != JUNO
   unsigned offset_start, offset_end;
-
+#endif
   // needed for RAB management
   RabSliceReq rab_slice_request;
   RabSliceReq *rab_slice_req = &rab_slice_request;
@@ -956,8 +1060,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
       switch(rab_slice_req->addr_start) {
       
-      case MAILBOX_H_BASE_ADDR:
-        rab_slice_req->addr_offset = MAILBOX_BASE_ADDR - MAILBOX_SIZE_B; // Interface 0
+      case MBOX_H_BASE_ADDR:
+        rab_slice_req->addr_offset = MBOX_BASE_ADDR - MBOX_SIZE_B; // Interface 0
         break;
     
       case L2_MEM_H_BASE_ADDR:
@@ -1043,6 +1147,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         }
       }
 
+    #if PLATFORM != JUNO  
       // flush caches
       if ( !(rab_slice_req->flags & 0x1) && !(rab_slice_req->use_acp) ) {
         for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
@@ -1060,6 +1165,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
           pulp_mem_cache_flush(pages[j],offset_start,offset_end);
         }
       }
+    #endif // PLATFORM != JUNO
     }
     
     if ( !(rab_slice_req->flags & 0x1) ) {
@@ -1160,7 +1266,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     n_bytes_left = rab_stripe_req[rab_mapping].n_elements*sizeof(unsigned); 
     while (ret > 0) {
       ret = copy_from_user((void *)((char *)max_stripe_size_b+byte),
-                           (void __user *)((char *)request[1]+byte), n_bytes_left);
+                           (void __user *)((unsigned long)request[1]+byte), n_bytes_left);
       if (ret < 0) {
         printk(KERN_WARNING "PULP: Cannot copy stripe information from user space.\n");
         return ret;
@@ -1174,7 +1280,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     n_bytes_left = rab_stripe_req[rab_mapping].n_elements*sizeof(unsigned *); 
     while (ret > 0) {
       ret = copy_from_user((void *)((char *)rab_stripe_ptrs+byte),
-                           (void __user *)((char *)request[2]+byte), n_bytes_left);
+                           (void __user *)((unsigned long)request[2]+byte), n_bytes_left);
       if (ret < 0) {
         printk(KERN_WARNING "PULP: Cannot copy stripe information from user space.\n");
         return ret;
@@ -1311,6 +1417,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       clk_cntr_map_sg += (arm_clk_cntr_value - arm_clk_cntr_value_start);
 #endif   
 
+    #if PLATFORM != JUNO
       if(!elem_cur->use_acp) {
         // flush caches for all segments
         for (j=0; j<n_segments; j++) { 
@@ -1330,6 +1437,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
           }
         }
       }
+    #endif // PLATFORM != JUNO
 
 #ifdef PROFILE_RAB
       arm_clk_cntr_value_start = arm_clk_cntr_value;
@@ -1501,15 +1609,15 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     // update counters in shared memory
     iowrite32(clk_cntr_setup,
-              (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_SETUP_OFFSET_B));
+              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_SETUP_OFFSET_B));
     iowrite32(clk_cntr_cache_flush,
-              (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_CACHE_FLUSH_OFFSET_B));
+              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_CACHE_FLUSH_OFFSET_B));
     iowrite32(clk_cntr_get_user_pages,
-              (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_GET_USER_PAGES_OFFSET_B));
+              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_GET_USER_PAGES_OFFSET_B));
     iowrite32(clk_cntr_map_sg,
-              (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_MAP_SG_OFFSET_B));
+              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_MAP_SG_OFFSET_B));
     iowrite32(n_pages_setup,
-              (void *)((unsigned)my_dev.l3_mem+N_PAGES_SETUP_OFFSET_B));
+              (void *)((unsigned long)my_dev.l3_mem+N_PAGES_SETUP_OFFSET_B));
 #endif
 
     // for debugging
@@ -1574,8 +1682,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     n_cleanups++;
 
     // update counters in shared memory
-    iowrite32(clk_cntr_cleanup,(void *)((unsigned)my_dev.l3_mem+CLK_CNTR_CLEANUP_OFFSET_B));
-    iowrite32(n_cleanups,(void *)((unsigned)my_dev.l3_mem+N_CLEANUPS_OFFSET_B));
+    iowrite32(clk_cntr_cleanup,(void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_CLEANUP_OFFSET_B));
+    iowrite32(n_cleanups,(void *)((unsigned long)my_dev.l3_mem+N_CLEANUPS_OFFSET_B));
 
     // cleanup driver variables
     clk_cntr_response = 0;   
@@ -1632,7 +1740,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     if (err) {
       printk(KERN_WARNING "PULP: Locking of user-space pages failed.\n");
       return err;
-    }    
+    }
    
     // virtual to physcial address translation + segmentation
     n_segments = pulp_mem_map_sg(&addr_start_vec, &addr_end_vec, &addr_offset_vec,
@@ -1670,6 +1778,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }
       size_b = addr_end_vec[i] - addr_start_vec[i];
 
+      #if PLATFORM != JUNO
       // flush caches
       for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
         // flush the whole page?
@@ -1685,6 +1794,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   
         pulp_mem_cache_flush(pages[j],offset_start,offset_end);
       }
+      #endif // PLATFORM != JUNO
 
       // prepare the transfers, fill the descriptors
       err = pulp_dma_xfer_prep(&descs[i], &pulp_dma_chan[dma_cmd],
@@ -1743,7 +1853,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     byte = 0;
     n_bytes_left = sizeof(unsigned); 
     while (ret > 0) {
-      ret = __copy_from_user((void *)((char *)rab_mh_use_acp+byte),
+      ret = __copy_from_user((void *)((char *)request+byte),
                              (void __user *)((char *)arg+byte), n_bytes_left);
       if (ret < 0) {
         printk(KERN_WARNING "PULP: Cannot copy ACP flag from user space.\n");
@@ -1752,6 +1862,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       byte += (n_bytes_left - ret);
       n_bytes_left = ret;
     }
+    rab_mh_use_acp = request[0];
 
     // create workqueue for RAB miss handling
     //rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
@@ -1779,7 +1890,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     clk_cntr_setup = 0;
     clk_cntr_cache_flush = 0;
     clk_cntr_get_user_pages = 0;
-    iowrite32(0, (void *)((unsigned)my_dev.l3_mem+N_MISSES_OFFSET_B));
+    iowrite32(0, (void *)((unsigned long)my_dev.l3_mem+N_MISSES_OFFSET_B));
 #endif
 
     // enable - protect with semaphore?
@@ -1825,111 +1936,12 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 /***********************************************************************************
  *
- * read 
- *
- ***********************************************************************************/
-ssize_t pulp_mailbox_read(struct file *filp, char __user *buf, size_t count, loff_t *offp)
-{
-  int i;
-  unsigned long not_copied;
-  
-  spin_lock_irqsave(&mailbox_fifo_lock, flags);
-  while ( (mailbox_fifo_wr == mailbox_fifo_rd) && !mailbox_fifo_full ) { // nothing to read
-    spin_unlock_irqrestore(&mailbox_fifo_lock, flags); // release the spinlock
-    
-    if ( filp->f_flags & O_NONBLOCK )
-      return -EAGAIN;
-    if ( wait_event_interruptible(mailbox_wq, (mailbox_fifo_wr != mailbox_fifo_rd) || mailbox_fifo_full) )
-      return -ERESTARTSYS; // signal: tell the fs layer to handle it
-   
-    spin_lock_irqsave(&mailbox_fifo_lock, flags);
-  }
-
-  // mailbox_fifo contains data to be read by user
-  if ( mailbox_fifo_wr > mailbox_fifo_rd )
-    count = min(count, (size_t)(mailbox_fifo_wr - mailbox_fifo_rd)*sizeof(mailbox_fifo[0]));
-  else // wrap, return data up to end of FIFO 
-    count = min(count, (size_t)(mailbox_fifo + 2*MAILBOX_FIFO_DEPTH - mailbox_fifo_rd)*sizeof(mailbox_fifo[0]));
- 
-  // release the spinlock, copy_to_user can sleep
-  spin_unlock_irqrestore(&mailbox_fifo_lock, flags); 
-
-  not_copied = copy_to_user(buf, mailbox_fifo_rd, count);
-  
-  spin_lock_irqsave(&mailbox_fifo_lock, flags);
-  // update read pointer
-  mailbox_fifo_rd = mailbox_fifo_rd + (count - not_copied)/sizeof(mailbox_fifo[0]);
-  // wrap around
-  if ( mailbox_fifo_rd >= (mailbox_fifo + 2*MAILBOX_FIFO_DEPTH) )
-    mailbox_fifo_rd = mailbox_fifo;
-  // not full anymore?
-  if ( mailbox_fifo_full && ((count - not_copied)/sizeof(mailbox_fifo[0]) > 0) ) {
-    mailbox_fifo_full = 0;
-
-    // if there is data available in the mailbox, read it to mailbox_fifo (interrupt won't be triggered anymore)
-    while ( !mailbox_fifo_full &&
-            !(0x1 & ioread32((void *)((unsigned)my_dev.mailbox+MAILBOX_STATUS_OFFSET_B))) ) {
-
-      // read mailbox
-      mailbox_data = ioread32((void *)((unsigned)my_dev.mailbox+MAILBOX_RDDATA_OFFSET_B));
-    
-      if (mailbox_data == RAB_UPDATE) {
-        printk(KERN_WARNING "PULP: Read RAB_UPDATE request from mailbox in pulp_mailbox_read. This request will be ignored.");
-        continue;
-      }
-      else {
-        if (mailbox_data == TO_RUNTIME) // don't write to FIFO
-          continue;
-  
-        // write to mailbox_fifo
-        *mailbox_fifo_wr = mailbox_data;
-
-        // update write pointer
-        mailbox_fifo_wr++;
-        // wrap around?
-        if ( mailbox_fifo_wr >= (mailbox_fifo + 2*MAILBOX_FIFO_DEPTH) )
-          mailbox_fifo_wr = mailbox_fifo;
-        // full?
-        if ( mailbox_fifo_wr == mailbox_fifo_rd )
-          mailbox_fifo_full = 1;
-        if (DEBUG_LEVEL_MBOX > 0) {
-          printk(KERN_INFO "PULP: Written %#x to mailbox_fifo.\n",mailbox_data);
-          printk(KERN_INFO "PULP: mailbox_fifo_wr: %d\n",(unsigned)(mailbox_fifo_wr-mailbox_fifo));
-          printk(KERN_INFO "PULP: mailbox_fifo_rd: %d\n",(unsigned)(mailbox_fifo_rd-mailbox_fifo));
-          printk(KERN_INFO "PULP: mailbox_fifo_full %d\n",mailbox_fifo_full);
-          if (DEBUG_LEVEL_MBOX > 1) {
-            for (i=0; i<2*MAILBOX_FIFO_DEPTH; i++) {
-              printk(KERN_INFO "mailbox_fifo[%d]: %d %d %#x \n",i,
-                     (&mailbox_fifo[i] == mailbox_fifo_wr) ? 1:0,
-                     (&mailbox_fifo[i] == mailbox_fifo_rd) ? 1:0,
-                     mailbox_fifo[i]);
-            }
-          }
-        }
-      }
-    }
-  }
-  if (DEBUG_LEVEL_MBOX > 0) {
-    printk(KERN_INFO "PULP: Read from mailbox_fifo.\n");
-    printk(KERN_INFO "PULP: mailbox_fifo_wr: %d\n",(unsigned)(mailbox_fifo_wr-mailbox_fifo));
-    printk(KERN_INFO "PULP: mailbox_fifo_rd: %d\n",(unsigned)(mailbox_fifo_rd-mailbox_fifo));
-    printk(KERN_INFO "PULP: mailbox_fifo_full %d\n",mailbox_fifo_full);
-  }
-  spin_unlock_irqrestore(&mailbox_fifo_lock, flags); // release the spinlock
-
-  if (DEBUG_LEVEL_MBOX > 0) {
-    printk(KERN_INFO "PULP: Read %li words from mailbox_fifo.\n",(count - not_copied)/sizeof(mailbox_fifo[0]));
-  }
-
-  if ( not_copied )
-    return -EFAULT; // bad address
-  else
-    return count;
-}
-
-/***********************************************************************************
- *
- * RAB miss handling routine 
+ * ███╗   ███╗██╗  ██╗██████╗ 
+ * ████╗ ████║██║  ██║██╔══██╗
+ * ██╔████╔██║███████║██████╔╝
+ * ██║╚██╔╝██║██╔══██║██╔══██╗
+ * ██║ ╚═╝ ██║██║  ██║██║  ██║
+ * ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝
  *
  ***********************************************************************************/
 static void pulp_rab_handle_miss(unsigned unused)
@@ -1952,8 +1964,8 @@ static void pulp_rab_handle_miss(unsigned unused)
 
   // empty miss-handling FIFOs
   for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
-    rab_mh_addr[i] = ioread32((void *)((unsigned)my_dev.rab_config+RAB_MH_ADDR_FIFO_OFFSET_B));
-    rab_mh_id[i]   = ioread32((void *)((unsigned)my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B));
+    rab_mh_addr[i] = ioread32((void *)((unsigned long)my_dev.rab_config+RAB_MH_ADDR_FIFO_OFFSET_B));
+    rab_mh_id[i]   = ioread32((void *)((unsigned long)my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B));
   
     // detect empty FIFOs
     if ( (rab_mh_addr[i] & 0x1) || (rab_mh_id[i] & 0x80000000) )
@@ -1995,7 +2007,7 @@ static void pulp_rab_handle_miss(unsigned unused)
     }
   
 #ifdef PROFILE_RAB_MH
-    err = ioread32((void *)((unsigned)my_dev.l3_mem+N_MISSES_OFFSET_B));
+    err = ioread32((void *)((unsigned long)my_dev.l3_mem+N_MISSES_OFFSET_B));
     // reset internal counters
     if (!err) {      
       clk_cntr_setup = 0;
@@ -2012,7 +2024,7 @@ static void pulp_rab_handle_miss(unsigned unused)
     n_misses++;
 
     // read the PE timer
-    clk_cntr_sched[id_pe] += ioread32((void *)((unsigned)my_dev.clusters
+    clk_cntr_sched[id_pe] += ioread32((void *)((unsigned long)my_dev.clusters
                                                +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
     // save resp_tmp
     clk_cntr_resp[id_pe] += clk_cntr_resp_tmp[id_pe];
@@ -2027,7 +2039,7 @@ static void pulp_rab_handle_miss(unsigned unused)
         if (DEBUG_LEVEL_RAB_MH > 0) {
           printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
           // for debugging only - deactivate fetch enable
-          // iowrite32(0xC0000000,(void *)((unsigned)my_dev.gpio+0x8));
+          // iowrite32(0xC0000000,(void *)((unsigned long)my_dev.gpio+0x8));
         }
         break;
       }
@@ -2140,9 +2152,11 @@ static void pulp_rab_handle_miss(unsigned unused)
       clk_cntr_setup += (arm_clk_cntr_value - arm_clk_cntr_value_start);
 #endif
 
+#if PLATFORM != JUNO
       // flush the entire page from the caches if ACP is not used
       if (!rab_mh_use_acp)
         pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
+#endif      
 
       if (rab_slice_req->rab_slice == (RAB_N_SLICES - 1)) {
         rab_mh_date++;
@@ -2166,7 +2180,7 @@ static void pulp_rab_handle_miss(unsigned unused)
 
     // wake up the sleeping PE
     iowrite32(BIT_N_SET(id_pe),
-              (void *)((unsigned)my_dev.clusters + CLUSTER_SIZE_B*id_cluster
+              (void *)((unsigned long)my_dev.clusters + CLUSTER_SIZE_B*id_cluster
                        + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B));
 
     /*
@@ -2176,10 +2190,10 @@ static void pulp_rab_handle_miss(unsigned unused)
 
 #ifdef PROFILE_RAB_MH
     // read the PE timer
-    clk_cntr_refill[id_pe] += ioread32((void *)((unsigned)my_dev.clusters
+    clk_cntr_refill[id_pe] += ioread32((void *)((unsigned long)my_dev.clusters
                                                 +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
     // update counters in shared memory
-    iowrite32(n_misses, (void *)((unsigned)my_dev.l3_mem+N_MISSES_OFFSET_B));
+    iowrite32(n_misses, (void *)((unsigned long)my_dev.l3_mem+N_MISSES_OFFSET_B));
 #endif
     
     // error handling
@@ -2198,27 +2212,156 @@ static void pulp_rab_handle_miss(unsigned unused)
 #ifdef PROFILE_RAB_MH
   // update counters in shared memory
   iowrite32(n_first_misses,
-            (void *)((unsigned)my_dev.l3_mem+N_FIRST_MISSES_OFFSET_B));
+            (void *)((unsigned long)my_dev.l3_mem+N_FIRST_MISSES_OFFSET_B));
   iowrite32(clk_cntr_setup,
-            (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_SETUP_OFFSET_B));
+            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_SETUP_OFFSET_B));
   iowrite32(clk_cntr_cache_flush,
-            (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_CACHE_FLUSH_OFFSET_B));
+            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_CACHE_FLUSH_OFFSET_B));
   iowrite32(clk_cntr_get_user_pages,
-            (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_GET_USER_PAGES_OFFSET_B));
+            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_GET_USER_PAGES_OFFSET_B));
 
   for (j=0; j<N_CORES; j++) {
     iowrite32(clk_cntr_refill[j],
-              (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_REFILL_OFFSET_B+4*j));
+              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_REFILL_OFFSET_B+4*j));
     iowrite32(clk_cntr_sched[j],
-              (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_SCHED_OFFSET_B+4*j));
+              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_SCHED_OFFSET_B+4*j));
     iowrite32(clk_cntr_resp[j],
-              (void *)((unsigned)my_dev.l3_mem+CLK_CNTR_RESP_OFFSET_B+4*j));
+              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_RESP_OFFSET_B+4*j));
   }
 
 #endif
-
 }
 
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Pirmin Vogel");
-MODULE_DESCRIPTION("PULPonFPGA driver");
+// ███╗   ██╗███████╗██╗    ██╗
+// ████╗  ██║██╔════╝██║    ██║
+// ██╔██╗ ██║█████╗  ██║ █╗ ██║
+// ██║╚██╗██║██╔══╝  ██║███╗██║
+// ██║ ╚████║███████╗╚███╔███╔╝
+// ╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝ 
+//
+// NEW - move to pulp_rab.h/c when cleaning up ioctl stuff
+//
+// Bottom-half -> should actually go into a tasklet                         
+void pulp_rab_update(void)
+{
+  int i,j;
+  unsigned idx, n_slices, n_fields, offset;
+
+#if !defined(MEM_SHARING) || (MEM_SHARING == 2)  
+  unsigned flags = 0;
+#endif
+
+  if (DEBUG_LEVEL_RAB > 0) {
+      printk(KERN_INFO "PULP: RAB update requested.\n");
+  }
+  
+#ifdef PROFILE_RAB 
+  // stop the PULP timer  
+  iowrite32(0x1,(void *)((unsigned long)my_dev.clusters+TIMER_STOP_OFFSET_B));
+
+  // read the PULP timer
+  clk_cntr_response += ioread32((void *)((unsigned long)my_dev.clusters+TIMER_GET_TIME_LO_OFFSET_B));
+
+  // reset the ARM clock counter
+  asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
+#endif
+  
+#if !defined(MEM_SHARING) || (MEM_SHARING == 2)
+  rab_stripe_req[rab_mapping_active].stripe_idx++;
+  idx = rab_stripe_req[rab_mapping_active].stripe_idx;
+  
+  // process every data element independently
+  for (i=0; i<rab_stripe_req[rab_mapping_active].n_elements; i++) {
+    elem_cur = rab_stripe_req[rab_mapping_active].elements[i];
+    n_slices = (elem_cur->n_slices_per_stripe);
+    n_fields = 1+elem_cur->n_slices;
+  
+    // process every slice independently
+    for (j=0; j<n_slices; j++) {
+      offset = 0x20*(elem_cur->rab_port*RAB_N_SLICES+elem_cur->slices[(idx & 0x1)*n_slices+j]);
+  
+      // deactivate slices
+      iowrite32(0x0,(void *)((unsigned long)my_dev.rab_config+offset+0x1c));
+  
+      // set up new translations rules
+      if ( elem_cur->rab_stripes[idx*n_fields+j*2+1] ) { // offset != 0
+        // set up the slice
+        RAB_SLICE_SET_FLAGS(flags, elem_cur->prot, elem_cur->use_acp);
+        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],
+                  (void *)((unsigned long)my_dev.rab_config+offset+0x20)); // start_addr
+        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+2],
+                  (void *)((unsigned long)my_dev.rab_config+offset+0x28)); // end_addr
+        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+1],
+                  (void *)((unsigned long)my_dev.rab_config+offset+0x30)); // offset  
+        // activate the slice
+        iowrite32(flags, (void *)((unsigned long)my_dev.rab_config+offset+0x38));
+  #ifdef PROFILE_RAB 
+          n_slices_updated++;
+  #endif
+      }
+    }
+  }
+#endif
+  // signal ready to PULP
+  iowrite32(HOST_READY,(void *)((unsigned long)my_dev.mbox+MBOX_WRDATA_OFFSET_B));
+        
+#ifdef PROFILE_RAB 
+  // read the ARM clock counter
+  asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
+  clk_cntr_update += arm_clk_cntr_value;
+  
+  n_updates++;
+  
+  // update counters in shared memory
+  iowrite32(clk_cntr_response,
+            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_RESPONSE_OFFSET_B));
+  iowrite32(clk_cntr_update,
+            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_UPDATE_OFFSET_B));
+  iowrite32(n_slices_updated,
+            (void *)((unsigned long)my_dev.l3_mem+N_SLICES_UPDATED_OFFSET_B));
+  iowrite32(n_updates,
+            (void *)((unsigned long)my_dev.l3_mem+N_UPDATES_OFFSET_B));
+#endif    
+  
+#if defined(PROFILE_RAB) || defined(JPEG) 
+  if (idx == rab_stripe_req[rab_mapping_active].n_stripes) {
+    rab_stripe_req[rab_mapping_active].stripe_idx = 0;
+    if (DEBUG_LEVEL_RAB > 0) {
+      printk(KERN_INFO "PULP: RAB stripe table wrap around.\n");
+    }
+  }
+#endif
+  if (DEBUG_LEVEL_RAB > 0) {
+    printk(KERN_INFO "PULP: RAB update completed.\n");
+  }
+
+  return;
+}
+
+void pulp_rab_switch(void)
+{
+  if (DEBUG_LEVEL_RAB > 0) {
+    printk(KERN_INFO "PULP: RAB switch requested.\n");
+  }
+  
+  // for debugging
+  //pulp_rab_print_mapping(my_dev.rab_config, 0xAAAA);
+  
+  // switch RAB mapping
+  rab_mapping_active = (rab_mapping_active) ? 0 : 1;
+  pulp_rab_switch_mapping(my_dev.rab_config,rab_mapping_active);
+  // reset striping idx
+  rab_stripe_req[rab_mapping_active].stripe_idx = 0;
+  
+  if (DEBUG_LEVEL_RAB > 0) {
+    printk(KERN_INFO "PULP: RAB switch completed.\n");
+  }
+    
+  // for debugging
+  //pulp_rab_print_mapping(my_dev.rab_config, 0xAAAA);
+  
+  // signal ready to PULP
+  iowrite32(HOST_READY,(void *)((unsigned long)my_dev.mbox+MBOX_WRDATA_OFFSET_B));
+
+  return;
+}

@@ -1,16 +1,19 @@
-obj-m := pulp.o
-pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o
+obj-m     := pulp.o
+pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o
 
-ARCH := arm
-CROSS_COMPILE := arm-xilinx-linux-gnueabi-
+PLATFORM      := ${shell echo ${PLATFORM}}
 
-KERNEL_DIR := $(shell echo $(KERNEL_DIR))
-ARM_INC_DIR1 := $(shell echo $(ARM_INC_DIR1))
-PULP_INC_DIR1 := $(shell echo $(PULP_INC_DIR1))
-PULP_INC_DIR2 := $(shell echo $(PULP_INC_DIR2))
+ARCH          := ${shell echo ${KERNEL_ARCH}}
+CROSS_COMPILE := ${shell echo ${KERNEL_CROSS_COMPILE}}
+
+KERNEL_DIR    := ${shell echo ${KERNEL_DIR}}
+ARM_INC_DIR1  := ${shell echo ${ARM_INC_DIR1}}
+PULP_INC_DIR1 := ${shell echo ${PULP_INC_DIR1}}
+PULP_INC_DIR2 := ${shell echo ${PULP_INC_DIR2}}
 
 ccflags-y := -I${ARM_INC_DIR1}
 ccflags-y += -I${PULP_INC_DIR1} -I${PULP_INC_DIR2}
+ccflags-y += -DPLATFORM=${PLATFORM}
 
 all: modules
 modules:
@@ -24,3 +27,4 @@ clean:
 	rm -f Module.symvers
 	rm -f .*.o.cmd
 	rm -f .*.ko.cmd
+	rm -f *.read
