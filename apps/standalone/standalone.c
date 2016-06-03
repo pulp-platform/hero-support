@@ -66,12 +66,6 @@ int main(int argc, char *argv[]) {
 
   // clear memories?
   
-  // clear stdout
-  pulp_stdout_clear(pulp,0);
-  pulp_stdout_clear(pulp,1);
-  pulp_stdout_clear(pulp,2);
-  pulp_stdout_clear(pulp,3);
-
   /*
    * Body
    */
@@ -88,18 +82,6 @@ int main(int argc, char *argv[]) {
   // stop execution
   pulp_exe_stop(pulp);
  
-  // -> poll stdout
-  pulp_stdout_print(pulp,0);
-  pulp_stdout_print(pulp,1);
-  pulp_stdout_print(pulp,2);
-  pulp_stdout_print(pulp,3);
-
-  // clear stdout
-  pulp_stdout_clear(pulp,0);
-  pulp_stdout_clear(pulp,1);
-  pulp_stdout_clear(pulp,2);
-  pulp_stdout_clear(pulp,3);
-
   /*
    * Cleanup
    */

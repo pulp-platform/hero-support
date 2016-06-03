@@ -257,24 +257,9 @@ int pulp_mmap(PulpDev *pulp)
     printf("Clock Manager memory mapped to virtual user space at %p.\n",pulp->clking.v_addr);
   }
 
-  // STDOUT
-  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
-    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B; // start of Stdout
-  pulp->stdout.size = STDOUT_SIZE_B;
-    
-  pulp->stdout.v_addr = mmap(NULL,pulp->stdout.size,
-                             PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
-  if (pulp->stdout.v_addr == MAP_FAILED) {
-    printf("MMAP failed for shared L3 memory.\n");
-    return -EIO;
-  }
-  else {
-    printf("Stdout memory mapped to virtual user space at %p.\n",pulp->stdout.v_addr);
-  }
-
   // RAB config
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
-    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B; // start of RAB config
+    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B; // start of RAB config
   pulp->rab_config.size = RAB_CONFIG_SIZE_B;
     
   pulp->rab_config.v_addr = mmap(NULL,pulp->rab_config.size,
@@ -290,7 +275,7 @@ int pulp_mmap(PulpDev *pulp)
 #if PLATFORM != JUNO // ZYNQ
   // SLCR
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
-    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B; // start of SLCR
+    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B; // start of SLCR
   pulp->slcr.size = SLCR_SIZE_B;
     
   pulp->slcr.v_addr = mmap(NULL,pulp->slcr.size,
@@ -305,8 +290,7 @@ int pulp_mmap(PulpDev *pulp)
 
   // MPCore
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
-    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B
-    + SLCR_SIZE_B; // start of MPCore
+    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B; // start of MPCore
   pulp->mpcore.size = MPCORE_SIZE_B;
     
   pulp->mpcore.v_addr = mmap(NULL,pulp->mpcore.size,
@@ -1922,6 +1906,7 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 }
 
 /****************************************************************************************/
+
 int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned char port,
                                    unsigned p_height, unsigned p_width, unsigned i_step,
                                    unsigned n_channels, unsigned char **channels,
@@ -2094,101 +2079,4 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   free(rab_stripes);
 
   return 0;
-}
-
-/****************************************************************************************/
-
-// qprintf stuff
-#define ANSI_RESET   "\x1b[0m"
-
-#define ANSI_RED     "\x1b[31m"
-#define ANSI_GREEN   "\x1b[32m"
-#define ANSI_YELLOW  "\x1b[33m"
-#define ANSI_BLUE    "\x1b[34m"
-#define ANSI_MAGENTA "\x1b[35m"
-#define ANSI_CYAN    "\x1b[36m"
-
-#define ANSI_BRED     "\x1b[31;1m"
-#define ANSI_BGREEN   "\x1b[32;1m"
-#define ANSI_BYELLOW  "\x1b[33;1m"
-#define ANSI_BBLUE    "\x1b[34;1m"
-#define ANSI_BMAGENTA "\x1b[35;1m"
-#define ANSI_BCYAN    "\x1b[36;1m"
-
-#define PULP_PRINTF(...) printf("[" ANSI_BRED "PULP" ANSI_RESET "] " __VA_ARGS__)
-#define HOST_PRINTF(...) printf("[" ANSI_BGREEN "HOST" ANSI_RESET "] " __VA_ARGS__)
-
-// from http://creativeandcritical.net/str-replace-c/
-static char *replace_str2(const char *str, const char *old, const char *new) {
-  char *ret, *r;
-  const char *p, *q;
-  size_t oldlen = strlen(old);
-  size_t count, retlen, newlen = strlen(new);
-  int samesize = (oldlen == newlen);
-
-  if (!samesize) {
-    for (count = 0, p = str; (q = strstr(p, old)) != NULL; p = q + oldlen)
-      count++;
-    /* This is undefined if p - str > PTRDIFF_MAX */
-    retlen = p - str + strlen(p) + count * (newlen - oldlen);
-  } else
-    retlen = strlen(str);
-
-  if ((ret = malloc(retlen + 1)) == NULL)
-    return NULL;
-
-  r = ret, p = str;
-  while (1) {
-    /* If the old and new strings are different lengths - in other
-     * words we have already iterated through with strstr above,
-     * and thus we know how many times we need to call it - then we
-     * can avoid the final (potentially lengthy) call to strstr,
-     * which we already know is going to return NULL, by
-     * decrementing and checking count.
-     */
-    if (!samesize && !count--)
-      break;
-    /* Otherwise i.e. when the old and new strings are the same
-     * length, and we don't know how many times to call strstr,
-     * we must check for a NULL return here (we check it in any
-     * event, to avoid further conditions, and because there's
-     * no harm done with the check even when the old and new
-     * strings are different lengths).
-     */
-    if ((q = strstr(p, old)) == NULL)
-      break;
-    /* This is undefined if q - p > PTRDIFF_MAX */
-    //ptrdiff_t l = q - p;
-    unsigned l = q - p;
-    memcpy(r, p, l);
-    r += l;
-    memcpy(r, new, newlen);
-    r += newlen;
-    p = q + oldlen;
-  }
-  strcpy(r, p);
-
-  return ret;
-}
-
-void pulp_stdout_print(PulpDev *pulp, unsigned pe)
-{
-  PULP_PRINTF("PE %d\n",pe);
-
-  char *string_ptr = (char *) (pulp->stdout.v_addr + STDOUT_PE_SIZE_B*pe);
-  char *pulp_str = replace_str2((const char *) string_ptr, 
-                                "\n", "\n[" ANSI_BRED "PULP" ANSI_RESET "] ");
-  PULP_PRINTF("%s\n", pulp_str);
-  fflush(stdout);
-}
-
-void pulp_stdout_clear(PulpDev *pulp, unsigned pe)
-{
-  int i;
-  for (i=0; i<(STDOUT_PE_SIZE_B/4); i++) {
-    pulp_write32(pulp->stdout.v_addr,STDOUT_PE_SIZE_B*pe+i*4,'b',0);    
-  }
-  for (i=0; i<STDOUT_SIZE_B/4; i++) {
-    pulp_write32(pulp->stdout.v_addr,i,'w',0);    
-  }
 }

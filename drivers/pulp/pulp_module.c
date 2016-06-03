@@ -709,41 +709,32 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
     strcpy(type,"Clking");
   }
   else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
-                  + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B)) {
-    // STDOUT
-    base_addr = STDOUT_H_BASE_ADDR;
-    off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
-      - H_GPIO_SIZE_B - CLKING_SIZE_B;
-    size_b = STDOUT_SIZE_B;
-    strcpy(type,"Stdout");
-  }
-  else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
-                  + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B)) {
+                  + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B)) {
     // RAB config
     base_addr = RAB_CONFIG_BASE_ADDR;
     off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
-      - H_GPIO_SIZE_B - CLKING_SIZE_B - STDOUT_SIZE_B;
+      - H_GPIO_SIZE_B - CLKING_SIZE_B;
     size_b = RAB_CONFIG_SIZE_B;
     strcpy(type,"RAB config");
   }
   #if PLATFORM != JUNO
     // Zynq System
     else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
-                    + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B)) {
+                    + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B)) {
       // Zynq SLCR
       base_addr = SLCR_BASE_ADDR;
       off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
-        - H_GPIO_SIZE_B - CLKING_SIZE_B - STDOUT_SIZE_B - RAB_CONFIG_SIZE_B;
+        - H_GPIO_SIZE_B - CLKING_SIZE_B - RAB_CONFIG_SIZE_B;
       size_b = SLCR_SIZE_B;
       strcpy(type,"Zynq SLCR");
     }
     else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
-                    + H_GPIO_SIZE_B + CLKING_SIZE_B + STDOUT_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B 
+                    + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B 
                     + MPCORE_SIZE_B)) {
       // Zynq MPCore
       base_addr = MPCORE_BASE_ADDR;
       off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
-        - H_GPIO_SIZE_B - CLKING_SIZE_B - STDOUT_SIZE_B - RAB_CONFIG_SIZE_B - SLCR_SIZE_B;
+        - H_GPIO_SIZE_B - CLKING_SIZE_B - RAB_CONFIG_SIZE_B - SLCR_SIZE_B;
       size_b = MPCORE_SIZE_B;
       strcpy(type,"Zynq MPCore");
     }

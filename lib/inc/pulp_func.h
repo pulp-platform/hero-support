@@ -31,7 +31,6 @@ typedef struct {
   PulpSubDev l3_mem; 
   PulpSubDev gpio;
   PulpSubDev clking;
-  PulpSubDev stdout;
   PulpSubDev rab_config;
   PulpSubDev pulp_res_v_addr;
   PulpSubDev l3_mem_res_v_addr;
@@ -76,9 +75,6 @@ void pulp_mbox_clear_is(PulpDev *pulp);
 
 int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
 int pulp_clking_measure_freq(PulpDev *pulp);
-
-void pulp_stdout_print(PulpDev *pulp, unsigned pe);
-void pulp_stdout_clear(PulpDev *pulp, unsigned pe);
 
 int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
 		         unsigned char prot, unsigned char port,

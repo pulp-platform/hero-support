@@ -132,7 +132,6 @@
   // PULP address map
   #define H_GPIO_BASE_ADDR     0x51000000
   #define CLKING_BASE_ADDR     0x51010000
-  #define STDOUT_H_BASE_ADDR   0x51020000
   #define RAB_CONFIG_BASE_ADDR 0x51030000
   //#define TRACE_CTRL_BASE_ADDR 0x51040000 // not yet used
   //#define INTR_REG_BASE_ADDR   0x51050000 // not yet used on ZYNQ
@@ -182,7 +181,6 @@
   // PULP address map
   #define H_GPIO_BASE_ADDR     0x6E000000
   #define CLKING_BASE_ADDR     0x6E010000
-  #define STDOUT_H_BASE_ADDR   0x6E020000
   #define RAB_CONFIG_BASE_ADDR 0x6E030000
   //#define TRACE_CTRL_BASE_ADDR 0x6E040000 // not yet used
   #define INTR_REG_BASE_ADDR   0x6E050000
@@ -226,9 +224,6 @@
 #define CLKING_STATUS_REG_OFFSET_B    0x4 
 
 #define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
-
-#define STDOUT_SIZE_B    0x10000
-#define STDOUT_PE_SIZE_B 0x1000
 
 #define RAB_CONFIG_SIZE_B         0x1000
 #define RAB_N_MAPPINGS            2
