@@ -38,7 +38,8 @@ typedef struct {
   PulpSubDev slcr;
   PulpSubDev mpcore;
 #endif
-  unsigned int l3_offset; // used for pulp_l3_malloc
+  unsigned int l3_offset;   // used for pulp_l3_malloc
+  unsigned int cluster_sel; // cluster select
 } PulpDev;
 
 // shared variable data structure

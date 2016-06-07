@@ -5,6 +5,7 @@
 #include <asm/uaccess.h>      /* copy_to_user, copy_from_user, access_ok */
 #include <asm/io.h>           /* ioremap, iounmap, iowrite32 */
 #include <linux/fs.h>         /* file_operations struct, struct file */
+#include <linux/sched.h>      /* wake_up_interruptible(), TASK_INTERRUPTIBLE */
 
 #include "pulp_module.h"
 

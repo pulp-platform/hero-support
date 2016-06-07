@@ -299,14 +299,14 @@
   #define L3_MEM_H_BASE_ADDR         (0x1000000000LL - L3_MEM_SIZE_B)
   #define MBOX_H_BASE_ADDR            0x65120000 // Interface 0
   #define SOC_PERIPHERALS_H_BASE_ADDR 0x65100000
-
-  // Redefine MBOX_BASE_ADDR -> edit pulpemu.h!!!!
-  #ifdef MBOX_BASE_ADDR
-    #undef MBOX_BASE_ADDR
-  #endif
-  #define MBOX_BASE_ADDR 0x1A121000 // Interface 1
   
 #endif // PLATFORM != JUNO
+
+// Redefine MBOX_BASE_ADDR -> edit pulpemu.h!!!!
+#ifdef MBOX_BASE_ADDR
+  #undef MBOX_BASE_ADDR
+#endif
+#define MBOX_BASE_ADDR 0x1A121000 // Interface 1
 
 #define CLUSTERS_H_BASE_ADDR (PULP_H_BASE_ADDR)
 #define TIMER_H_OFFSET_B     (TIMER_BASE_ADDR - PULP_BASE_ADDR)

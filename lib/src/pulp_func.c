@@ -1120,17 +1120,31 @@ int pulp_boot(PulpDev *pulp, TaskDesc *task)
 int pulp_load_bin(PulpDev *pulp, char *name)
 {
   int i;
-
-  // prepare binary reading
   char * bin_name;
-  bin_name = (char *)malloc((strlen(name)+4+1)*sizeof(char));
-  if (!bin_name) {
-    printf("ERROR: Malloc failed for bin_name.\n");
-    return -ENOMEM;
+  int append = 0;  
+
+  // prepare binary name
+  if ( strlen(name) < 5)
+    append = 1;
+  else {
+    char * last_dot;
+    last_dot = strrchr(name, '.');
+    if ( (NULL == last_dot) || (strncmp(last_dot,".bin",4)) )
+      append = 1;
   }
-  strcpy(bin_name,name);
-  strcat(bin_name,".bin");
   
+  if (append) {
+    bin_name = (char *)malloc((strlen(name)+4+1)*sizeof(char));
+    if (!bin_name) {
+      printf("ERROR: Malloc failed for bin_name.\n");
+      return -ENOMEM;
+    }
+    strcpy(bin_name,name);
+    strcat(bin_name,".bin");
+  }
+  else
+    bin_name = name;
+
   printf("Loading binary file: %s\n",bin_name);
 
   // read in binary
@@ -1153,6 +1167,10 @@ int pulp_load_bin(PulpDev *pulp, char *name)
   for (i=0; i<nsz/4; i++)
     pulp->l2_mem.v_addr[i] = bin[i];
 
+  // cleanup
+  if (append)
+    free(bin_name);
+
   return 0;
 }
 
@@ -1163,8 +1181,12 @@ int pulp_load_bin(PulpDev *pulp, char *name)
  */
 void pulp_exe_start(PulpDev *pulp)
 {
+
+  unsigned int value = 0xC0000000;
+  value |= pulp->cluster_sel;
+
   printf("Starting program execution.\n");
-  pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000001);
+  pulp_write32(pulp->gpio.v_addr,0x8,'b',value);
 
   return;
 }
@@ -1192,24 +1214,24 @@ void pulp_exe_stop(PulpDev *pulp)
  */
 int pulp_exe_wait(PulpDev *pulp, int timeout_s)
 {
-  unsigned status;
+  unsigned status, gpio_eoc;
   float interval_us = 100000;
-  float timeout = 0;
+  float timeout = (float)timeout_s*1000000/interval_us;
 
-  if ( !(pulp_read32(pulp->gpio.v_addr,0,'b') & 0x1) ) {
-    timeout = (float)timeout_s*1000000/interval_us;
-    status = 1;
-    while ( status && (timeout > 0) ) {
-      usleep(interval_us);
-      timeout--;
-      status = !(pulp_read32(pulp->gpio.v_addr,0,'b') & 0x1);
-    }
-    if ( status ) {
-      printf("ERROR: PULP execution timeout.\n");
-      return -ETIME;
-    }
+  gpio_eoc = BF_GET(pulp_read32(pulp->gpio.v_addr,0,'b'), INTR_EOC_0, INTR_EOC_N-INTR_EOC_0+1);
+  status   = (gpio_eoc == pulp->cluster_sel) ? 0 : 1;
+
+  while ( status && (timeout > 0) ) {
+    usleep(interval_us);
+    timeout--;
+    gpio_eoc = BF_GET(pulp_read32(pulp->gpio.v_addr,0,'b'), INTR_EOC_0, INTR_EOC_N-INTR_EOC_0+1);
+    status   = (gpio_eoc == pulp->cluster_sel) ? 0 : 1;
   }
- 
+  if ( status ) {
+    printf("ERROR: PULP execution timeout.\n");
+    return -ETIME;
+  }
+   
   return 0;
 }
 

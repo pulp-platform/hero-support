@@ -11,7 +11,7 @@ else # ZYNQ
   vivado-2015.1 make
 
   # .read
-  vivado-2015.1 ${KERNEL_CROSS_COMPILE}-objdump -DS pulp.ko > pulp.read
+  vivado-2015.1 ${KERNEL_CROSS_COMPILE}objdump -DS pulp.ko > pulp.read
 fi
 
 # Create folder on target

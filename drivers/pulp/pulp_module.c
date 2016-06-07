@@ -54,7 +54,7 @@
 #include <linux/slab.h>       /* kmalloc */
 #include <linux/errno.h>      /* errno */
 
-#include <linux/sched.h>
+#include <linux/sched.h>      /* wake_up_interruptible(), TASK_INTERRUPTIBLE */
 #include <linux/delay.h>      /* udelay */
 #include <linux/device.h>     // class_create, device_create
 
@@ -200,12 +200,6 @@ struct file_operations pulp_fops = {
 static PulpDev my_dev;
 
 static struct class *my_class; 
-
-// for ISR
-#if PLATFORM != JUNO
-  static struct timeval time;
-  static char rab_interrupt_type[9];
-#endif
 
 // for RAB
 static RabStripeElem * elem_cur;
@@ -792,6 +786,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 
     // read and clear the interrupt register
     intr_reg_value = ioread64((void *)(unsigned long)my_dev.intr_reg);
+    //printk(KERN_INFO "PULP: Interrupt status %#lx \n",intr_reg_value);  
 
    /*********************
     *
@@ -835,7 +830,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       printk(KERN_ALERT "PULP: RAB prot interrupt received at %02li:%02li:%02li.\n",
         (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
     } 
-    if ( BF_GET(intr_reg_value, INTR_EOC_0, INTR_EOC_N-INTR_EOC_0) ) { // EOC
+    if ( BF_GET(intr_reg_value, INTR_EOC_0, INTR_EOC_N-INTR_EOC_0+1) ) { // EOC
       for (i=0; i<N_CLUSTERS; i++) {
         if ( BF_GET(intr_reg_value, INTR_EOC_0+i, 1) ) {
           printk(KERN_INFO "PULP: End of Computation Cluster %i at %02li:%02li:%02li.\n",
@@ -849,7 +844,9 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 
 #else // PLATFORM != JUNO
   irqreturn_t pulp_isr_eoc(int irq, void *ptr)
-  {  
+  { 
+    struct timeval time;
+
     // do something
     do_gettimeofday(&time);
     printk(KERN_INFO "PULP: End of Computation: %02li:%02li:%02li.\n",
@@ -861,13 +858,16 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
    
   irqreturn_t pulp_isr_mbox(int irq, void *ptr)
   {
-    pulp_mbox_intr();
+    pulp_mbox_intr(my_dev.mbox);
   
     return IRQ_HANDLED;
   }
   
   irqreturn_t pulp_isr_rab(int irq, void *ptr)
-  {    
+  { 
+    struct timeval time;
+    char rab_interrupt_type[9];
+
     // detect RAB interrupt type
     if (RAB_MISS_IRQ == irq)
       strcpy(rab_interrupt_type,"miss");
