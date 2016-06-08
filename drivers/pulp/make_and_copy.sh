@@ -1,10 +1,18 @@
 #!/bin/bash
 
-# Make
-vivado-2015.1 make
+if [ "${PLATFORM}" -eq "4" ]; then # JUNO
+  # Make
+  make
 
-# .read
-vivado-2015.1 arm-xilinx-linux-gnueabi-objdump -DS pulp.ko > pulp.read
+  # .read
+  ${KERNEL_CROSS_COMPILE}objdump -DS pulp.ko > pulp.read
+else # ZYNQ
+  # Make
+  vivado-2015.1 make
+
+  # .read
+  vivado-2015.1 ${KERNEL_CROSS_COMPILE}objdump -DS pulp.ko > pulp.read
+fi
 
 # Create folder on target
 ssh ${SCP_TARGET_MACHINE} "mkdir -p ${SCP_TARGET_PATH_DRIVERS}"

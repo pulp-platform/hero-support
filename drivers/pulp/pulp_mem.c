@@ -1,5 +1,6 @@
 #include "pulp_mem.h"
 
+#if PLATFORM != JUNO
 /**
  * Flush user-space memory pages. Required when PULP reads from
  * user-space memory.
@@ -73,6 +74,7 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   // destroy kernel-space mapping
   kunmap(page);
 }
+#endif // PLATFORM != JUNO
 
 /**
  * Get the number of pages to remap.
@@ -145,9 +147,9 @@ int pulp_mem_get_user_pages(struct page *** pages, unsigned addr_start, unsigned
  * @addr_end: virtual end address of the mapping.
  */
 int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsigned ** addr_offset_vec,
-		    unsigned ** page_start_idxs, unsigned ** page_end_idxs, 
-		    struct page *** pages, unsigned n_pages, 
-		    unsigned addr_start, unsigned addr_end)
+        unsigned ** page_start_idxs, unsigned ** page_end_idxs, 
+        struct page *** pages, unsigned n_pages, 
+        unsigned addr_start, unsigned addr_end)
 {
   int i;
   unsigned n_segments;
@@ -205,33 +207,33 @@ int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsign
    *  analyze the physical addresses
    */
   if ( n_pages > 1 ) {
-     	
+      
     // check the number of slices required
-    for (i=1; i<n_pages; i++) {	  
+    for (i=1; i<n_pages; i++) {   
 
       // are the pages also contiguous in physical memory?
       if (addr_phys_vec[i] != (addr_phys_vec[i-1] + PAGE_SIZE)) { // no
 
-	if (DEBUG_LEVEL_MEM > 2) {
-	  printk(KERN_INFO "PULP - MEM: Checking Page %d:\n",i);
-	  printk(KERN_INFO "PULP - MEM: Page %d physical address = %#x\n",i,addr_phys_vec[i]);
-	  printk(KERN_INFO "PULP - MEM: Page %d physical address = %#x\n",i-1,addr_phys_vec[i-1]);    
-	}
+  if (DEBUG_LEVEL_MEM > 2) {
+    printk(KERN_INFO "PULP - MEM: Checking Page %d:\n",i);
+    printk(KERN_INFO "PULP - MEM: Page %d physical address = %#x\n",i,addr_phys_vec[i]);
+    printk(KERN_INFO "PULP - MEM: Page %d physical address = %#x\n",i-1,addr_phys_vec[i-1]);    
+  }
 
-	// finish current slice
-	(*addr_end_vec)[n_segments-1] = (addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT) ) + PAGE_SIZE*i;
-	(*page_end_idxs)[n_segments-1] = i-1;
+  // finish current slice
+  (*addr_end_vec)[n_segments-1] = (addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT) ) + PAGE_SIZE*i;
+  (*page_end_idxs)[n_segments-1] = i-1;
 
-	// add a new slice
-	n_segments++;
-	(*addr_start_vec)[n_segments-1] = (addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT) ) + PAGE_SIZE*i;
-	(*addr_offset_vec)[n_segments-1] = addr_phys_vec[i];
-	(*page_start_idxs)[n_segments-1] = i;
+  // add a new slice
+  n_segments++;
+  (*addr_start_vec)[n_segments-1] = (addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT) ) + PAGE_SIZE*i;
+  (*addr_offset_vec)[n_segments-1] = addr_phys_vec[i];
+  (*page_start_idxs)[n_segments-1] = i;
       }
       if (i == (n_pages-1)) {
-	// finish last slice
-	(*addr_end_vec)[n_segments-1] = addr_end;
-	(*page_end_idxs)[n_segments-1] = i;
+  // finish last slice
+  (*addr_end_vec)[n_segments-1] = addr_end;
+  (*page_end_idxs)[n_segments-1] = i;
       }
     }
   }
@@ -251,4 +253,3 @@ int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsign
 
   return n_segments;
 }
-

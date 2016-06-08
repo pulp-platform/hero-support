@@ -11,6 +11,8 @@
 #include <stdlib.h>     // for system
 #include <unistd.h>     // for usleep, access
 
+#include <errno.h>
+
 #include "zynq.h"
 #include "pulp_host.h"
 
@@ -24,17 +26,20 @@ typedef struct {
   int fd; // file descriptor
   PulpSubDev clusters;
   PulpSubDev soc_periph;
-  PulpSubDev mailbox;
+  PulpSubDev mbox;
   PulpSubDev l2_mem;
   PulpSubDev l3_mem; 
   PulpSubDev gpio;
   PulpSubDev clking;
-  PulpSubDev stdout;
   PulpSubDev rab_config;
+  PulpSubDev pulp_res_v_addr;
+  PulpSubDev l3_mem_res_v_addr;
+#if PLATFORM != JUNO
   PulpSubDev slcr;
   PulpSubDev mpcore;
-  PulpSubDev reserved_v_addr;
-  unsigned int l3_offset; // used for pulp_l3_malloc
+#endif
+  unsigned int l3_offset;   // used for pulp_l3_malloc
+  unsigned int cluster_sel; // cluster select
 } PulpDev;
 
 // shared variable data structure
@@ -66,14 +71,11 @@ int pulp_mmap(PulpDev *pulp);
 int pulp_munmap(PulpDev *pulp);
 int pulp_init(PulpDev *pulp);
 
-int pulp_mailbox_read(PulpDev *pulp, unsigned *buffer, unsigned n_words);
-void pulp_mailbox_clear_is(PulpDev *pulp);
+int pulp_mbox_read(PulpDev *pulp, unsigned *buffer, unsigned n_words);
+void pulp_mbox_clear_is(PulpDev *pulp);
 
 int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
 int pulp_clking_measure_freq(PulpDev *pulp);
-
-void pulp_stdout_print(PulpDev *pulp, unsigned pe);
-void pulp_stdout_clear(PulpDev *pulp, unsigned pe);
 
 int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
 		         unsigned char prot, unsigned char port,

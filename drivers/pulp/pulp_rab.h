@@ -1,12 +1,12 @@
 #ifndef _PULP_RAB_H_
 #define _PULP_RAB_H_
 
-#include <linux/module.h>	/* Needed by all modules */
-#include <linux/kernel.h>	/* KERN_ALERT, container_of */
-#include <linux/mm.h>           /* vm_area_struct struct, page struct, PAGE_SHIFT, page_to_phys */
-#include <linux/pagemap.h>      /* page_cache_release() */
-#include <linux/slab.h>         /* kmalloc() */
-#include <asm/io.h>		/* ioremap, iounmap, iowrite32 */
+#include <linux/module.h>	 /* Needed by all modules */
+#include <linux/kernel.h>	 /* KERN_ALERT, container_of */
+#include <linux/mm.h>      /* vm_area_struct struct, page struct, PAGE_SHIFT, page_to_phys */
+#include <linux/pagemap.h> /* page_cache_release() */
+#include <linux/slab.h>    /* kmalloc() */
+#include <asm/io.h>		     /* ioremap, iounmap, iowrite32 */
 
 #include "pulp_module.h"
 
@@ -50,7 +50,7 @@ typedef struct {
   unsigned char date_cur;
   unsigned addr_start;
   unsigned addr_end;
-  unsigned addr_offset;
+  unsigned long addr_offset;
   unsigned page_ptr_idx;
   unsigned page_idx_start;
   unsigned page_idx_end;
