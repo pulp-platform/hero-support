@@ -14,7 +14,7 @@ export VIVADO_VERSION="vivado-2015.1"
 #  ZC706:    2
 #  MINI_ITX: 3
 #  JUNO:     4
-export PLATFORM="4"
+export PLATFORM="3"
 
 # Platform dependent variables
 if [ "${PLATFORM}" -eq "4" ]; then
@@ -24,7 +24,8 @@ if [ "${PLATFORM}" -eq "4" ]; then
     export OE_RELEASE=15.09
 
     # system workspace directory
-    export WORKSPACE_DIR=/usr/scratch/fliana/vogelpi/linaro-${LINARO_RELEASE}
+    #export WORKSPACE_DIR=/usr/scratch/fliana/vogelpi/linaro-${LINARO_RELEASE}
+    export WORKSPACE_DIR=/scratch/vogelpi/linaro-${LINARO_RELEASE}
 
     # directory containing the kernel sources
     export KERNEL_DIR=${WORKSPACE_DIR}/workspace/linux/out/juno-oe
@@ -37,7 +38,8 @@ if [ "${PLATFORM}" -eq "4" ]; then
     export SCP_TARGET_PATH_DRIVERS="~/juno/share/drivers"
 
     # path to external ARM libraries (on scratch)
-    export ARM_LIB_EXT_DIR=/usr/scratch/fliana/vogelpi/libs-juno/lib
+    #export ARM_LIB_EXT_DIR=/usr/scratch/fliana/vogelpi/libs-juno/lib
+    export ARM_LIB_EXT_DIR=/scratch/vogelpi/libs-juno/lib
 
     # number of cores on Linux host
     export N_CORES_COMPILE=4
@@ -53,12 +55,13 @@ if [ "${PLATFORM}" -eq "4" ]; then
     GCC_VERSION="4.9" 
 
     # Set up PATH variable
-    export PATH=/usr/scratch/fliana/vogelpi/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:/usr/scratch/fliana/vogelpi/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
+    #export PATH=/usr/scratch/fliana/vogelpi/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:/usr/scratch/fliana/vogelpi/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
+    export PATH=/scratch/vogelpi/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:/scratch/vogelpi/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
 else 
     echo "Configuring for ZYNQ platform"
 
     # system workspace directory
-    export WORKSPACE_DIR=/usr/scratch/riseten/vogelpi/mini-itx
+    export WORKSPACE_DIR=/scratch/vogelpi/mini-itx
 
     # directory containing the kernel sources
     export KERNEL_DIR=${WORKSPACE_DIR}/workspace/linux-xlnx
@@ -100,8 +103,8 @@ fi
 export ARM_INC_DIR1=${ARM_LIB_DIR1}/inc
 
 # directory containing PULP header files
-export PULP_INC_DIR1=/home/vogelpi/pulp_on_fpga/software/pulp/pulp_pipeline/pkg/sdk/dev/install/include/archi/pulp4
-export PULP_INC_DIR2=/home/vogelpi/pulp_on_fpga/software/pulp/pulp_pipeline/pkg/sdk/dev/install/include/pulp4
+export PULP_INC_DIR1=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
+export PULP_INC_DIR2=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include
 
 # PULP HSA home directory
 export PULP_HSA_HOME=/home/vogelpi/pulp_on_fpga/software/hsa_apps
