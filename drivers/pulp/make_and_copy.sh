@@ -8,10 +8,10 @@ if [ "${PLATFORM}" -eq "4" ]; then # JUNO
   ${KERNEL_CROSS_COMPILE}objdump -DS pulp.ko > pulp.read
 else # ZYNQ
   # Make
-  vivado-2015.1 make
+  ${VIVADO_VERSION} make
 
   # .read
-  vivado-2015.1 ${KERNEL_CROSS_COMPILE}objdump -DS pulp.ko > pulp.read
+  ${VIVADO_VERSION} ${KERNEL_CROSS_COMPILE}objdump -DS pulp.ko > pulp.read
 fi
 
 # Create folder on target

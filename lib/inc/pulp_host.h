@@ -144,10 +144,9 @@
   #define RAB_PROT_IRQ           65
   //#define RAB_MHR_FULL_IRQ       66 // not yet used
 
-  #define PULP_DEFAULT_FREQ_MHZ 50
-
   #if PLATFORM == ZEDBOARD
 
+    #define PULP_DEFAULT_FREQ_MHZ 25
     #define CLKING_INPUT_FREQ_MHZ 50
 
     // L3
@@ -156,21 +155,22 @@
     // Cluster + RAB config
     #define N_CORES          2
     #define L2_MEM_SIZE_KB  64
-    #define L1_MEM_SIZE_KB  36
-    #define RAB_N_SLICES    12
+    #define L1_MEM_SIZE_KB  32
+    #define RAB_N_SLICES     8
   
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
   
+    #define PULP_DEFAULT_FREQ_MHZ 50
     #define CLKING_INPUT_FREQ_MHZ 100
 
     // L3
     #define L3_MEM_SIZE_MB 128
     
     // Cluster + RAB config
-    #define N_CORES 4
+    #define N_CORES          8
     #define L2_MEM_SIZE_KB 256
-    #define L1_MEM_SIZE_KB 72
-    #define RAB_N_SLICES   32
+    #define L1_MEM_SIZE_KB 256
+    #define RAB_N_SLICES    32
   
   #endif // PLATFORM
 
@@ -203,10 +203,10 @@
   #define L3_MEM_SIZE_MB 128
 
   // Cluster + RAB config
-  #define N_CORES 8
+  #define N_CORES          8
   #define L2_MEM_SIZE_KB 256
-  #define L1_MEM_SIZE_KB 72
-  #define RAB_N_SLICES   32
+  #define L1_MEM_SIZE_KB 256
+  #define RAB_N_SLICES    32
 
 #endif // PLATFORM
 
@@ -278,6 +278,9 @@
 
 #define CLUSTER_SIZE_B  (CLUSTER_SIZE_MB*1024*1024)
 #define CLUSTERS_SIZE_B (N_CLUSTERS*CLUSTER_SIZE_B)
+
+#define GPIO_EOC_0              0
+#define GPIO_EOC_N   N_CLUSTERS-1 // max 15
 
 /*
  * Host memory map 

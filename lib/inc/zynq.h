@@ -24,7 +24,8 @@
 
 #elif BOARD == ZC706 || BOARD == MINI_ITX
 
-#define ARM_CLK_FREQ_MHZ 667
+//#define ARM_CLK_FREQ_MHZ 667
+#define ARM_CLK_FREQ_MHZ 333 // for benchmarking
 #define DRAM_SIZE_MB 1024
  
 #endif // BOARD

@@ -362,7 +362,11 @@ int pulp_munmap(PulpDev *pulp)
 }
 
 /**
- * Set the clock frequency of PULP, only do this at startup of PULP!!! 
+ * Set the clock frequency of PULP, only do this at startup of PULP!!!
+ *
+ * clk_in   = CLKING_INPUT_FREQ_MHZ (100 or 50 MHz) multiplied to 1000 MHz
+ * clk_out1 = CLKOUT0: divide 1000 MHz by CLKING_CONFIG_REG_2 -> ClkSoc_C
+ * clk_out2 = CLKOUT1: divide 1000 MHz by CLKING_CONFIG_REG_5 -> ClkCluster_C
  *
  * @pulp:         pointer to the PulpDev structure
  * @des_freq_mhz: desired frequency in MHz
@@ -377,20 +381,20 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   else if(freq_mhz >= 200)
     freq_mhz = 200;
 
-  // Bring the input clock to 500 MHz
+  // Bring the input clock to 1000 MHz
 #if CLKING_INPUT_FREQ_MHZ == 50
   int divclk_divide = 1;
-  int clkfbout_mult = 10;
+  int clkfbout_mult = 20;
 #elif CLKING_INPUT_FREQ_MHZ == 100
   int divclk_divide = 1;
-  int clkfbout_mult = 5;
+  int clkfbout_mult = 10;
 #else
   #error CLKING_INPUT_FREQ_MHZ value is not supported
 #endif
 
   // default output clock = 50 MHz
-  int clkout0_divide = 500/freq_mhz;
-  int clkout0_divide_frac = ((500 % freq_mhz) << 10)/freq_mhz;
+  int clkout0_divide = 1000/freq_mhz;
+  int clkout0_divide_frac = ((1000 % freq_mhz) << 10)/freq_mhz;
 
   // config DIVCLK_DIVIDE, CLKFBOUT_MULT, CLKFBOUT_FRAC, CLKFBOUT_PHASE
   unsigned value;
@@ -399,13 +403,12 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   if (DEBUG_LEVEL > 3)
     printf("CLKING_CONFIG_REG_0: %#x\n",value);
 
-  // config CLKOUT0/1/2: DIVIDE, FRAC, FRAC_EN
+  // config CLKOUT0/1: DIVIDE, FRAC, FRAC_EN
   value = 0x00040000 + 0x100*clkout0_divide_frac + 0x1*clkout0_divide;
-  //pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_2_OFFSET_B,'b',value);
+  pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_2_OFFSET_B,'b',value);
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_5_OFFSET_B,'b',value);
-  pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_8_OFFSET_B,'b',value);
   if (DEBUG_LEVEL > 3)
-    printf("CLKING_CONFIG_REG_5/8: %#x\n",value);
+    printf("CLKING_CONFIG_REG_2/5: %#x\n",value);
 
   // check status
   if ( !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1) ) {
@@ -441,7 +444,34 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
       return -EBUSY;
     } 
   }
- 
+
+#if PLATFORM != JUNO
+  // reconfigure PULP -> host UART
+  int baudrate = 115200;
+  char cmd[40];
+  char baudrate_s[10];
+  float ratio,baudrate_f;
+
+  // compute custom baudrate
+  ratio = (float)freq_mhz/(float)PULP_DEFAULT_FREQ_MHZ;
+  baudrate_f = (float)baudrate * ratio;
+  baudrate = (int)baudrate_f;
+  sprintf(baudrate_s, "%i", baudrate);
+
+  printf("Please configure /dev/ttyPS1 for %i baud.\n",baudrate);
+
+  // prepare command
+  //strcpy(cmd,"stty -F /dev/ttyPS1 ");  // only supports standard baudrates
+  strcpy(cmd,"/media/nfs/apps/uart "); // supports non-standard baudrates 
+  strcat(cmd,baudrate_s);
+  strcat(cmd," 0");
+
+  //printf("%s\n",cmd);
+
+  // set the baudrate -- can cause crashes
+  //system(cmd);
+#endif
+
   return freq_mhz;
 }
 
@@ -967,7 +997,7 @@ int pulp_dma_xfer(PulpDev *pulp,
  */
 int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
 
-  int i,n_idxs;
+  int i,n_idxs,err;
   unsigned * data_idxs;
  
   /*
@@ -1005,7 +1035,11 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   /*
    * offload
    */
-  pulp_load_bin(pulp, task->name);
+  err = pulp_load_bin(pulp, task->name);
+  if (err) {
+    printf("ERROR: Load of PULP binary failed.\n");
+    return err;
+  }
   pulp_exe_start(pulp);
     
 #ifdef PROFILE_RAB
@@ -1075,16 +1109,22 @@ void pulp_reset(PulpDev *pulp, unsigned full)
     pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 
                  slcr_value );
 #endif
+
     // reset using GPIO register
     pulp_write32(pulp->gpio.v_addr,0x8,'b',0x00000000);
     usleep(100000);
     pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);
     usleep(100000);
+
+printf("%s %d\n",__FILE__,__LINE__);
+
 #if PLATFORM != JUNO
   }
   // temporary fix: global clk enable
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);
 #endif
+
+  printf("%s %d\n",__FILE__,__LINE__);
 }
 
 /**
@@ -1218,13 +1258,13 @@ int pulp_exe_wait(PulpDev *pulp, int timeout_s)
   float interval_us = 100000;
   float timeout = (float)timeout_s*1000000/interval_us;
 
-  gpio_eoc = BF_GET(pulp_read32(pulp->gpio.v_addr,0,'b'), INTR_EOC_0, INTR_EOC_N-INTR_EOC_0+1);
+  gpio_eoc = BF_GET(pulp_read32(pulp->gpio.v_addr,0,'b'), GPIO_EOC_0, GPIO_EOC_N-GPIO_EOC_0+1);
   status   = (gpio_eoc == pulp->cluster_sel) ? 0 : 1;
 
   while ( status && (timeout > 0) ) {
     usleep(interval_us);
     timeout--;
-    gpio_eoc = BF_GET(pulp_read32(pulp->gpio.v_addr,0,'b'), INTR_EOC_0, INTR_EOC_N-INTR_EOC_0+1);
+    gpio_eoc = BF_GET(pulp_read32(pulp->gpio.v_addr,0,'b'), GPIO_EOC_0, GPIO_EOC_N-GPIO_EOC_0+1);
     status   = (gpio_eoc == pulp->cluster_sel) ? 0 : 1;
   }
   if ( status ) {

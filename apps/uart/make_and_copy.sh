@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Name of the app
-NAME=standalone
+NAME=uart
 
 if [ "${PLATFORM}" -eq "4" ]; then # JUNO
   # Make
