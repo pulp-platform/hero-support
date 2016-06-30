@@ -1,6 +1,8 @@
 #include "pulp_func.h"
 #include "pulp_host.h"
 
+//printf("%s %d\n",__FILE__,__LINE__);
+
 /**
  * Reserve the virtual address space overlapping with the physical
  * address map of pulp using the mmap() syscall with MAP_FIXED and
@@ -11,7 +13,7 @@
 int pulp_reserve_v_addr(PulpDev *pulp)
 {
   pulp->pulp_res_v_addr.size = PULP_SIZE_B;
-  pulp->pulp_res_v_addr.v_addr = mmap((int *)PULP_BASE_ADDR,pulp->pulp_res_v_addr.size,
+  pulp->pulp_res_v_addr.v_addr = mmap((int *)PULP_BASE_REMOTE_ADDR,pulp->pulp_res_v_addr.size,
                                       PROT_NONE,MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,-1,0);
   if (pulp->pulp_res_v_addr.v_addr == MAP_FAILED) {
     printf("MMAP failed to reserve virtual addresses overlapping with physical address map of PULP.\n");
@@ -510,6 +512,7 @@ int pulp_clking_measure_freq(PulpDev *pulp)
     // enable clock counter divider (by 64), reset & enable clock counter, PMCR register 
     asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
   }
+
   pulp_write32(pulp->clusters.v_addr,TIMER_STOP_OFFSET_B,'b',0x1);
   pulp_write32(pulp->clusters.v_addr,TIMER_RESET_OFFSET_B,'b',0x1);
   pulp_write32(pulp->clusters.v_addr,TIMER_START_OFFSET_B,'b',0x1);
