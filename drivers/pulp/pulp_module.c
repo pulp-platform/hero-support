@@ -1060,7 +1060,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         break;
 
       case PULP_H_BASE_ADDR:
-        rab_slice_req->addr_offset = PULP_BASE_ADDR;
+        rab_slice_req->addr_offset = PULP_BASE_REMOTE_ADDR;
         break;
 
       default: // L3_MEM_BASE_ADDR - port 1
@@ -1073,7 +1073,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
             
       // number of pages
       len = pulp_mem_get_num_pages(rab_slice_req->addr_start,size_b);
-      
+
       // get and lock user-space pages
       err = pulp_mem_get_user_pages(&pages, rab_slice_req->addr_start, len, rab_slice_req->prot & 0x4);
       if (err) {
@@ -1959,7 +1959,7 @@ static void pulp_rab_handle_miss(unsigned unused)
     rab_mh_id[i]   = ioread32((void *)((unsigned long)my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B));
   
     // detect empty FIFOs
-    if ( (rab_mh_addr[i] & 0x1) || (rab_mh_id[i] & 0x80000000) )
+    if ( rab_mh_id[i] & 0x80000000 )
       break;
     if (DEBUG_LEVEL_RAB_MH > 0) {
       printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",

@@ -1,8 +1,10 @@
 #ifndef PULP_HOST_H___
 #define PULP_HOST_H___
 
-#include "pulp.h"
-#include "pulpemu.h"
+#define CHIP_BIGPULP 7
+#define PULP_CHIP CHIP_BIGPULP
+
+#include "archi/bigpulp/pulp.h"
 
 #define DEBUG_LEVEL 0
 
@@ -280,7 +282,9 @@
 #define CLUSTERS_SIZE_B (N_CLUSTERS*CLUSTER_SIZE_B)
 
 #define GPIO_EOC_0              0
-#define GPIO_EOC_N   N_CLUSTERS-1 // max 15
+#define GPIO_EOC_N  (N_CLUSTERS-1) // max 15
+
+#define MBOX_BASE_ADDR 0x1A121000  // Interface 1
 
 /*
  * Host memory map 
@@ -288,12 +292,13 @@
 #if PLATFORM != JUNO
   #define PULP_H_BASE_ADDR   0x40000000 // Address at which the host sees PULP
   #define L1_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR)
-  #define L2_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_ADDR + L2_MEM_BASE_ADDR)  
+  #define L2_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + L2_MEM_BASE_ADDR)  
   #define L3_MEM_H_BASE_ADDR \
     (DRAM_SIZE_MB - L3_MEM_SIZE_MB)*1024*1024 // = 0x38000000 for 1024 MB DRAM and 128 MB L3
   #define MBOX_H_BASE_ADDR \
-    (PULP_H_BASE_ADDR - PULP_BASE_ADDR + MBOX_BASE_ADDR - MBOX_SIZE_B) // Interface 0 
-  #define SOC_PERIPHERALS_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_ADDR + SOC_PERIPHERALS_BASE_ADDR)
+    (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + MBOX_BASE_ADDR - MBOX_SIZE_B) // Interface 0 
+  #define SOC_PERIPHERALS_H_BASE_ADDR \
+    (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + SOC_PERIPHERALS_BASE_ADDR)
 
 #else // PLATFORM == JUNO
   #define PULP_H_BASE_ADDR            0x60000000 // Address at which the host sees PULP
@@ -304,12 +309,6 @@
   #define SOC_PERIPHERALS_H_BASE_ADDR 0x65100000
   
 #endif // PLATFORM != JUNO
-
-// Redefine MBOX_BASE_ADDR -> edit pulpemu.h!!!!
-#ifdef MBOX_BASE_ADDR
-  #undef MBOX_BASE_ADDR
-#endif
-#define MBOX_BASE_ADDR 0x1A121000 // Interface 1
 
 #define CLUSTERS_H_BASE_ADDR (PULP_H_BASE_ADDR)
 #define TIMER_H_OFFSET_B     (TIMER_BASE_ADDR - PULP_BASE_ADDR)
