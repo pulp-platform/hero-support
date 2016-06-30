@@ -394,7 +394,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
                                             +j*RAB_TABLE_WIDTH+0]);
 
         if (prot)
-          printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x, acp: %d\n",
+          printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#x , %#x, acp: %d\n",
                  i,j,addr_start,addr_end,addr_offset,prot,use_acp);
 
       }
@@ -416,7 +416,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
           addr_end     = ioread32((void *)((unsigned long)rab_config+offset+0x28));
           addr_offset  = ioread32((void *)((unsigned long)rab_config+offset+0x30));
           
-          printk(KERN_INFO "Port %d, Slice %d: %#x - %#x -> %#x , %#x, acp: %d\n",
+          printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#x , %#x, acp: %d\n",
                  i,j,addr_start,addr_end,addr_offset,prot,use_acp);
         }
       }
@@ -431,7 +431,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
     for (i=0; i<RAB_N_PORTS; i++) {
       for (j=0; j<RAB_N_SLICES; j++) {
         if (page_ptr_ref_cntrs[off_ptrs+i*RAB_N_SLICES+j])
-          printk(KERN_INFO "Port %d, Slice %d: page_ptrs[i] = %#lx, page_ptr_ref_cntrs[i] = %d\n",
+          printk(KERN_INFO "Port %d, Slice %2d: page_ptrs[i] = %#lx, page_ptr_ref_cntrs[i] = %d\n",
                  i,j,(unsigned long int)page_ptrs[off_ptrs+i*RAB_N_SLICES+j],
                  page_ptr_ref_cntrs[off_ptrs+i*RAB_N_SLICES+j]);
       }

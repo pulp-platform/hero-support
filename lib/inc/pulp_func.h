@@ -78,12 +78,12 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
 int pulp_clking_measure_freq(PulpDev *pulp);
 
 int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b, 
-		         unsigned char prot, unsigned char port,
+                 unsigned char prot, unsigned char port,
                  unsigned char date_exp, unsigned char date_cur, unsigned char use_acp);
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur);
 
 int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
-			             unsigned **data_idxs, int n_elements,  
+                         unsigned **data_idxs, int n_elements,  
                          unsigned char prot, unsigned char port);
 void pulp_rab_free_striped(PulpDev *pulp);
 
@@ -91,8 +91,8 @@ void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp);
 void pulp_rab_mh_disable(PulpDev *pulp);
 
 int pulp_dma_xfer(PulpDev *pulp, 
-		  unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
-		  unsigned host_read);
+                  unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
+                  unsigned host_read);
 
 int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task);
 
@@ -125,9 +125,9 @@ int pulp_offload_wait(PulpDev *pulp, TaskDesc *task);
 
 // for random_forest
 int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned char port,
-				   unsigned p_height, unsigned p_width, unsigned i_step,
-				   unsigned n_channels, unsigned char **channels,
-				   unsigned *s_height);
+                                   unsigned p_height, unsigned p_width, unsigned i_step,
+                                   unsigned n_channels, unsigned char **channels,
+                                   unsigned *s_height);
 
 
 #endif // PULP_FUNC_H__
