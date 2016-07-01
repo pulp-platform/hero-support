@@ -12,7 +12,7 @@
 
 #define PRINT_RESULT 0
 #define PRINT_GRAPH 0
-#define USE_FLOAT 0
+#define USE_FLOAT 1
 
 #define ZYNQ_PMM 0
 
@@ -75,11 +75,12 @@ int main(int argc, char *argv[]){
   int pulp_clk_freq_mhz = 50;
   int mem_sharing = 2;
   unsigned char use_acp = 0;
+  unsigned char rab_mh_lvl = 0;
 
   strcpy(app_name,"pagerank");
   
-  if (argc > 6) {
-    printf("WARNING: More than 5 command line arguments are not supported. Those will be ignored.\n");
+  if (argc > 7) {
+    printf("WARNING: More than 6 command line arguments are not supported. Those will be ignored.\n");
   }
 
   if (argc > 1)
@@ -102,6 +103,9 @@ int main(int argc, char *argv[]){
 
   if (argc > 5)
     use_acp = atoi(argv[5]);
+
+  if (argc > 6)
+    rab_mh_lvl = atoi(argv[6]);
 
   /*************************************************************************/
   // build up the graph
@@ -578,7 +582,7 @@ int main(int argc, char *argv[]){
   /*************************************************************************/
  
   // enable RAB miss handling
-  pulp_rab_mh_enable(pulp, use_acp);
+  pulp_rab_mh_enable(pulp, use_acp, rab_mh_lvl);
   
   clock_gettime(CLOCK_REALTIME,&tp1);
 

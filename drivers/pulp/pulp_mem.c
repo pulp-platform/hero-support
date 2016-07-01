@@ -253,3 +253,103 @@ int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsign
 
   return n_segments;
 }
+
+/**
+ * Translates user-space pages' virtual addresses into physical
+ * addresses and groups them into segments of physically contiguous
+ * addresses. Returns the number of segments in case of success,
+ * -ENOMEM otherwise.
+ *
+ * @pages: pointer to the pages' page structs
+ * @n_pages: number of pages to map.
+ */
+int pulp_mem_check_num_sg(struct page *** pages, unsigned n_pages)
+{
+  int i;
+  unsigned n_segments;
+  unsigned * addr_phys_vec;
+
+  // virtual to physical address translation
+  addr_phys_vec = (unsigned *)kmalloc((size_t)n_pages*sizeof(unsigned),GFP_KERNEL);
+  if (addr_phys_vec == NULL) {
+    printk(KERN_WARNING "PULP - MEM: Memory allocation failed.\n");
+    return -ENOMEM;
+  }
+  for (i=0;i<n_pages;i++) {
+    addr_phys_vec[i] = (unsigned)page_to_phys((*pages)[i]);
+    if (DEBUG_LEVEL_MEM > 1) {
+      printk(KERN_INFO "PULP - MEM: Physical address = %#x\n",addr_phys_vec[i]);
+    }
+  }
+  
+  n_segments = 1;
+
+  /*
+   *  analyze the physical addresses
+   */
+  if ( n_pages > 1 ) {
+     	
+    // check the number of slices required
+    for (i=1; i<n_pages; i++) {	  
+
+      // are the pages also contiguous in physical memory?
+      if (addr_phys_vec[i] != (addr_phys_vec[i-1] + PAGE_SIZE)) { // no
+
+        if (DEBUG_LEVEL_MEM > 2) {
+          printk(KERN_INFO "PULP - MEM: Checking Page %d:\n",i);
+          printk(KERN_INFO "PULP - MEM: Page %d physical address = %#x\n",i,addr_phys_vec[i]);
+          printk(KERN_INFO "PULP - MEM: Page %d physical address = %#x\n",i-1,addr_phys_vec[i-1]);    
+        }
+
+        n_segments++;
+      }
+    }
+  }
+  // free memory
+  kfree(addr_phys_vec);
+  // TODO: No need to discard addr_phys_vec. Can use the physical address in pulp_mem_map_sg without having to do page_to_phys again.
+
+  return n_segments;
+}
+
+/**
+ * Get the physical pageframe numbers for every virtual page.
+ *
+ * @pfn_v_vec: pointer to array containing virtual pageframe numbers.
+ * @pfn_p_vec: pointer to array containing physical pageframe numbers.
+ * @pages: pointer to the pages' page structs.
+ * @n_pages: Number of pages to translate.
+ * @addr_start: virtual start address of the mapping.
+ */
+int pulp_mem_l2tlb_get_entries(unsigned ** pfn_v_vec, unsigned ** pfn_p_vec,
+                           struct page *** pages, unsigned n_pages, unsigned addr_start)
+{
+  int i;
+  int err=0;
+  
+  // setup mapping information. (These are freed after L2 TLB setup. TODO)
+  *pfn_v_vec = (unsigned *)kmalloc((size_t)(n_pages*sizeof(unsigned)),GFP_KERNEL);
+  if (*pfn_v_vec == NULL) {
+    printk(KERN_WARNING "PULP - MEM: Memory allocation failed.\n");
+    return -ENOMEM;
+  }
+  *pfn_p_vec = (unsigned *)kmalloc((size_t)(n_pages*sizeof(unsigned)),GFP_KERNEL);
+  if (*pfn_p_vec == NULL) {
+    printk(KERN_WARNING "PULP - MEM: Memory allocation failed.\n");
+    return -ENOMEM;
+  }
+
+  // Virtual pageframe num for first page.
+  (*pfn_v_vec)[0] = addr_start >> PAGE_SHIFT;
+
+  // Use page_to_phys to get physical pageframe num.
+  for (i=0;i<n_pages;i++) {
+    (*pfn_p_vec)[i] = (unsigned)page_to_phys((*pages)[i]) >> PAGE_SHIFT;
+    if (i > 0) {
+      (*pfn_v_vec)[i] = (*pfn_v_vec)[i-1] + 1; // Assuming continuous VA pages.
+    }
+    // (page_ptr*)[i] = (*pages)[i]; //Pass this value also outside and assign to entry.page_ptr
+  }
+
+  return err;
+}

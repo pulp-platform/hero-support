@@ -26,11 +26,12 @@ int main(int argc, char *argv[]){
   int timeout_s = 10;  
   int pulp_clk_freq_mhz = 50;
   unsigned char use_acp = 0;
+  unsigned char rab_mh_lvl = 0;
 
   strcpy(app_name,"profile_rab_mh");
   
-  if (argc > 4) {
-    printf("WARNING: More than 3 command line argument is not supported. Those will be ignored.\n");
+  if (argc > 5) {
+    printf("WARNING: More than 4 command line argument is not supported. Those will be ignored.\n");
   }
 
   if (argc > 1)
@@ -41,6 +42,9 @@ int main(int argc, char *argv[]){
 
   if (argc > 3)
     use_acp = atoi(argv[3]);
+
+  if (argc > 4)
+    rab_mh_lvl = atoi(argv[4]);
 
   // shared data element
   unsigned *array_ptr;
@@ -103,7 +107,7 @@ int main(int argc, char *argv[]){
   /*************************************************************************/
  
   // enable RAB miss handling
-  pulp_rab_mh_enable(pulp, use_acp);
+  pulp_rab_mh_enable(pulp, use_acp, rab_mh_lvl);
   
   /*************************************************************************/
 

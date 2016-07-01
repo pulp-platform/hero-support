@@ -8,6 +8,8 @@ static        unsigned page_ptr_ref_cntrs[RAB_N_MAPPINGS*RAB_N_PORTS*RAB_N_SLICE
 static        unsigned rab_mappings[RAB_N_MAPPINGS*RAB_N_PORTS*RAB_N_SLICES*3];
 static        unsigned rab_mapping_active;
 
+static TlbL2_t tlbl2;
+
 // functions
 
 /**
@@ -108,12 +110,34 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
     if ( pulp_rab_slice_check(rab_slice_req) ) // found an expired slice
       break;
     else if (i == (RAB_N_SLICES-1) ) { // no slice free
-      printk(KERN_INFO "PULP - RAB: No slice available.\n");
-      return -EIO;
+      //      printk(KERN_INFO "PULP - RAB: No slice available.\n");
+      //return -EIO;
+      err = 1;
     }
   }
 
   return err;
+}
+
+/**
+ * Get the number of free RAB slices.
+ *
+ * @rab_slice_req: specifies the current date.
+ */
+int pulp_rab_num_free_slices(RabSliceReq *rab_slice_req)
+{
+  int num_free_slice, i;
+  num_free_slice = 0;
+  
+  // get slice number
+  for (i=0;i<RAB_N_SLICES;i++) {
+    rab_slice_req->rab_slice = i;   
+
+    if ( pulp_rab_slice_check(rab_slice_req) ) // found an expired slice
+      num_free_slice++;
+  }
+
+  return num_free_slice;
 }
 
 /**
@@ -439,4 +463,232 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
   }
 
 }
+
+
+/**
+ * Initialise L2 TLB HW and struct to zero.
+ *
+ * @rab_config: kernel virtual address of the RAB configuration port.
+ * @port: RAB port
+ */
+void pulp_l2tlb_init_zero(void *rab_config, char port)
+{
+  unsigned int set_num, entry_num, offset;
+  
+  for (set_num=0; set_num<TLBL2_NUM_SETS; set_num++) {
+    for (entry_num=0; entry_num<TLBL2_NUM_ENTRIES_PER_SET; entry_num++) {
+      // Clear VA ram. No need to clear PA ram.
+      offset = ((port+1)*0x4000) + (set_num*TLBL2_NUM_ENTRIES_PER_SET*4) + (entry_num*4);
+      iowrite32( 0, (void *)((unsigned)rab_config + offset)); 
+      tlbl2.set[set_num].entry[entry_num].flags = 0;
+      tlbl2.set[set_num].entry[entry_num].pfn_p = 0;
+      tlbl2.set[set_num].entry[entry_num].pfn_v = 0;
+    }
+    tlbl2.set[set_num].next_entry_idx = 0;
+    tlbl2.set[set_num].is_full = 0;
+  }
+  printk(KERN_INFO "PULP TLB: Initialized TLB RAMs to 0.\n");
+
+}
+
+
+/**
+ * Setup an L2TLB entry: 1) Check if a free spot is avaialble in L2 TLB,
+ * 2) configure the HW using iowrite32(), 3) Configure kernel struct. 
+ * Return 0 on success.
+ *
+ * @rab_config: kernel virtual address of the RAB configuration port.
+ * @tlb_entry: specifies the L2TLB entry to setup.
+ * @port: RAB port
+ * @enable_replace: an entry can be replaced if set is full.
+ */
+int pulp_l2tlb_setup_entry(void *rab_config, TlbL2Entry_t *tlb_entry, char port, char enable_replace)
+{
+  unsigned set_num, entry_num;
+  unsigned data_v, data_p, addr_v, addr_p;
+  
+  int err = 0;
+  int full = 0;
+
+  set_num = BF_GET(tlb_entry->pfn_v,0,5);
+  entry_num = tlbl2.set[set_num].next_entry_idx;
+
+  //Check if set is full
+  full = pulp_l2tlb_check_availability(tlb_entry, port);
+  if (full == 1 && enable_replace == 0){
+    err = 1;
+    if (DEBUG_LEVEL_RAB > 0) {
+      printk(KERN_INFO "PULP TLB: Set %d is full in L2TLB. Replace not allowed"
+             ,set_num);
+    }
+  }
+  if (full == 1 && enable_replace == 1){ 
+    pulp_l2tlb_invalidate_entry(rab_config, port, set_num, entry_num);
+    if (DEBUG_LEVEL_RAB > 1) {
+      printk(KERN_INFO "PULP: Removing L2 TLB entry  at set %d entry %d \n",
+             set_num, entry_num);
+    }
+    full = 0;
+  }
+
+
+  if (full == 0) {
+    //Set is not full. Issue a write.
+    addr_v = ((unsigned)rab_config+((port+1)*0x4000)+(set_num*TLBL2_NUM_ENTRIES_PER_SET*4)+(entry_num*4));
+    data_v = tlb_entry->flags;
+    BF_SET(data_v, tlb_entry->pfn_v, 4, 20); // Parameterise TODO.
+    iowrite32(data_v, (void *)(addr_v));
+    addr_p = ((unsigned)rab_config+((port+1)*0x4000)+(set_num*TLBL2_NUM_ENTRIES_PER_SET*4)+(entry_num*4)+1024*4); // PA RAM address. Parameterise TODO.
+    data_p =  tlb_entry->pfn_p;
+    iowrite32(data_p, (void *)(addr_p));
+    
+    // Update kernel struct
+    tlbl2.set[set_num].entry[entry_num] = *tlb_entry;
+    tlbl2.set[set_num].next_entry_idx++;
+    if (DEBUG_LEVEL_RAB > 1) {
+      printk(KERN_INFO "PULP: Done Writing L2 TLB entry. PFN_V= %#x, PFN_P = %#x, at set %d entry %d \n",
+             tlb_entry->pfn_v, tlb_entry->pfn_p, set_num, entry_num);
+    }
+    if (tlbl2.set[set_num].next_entry_idx == TLBL2_NUM_ENTRIES_PER_SET) {
+      tlbl2.set[set_num].is_full = 1;
+      tlbl2.set[set_num].next_entry_idx = 0;
+    }
+  }
+
+  return err;
+}
+
+/**
+ * Check if a free spot is available in L2 TLB.
+ * Return 0 if available. 1 if not available.
+ * @tlb_entry: specifies the L2TLB entry to setup.
+ * @port: RAB port
+ */
+int pulp_l2tlb_check_availability(TlbL2Entry_t *tlb_entry, char port)
+{
+  unsigned set_num;
+  int full = 0;
+
+  set_num = BF_GET(tlb_entry->pfn_v,0,5);
+
+  //Check if set is full
+  if (tlbl2.set[set_num].is_full == 1) {
+    full = 1;
+    if (DEBUG_LEVEL_RAB > 0) {
+      printk(KERN_INFO "PULP TLB: Set %d is full in L2TLB. Cannot fill further without replacing."
+             ,set_num);
+    }
+    //return -EIO;
+  }
+
+  return full;
+}
+
+
+/**
+ * Invalidate all valid L2 TLB entries. Keep the virtual and physical pageframe numbers intact.
+ *
+ * @rab_config: kernel virtual address of the RAB configuration port.
+ * @port: RAB port
+ */
+int pulp_l2tlb_invalidate_all_entries(void *rab_config, char port)
+{
+  int set_num, entry_num;
+
+  for (set_num=0; set_num<TLBL2_NUM_SETS; set_num++) {
+    for (entry_num=0; entry_num<tlbl2.set[set_num].next_entry_idx; entry_num++) {
+      pulp_l2tlb_invalidate_entry(rab_config, port, set_num, entry_num);
+    }
+    tlbl2.set[set_num].next_entry_idx = 0;
+  }
+  return 0;
+}
+
+
+/**
+ * Invalidate one L2 TLB entry. Keep the virtual and physical pageframe numbers intact.
+ *
+ * @rab_config: kernel virtual address of the RAB configuration port.
+ * @port: RAB port
+ * @set_num: Set number
+ * @entry_num: Entry number in the set.
+ */
+int pulp_l2tlb_invalidate_entry(void *rab_config, char port, int set_num, int entry_num)
+{
+  unsigned data;
+  struct page * page_old;
+
+  if (DEBUG_LEVEL_RAB > 1) {
+    printk(KERN_INFO "PULP - RAB: Invalidating L2 TLB entry- Port %d, Set %d, Entry %d.\n",port,set_num, entry_num);
+  }
+  data = tlbl2.set[set_num].entry[entry_num].flags;
+  data = data >> 1;
+  data = data << 1; // LSB is now zero.
+  tlbl2.set[set_num].entry[entry_num].flags = data; // Update kernel struct
+  BF_SET(data, tlbl2.set[set_num].entry[entry_num].pfn_v, 4, 20); // Parameterise TODO.
+  iowrite32( data, (void *)((unsigned)rab_config+((port+1)*0x4000) + 
+                            (set_num*TLBL2_NUM_ENTRIES_PER_SET*4) + (entry_num*4)) );
+
+  // unlock pages and invalidate cache.
+  page_old = tlbl2.set[set_num].entry[entry_num].page_ptr;  
+  if (!PageReserved(page_old)) 
+    SetPageDirty(page_old);
+  page_cache_release(page_old);  
+
+  // free the allocated memory for page struct. TODO
+  //kfree(tlbl2.set[set_num].entry[entry_num].page_ptr);
+
+  return 0;
+}
+
+/**
+ * Print all entries.
+ *
+ * @port: RAB port
+ */
+int pulp_l2tlb_print_all_entries(char port)
+{
+  int set_num, entry_num;
+  printk(KERN_INFO "PULP L2TLB Mapping: Port %d\n", port);
+  for (set_num=0; set_num<TLBL2_NUM_SETS; set_num++) {
+    for (entry_num=0; entry_num<tlbl2.set[set_num].next_entry_idx; entry_num++) {
+      printk(KERN_INFO "PULP L2TLB Mapping: Virtual pageframe num = %#x, Physical pageframe num=%#x, Flags=%#x\n",
+             tlbl2.set[set_num].entry[entry_num].pfn_v,
+             tlbl2.set[set_num].entry[entry_num].pfn_p,
+             tlbl2.set[set_num].entry[entry_num].flags
+             );
+    }
+  }
+  return 0;
+}
+
+int pulp_l2tlb_print_valid_entries(char port)
+{
+  int set_num, entry_num;
+  printk(KERN_INFO "PULP L2TLB Mapping: Port %d\n", port);
+  for (set_num=0; set_num<TLBL2_NUM_SETS; set_num++) {
+    for (entry_num=0; entry_num<tlbl2.set[set_num].next_entry_idx; entry_num++) {
+      if (tlbl2.set[set_num].entry[entry_num].flags & 0x1) {
+        printk(KERN_INFO "PULP L2TLB Mapping: Set=%d, Entry=%d, Virtual pageframe num = %#x, Physical pageframe num=%#x, Flags=%#x\n",
+               set_num, entry_num,
+               tlbl2.set[set_num].entry[entry_num].pfn_v,
+               tlbl2.set[set_num].entry[entry_num].pfn_p,
+               tlbl2.set[set_num].entry[entry_num].flags
+               );
+      }
+    }
+  }
+  return 0;
+}
+
+//////// Other functions
+// pulp_l2tlb_replace_entry()
+// pulp_l2tlb_find_entry_to_replace()
+
+
+
+// The user will give preference as L1 or L2. Default option is L1 . try to group all nearby L1 together and call ioctl, same as before.
+// If all slices are used up, give back error for now. Later, we will make them fill L2 in case L1 is full.
+// group all L2 together and call ioctl. There should be only one ioctl for all of L2.
+// Further enhancement would be to use some algorithm to dynamically assign the mapping to L1 or L2 based on region size and frequency of occurance.
 
