@@ -15,7 +15,7 @@ static TlbL2_t tlbl2;
 /**
  * Initialize the arrays the driver uses to manage the RAB.
  */
-void pulp_rab_init()
+void pulp_rab_l1_init()
 {
   int i;
 
@@ -33,6 +33,7 @@ void pulp_rab_init()
   }
   rab_mapping_active = 0;
 
+  return;
 }
 
 /**
@@ -56,7 +57,7 @@ int pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req)
       break;
     }
     if ( i == (RAB_N_SLICES*RAB_N_PORTS) ) {
-      printk(KERN_INFO "PULP RAB: No slice available.\n");
+      printk(KERN_INFO "PULP RAB L1: No slice available.\n");
       return -EIO;
     }
   }
@@ -81,7 +82,7 @@ int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
   off_slices = rab_slice_req->rab_mapping*RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES;
 
   if (DEBUG_LEVEL_RAB > 2) {
-    printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Testing.\n",
+    printk(KERN_INFO "PULP - RAB L1: Mapping %d, Port %d, Slice %d: Testing.\n",
            rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
   }
   RAB_GET_DATE_EXP(date_exp_i,rab_slices[off_slices+rab_slice_req->rab_port*RAB_N_SLICES
@@ -110,7 +111,7 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
     if ( pulp_rab_slice_check(rab_slice_req) ) // found an expired slice
       break;
     else if (i == (RAB_N_SLICES-1) ) { // no slice free
-      //      printk(KERN_INFO "PULP - RAB: No slice available.\n");
+      //      printk(KERN_INFO "PULP - RAB L1: No slice available.\n");
       //return -EIO;
       err = 1;
     }
@@ -158,7 +159,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
   off_mappings = rab_slice_req->rab_mapping*RAB_N_PORTS*RAB_N_SLICES*3;
 
   if (DEBUG_LEVEL_RAB > 0) {
-    printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Freeing.\n",
+    printk(KERN_INFO "PULP - RAB L1: Mapping %d, Port %d, Slice %d: Freeing.\n",
            rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
   }
 
@@ -184,7 +185,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
          !(rab_slice_req->flags & 0x4) ) {  // only unlock pages in multi-mapping rule when the last mapping is removed 
       for (i=page_idx_start_old;i<=page_idx_end_old;i++) {
         if (DEBUG_LEVEL_RAB > 0) {
-          printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Unlocking Page %d.\n",
+          printk(KERN_INFO "PULP - RAB L1: Mapping %d, Port %d, Slice %d: Unlocking Page %d.\n",
                  rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice, i);
         }
         // invalidate caches --- invalidates entire pages only --- really needed?
@@ -205,7 +206,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
       page_ptrs[off_ptrs+page_ptr_idx_old] = 0;
     }
     if (DEBUG_LEVEL_RAB > 0) {
-      printk(KERN_INFO "PULP - RAB: Number of references to pages pointer = %d.\n",
+      printk(KERN_INFO "PULP - RAB L1: Number of references to pages pointer = %d.\n",
              page_ptr_ref_cntrs[off_ptrs+page_ptr_idx_old]);
     }
   }
@@ -220,6 +221,8 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
     rab_mappings[off_mappings+rab_slice_req->rab_port*RAB_N_SLICES*3
                  +rab_slice_req->rab_slice*3+i] = 0;
   }
+
+  return;
 }
 
 /**
@@ -258,13 +261,13 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
   // entry is really free = memory has properly been freed
   if ( page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx] & !rab_slice_req->page_idx_start 
        & !(rab_slice_req->flags & 0x2) ) { 
-    printk(KERN_WARNING "PULP - RAB: Selected reference list entry not free. Number of references = %d.\n"
+    printk(KERN_WARNING "PULP - RAB L1: Selected reference list entry not free. Number of references = %d.\n"
            , page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx]);
     return -EIO;
   }
   page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx]++;
   if (DEBUG_LEVEL_RAB > 0) {
-    printk(KERN_INFO "PULP - RAB: Number of references to pages pointer = %d.\n",
+    printk(KERN_INFO "PULP - RAB L1: Number of references to pages pointer = %d.\n",
            page_ptr_ref_cntrs[off_ptrs+rab_slice_req->page_ptr_idx]);
   }
 
@@ -284,7 +287,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
     = rab_slice_req->addr_offset;
 
   if (DEBUG_LEVEL_RAB > 0)
-    printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Setting up.\n", 
+    printk(KERN_INFO "PULP - RAB L1: Mapping %d, Port %d, Slice %d: Setting up.\n", 
            rab_slice_req->rab_mapping, rab_slice_req->rab_port, rab_slice_req->rab_slice);
 
   // set up new slice, configure the hardware
@@ -300,10 +303,10 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
     iowrite32(flags,                      (void *)((unsigned long)rab_config+offset+0x38));
  
     if (DEBUG_LEVEL_RAB > 1) {
-      printk(KERN_INFO "PULP - RAB: addr_start  %#x\n",  rab_slice_req->addr_start);
-      printk(KERN_INFO "PULP - RAB: addr_end    %#x\n",  rab_slice_req->addr_end);
-      printk(KERN_INFO "PULP - RAB: addr_offset %#lx\n", rab_slice_req->addr_offset);
-      printk(KERN_INFO "PULP - RAB: flags       %#x\n",  flags);
+      printk(KERN_INFO "PULP - RAB L1: addr_start  %#x\n",  rab_slice_req->addr_start);
+      printk(KERN_INFO "PULP - RAB L1: addr_end    %#x\n",  rab_slice_req->addr_end);
+      printk(KERN_INFO "PULP - RAB L1: addr_offset %#lx\n", rab_slice_req->addr_offset);
+      printk(KERN_INFO "PULP - RAB L1: flags       %#x\n",  flags);
     }
   }  
 
@@ -323,7 +326,7 @@ void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
   unsigned char prot, use_acp;
 
   if (DEBUG_LEVEL_RAB > 0)
-    printk(KERN_INFO "PULP - RAB: Switch from Mapping %d to %d.\n",rab_mapping_active,rab_mapping);
+    printk(KERN_INFO "PULP - RAB L1: Switch from Mapping %d to %d.\n",rab_mapping_active,rab_mapping);
 
   // de-activate old mapping
   off_slices = rab_mapping_active*RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES;
@@ -336,7 +339,7 @@ void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
         iowrite32(0x0,(void *)((unsigned long)rab_config+offset+0x38));
 
         if (DEBUG_LEVEL_RAB > 0)
-          printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Disabling.\n",rab_mapping_active,i,j);
+          printk(KERN_INFO "PULP - RAB L1: Mapping %d, Port %d, Slice %d: Disabling.\n",rab_mapping_active,i,j);
       }
     }
   }
@@ -361,17 +364,19 @@ void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
         iowrite32(flags,                                             (void *)((unsigned long)rab_config+offset+0x38));
 	
         if (DEBUG_LEVEL_RAB > 0)
-          printk(KERN_INFO "PULP - RAB: Mapping %d, Port %d, Slice %d: Setting up.\n",rab_mapping,i,j);
+          printk(KERN_INFO "PULP - RAB L1: Mapping %d, Port %d, Slice %d: Setting up.\n",rab_mapping,i,j);
         if (DEBUG_LEVEL_RAB > 1) {
-          printk(KERN_INFO "PULP - RAB: addr_start  %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0]);
-          printk(KERN_INFO "PULP - RAB: addr_end    %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1]);
-          printk(KERN_INFO "PULP - RAB: addr_offset %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2]);
+          printk(KERN_INFO "PULP - RAB L1: addr_start  %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+0]);
+          printk(KERN_INFO "PULP - RAB L1: addr_end    %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+1]);
+          printk(KERN_INFO "PULP - RAB L1: addr_offset %#x\n", rab_mappings[off_mappings+i*RAB_N_SLICES*3+j*3+2]);
         }
       }
     }
   }
  
   rab_mapping_active = rab_mapping;
+
+  return;
 }
 
 /**
@@ -402,7 +407,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
   }
 
   for (k=mapping_min; k<mapping_max; k++) {
-    printk(KERN_INFO "PULP - RAB: Printing Mapping %d: \n",k);
+    printk(KERN_INFO "PULP - RAB L1: Printing Mapping %d: \n",k);
     
     off_slices = k*RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES;
     off_mappings = k*RAB_N_PORTS*RAB_N_SLICES*3;
@@ -426,7 +431,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
   } 
 
   if ( (rab_mapping ==  0xFFFF) || (rab_mapping == 0xAAAA) ) {
-    printk(KERN_INFO "PULP - RAB: Printing active configuration: \n");
+    printk(KERN_INFO "PULP - RAB L1: Printing active configuration: \n");
     
     for (i=0; i<RAB_N_PORTS; i++) {
       for (j=0; j<RAB_N_SLICES; j++) {
@@ -450,7 +455,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
   // print the RAB pages and reference counter lists
   for (k=mapping_min; k<mapping_max; k++) {
     off_ptrs  = k*RAB_N_PORTS*RAB_N_SLICES;
-    printk(KERN_INFO "PULP - RAB: Printing Mapping %d: \n",k);
+    printk(KERN_INFO "PULP - RAB L1: Printing Mapping %d: \n",k);
 
     for (i=0; i<RAB_N_PORTS; i++) {
       for (j=0; j<RAB_N_SLICES; j++) {
@@ -462,6 +467,7 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
     }
   }
 
+  return;
 }
 
 
@@ -469,26 +475,27 @@ void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
  * Initialise L2 TLB HW and struct to zero.
  *
  * @rab_config: kernel virtual address of the RAB configuration port.
- * @port: RAB port
  */
-void pulp_l2tlb_init_zero(void *rab_config, char port)
+void pulp_rab_l2_init(void *rab_config)
 {
-  unsigned int set_num, entry_num, offset;
-  
-  for (set_num=0; set_num<TLBL2_NUM_SETS; set_num++) {
-    for (entry_num=0; entry_num<TLBL2_NUM_ENTRIES_PER_SET; entry_num++) {
-      // Clear VA ram. No need to clear PA ram.
-      offset = ((port+1)*0x4000) + (set_num*TLBL2_NUM_ENTRIES_PER_SET*4) + (entry_num*4);
-      iowrite32( 0, (void *)((unsigned)rab_config + offset)); 
-      tlbl2.set[set_num].entry[entry_num].flags = 0;
-      tlbl2.set[set_num].entry[entry_num].pfn_p = 0;
-      tlbl2.set[set_num].entry[entry_num].pfn_v = 0;
+  unsigned int i_port, i_set, i_entry, offset;
+  for (i_port=0; i_port<RAB_N_PORTS; i_port++) {
+    for (i_set=0; i_set<TLBL2_NUM_SETS; i_set++) {
+      for (i_entry=0; i_entry<TLBL2_NUM_ENTRIES_PER_SET; i_entry++) {
+        // Clear VA ram. No need to clear PA ram.
+        offset = ((i_port+1)*0x4000) + (i_set*TLBL2_NUM_ENTRIES_PER_SET*4) + (i_entry*4);
+        iowrite32( 0, (void *)((unsigned)rab_config + offset)); 
+        tlbl2.set[i_set].entry[i_entry].flags = 0;
+        tlbl2.set[i_set].entry[i_entry].pfn_p = 0;
+        tlbl2.set[i_set].entry[i_entry].pfn_v = 0;
+      }
+      tlbl2.set[i_set].next_entry_idx = 0;
+      tlbl2.set[i_set].is_full = 0;
     }
-    tlbl2.set[set_num].next_entry_idx = 0;
-    tlbl2.set[set_num].is_full = 0;
   }
-  printk(KERN_INFO "PULP TLB: Initialized TLB RAMs to 0.\n");
+  printk(KERN_INFO "PULP - RAB L2: Initialized VRAMs to 0.\n");
 
+  return;
 }
 
 
@@ -505,7 +512,7 @@ void pulp_l2tlb_init_zero(void *rab_config, char port)
 int pulp_l2tlb_setup_entry(void *rab_config, TlbL2Entry_t *tlb_entry, char port, char enable_replace)
 {
   unsigned set_num, entry_num;
-  unsigned data_v, data_p, addr_v, addr_p;
+  unsigned data_v, data_p, off_v, off_p;
   
   int err = 0;
   int full = 0;
@@ -518,37 +525,40 @@ int pulp_l2tlb_setup_entry(void *rab_config, TlbL2Entry_t *tlb_entry, char port,
   if (full == 1 && enable_replace == 0){
     err = 1;
     if (DEBUG_LEVEL_RAB > 0) {
-      printk(KERN_INFO "PULP TLB: Set %d is full in L2TLB. Replace not allowed"
-             ,set_num);
+      printk(KERN_INFO "PULP - RAB L2: Port %d, Set %d: Full.\n", port, set_num);
     }
   }
   if (full == 1 && enable_replace == 1){ 
     pulp_l2tlb_invalidate_entry(rab_config, port, set_num, entry_num);
-    if (DEBUG_LEVEL_RAB > 1) {
-      printk(KERN_INFO "PULP: Removing L2 TLB entry  at set %d entry %d \n",
-             set_num, entry_num);
-    }
     full = 0;
   }
 
-
   if (full == 0) {
     //Set is not full. Issue a write.
-    addr_v = ((unsigned)rab_config+((port+1)*0x4000)+(set_num*TLBL2_NUM_ENTRIES_PER_SET*4)+(entry_num*4));
+    off_v = (port+1)*0x4000 + set_num*TLBL2_NUM_ENTRIES_PER_SET*4 + entry_num*4;
+    
     data_v = tlb_entry->flags;
     BF_SET(data_v, tlb_entry->pfn_v, 4, 20); // Parameterise TODO.
-    iowrite32(data_v, (void *)(addr_v));
-    addr_p = ((unsigned)rab_config+((port+1)*0x4000)+(set_num*TLBL2_NUM_ENTRIES_PER_SET*4)+(entry_num*4)+1024*4); // PA RAM address. Parameterise TODO.
+    iowrite32(data_v, (void *)((unsigned)rab_config+off_v));
+
+    off_p = (port+1)*0x4000 + set_num*TLBL2_NUM_ENTRIES_PER_SET*4 + entry_num*4 + 1024*4 ; // PA RAM address. Parameterise TODO.
     data_p =  tlb_entry->pfn_p;
-    iowrite32(data_p, (void *)(addr_p));
+    iowrite32(data_p, (void *)((unsigned)rab_config+off_p));
     
+    //printk("off_v = %#x, off_p = %#x \n",(unsigned)off_v, (unsigned)off_p);
+    //printk("data_v = %#x, data_p = %#x \n",(unsigned)data_v, (unsigned)data_p);
+
     // Update kernel struct
     tlbl2.set[set_num].entry[entry_num] = *tlb_entry;
     tlbl2.set[set_num].next_entry_idx++;
+    if (DEBUG_LEVEL_RAB > 0)
+      printk(KERN_INFO "PULP - RAB L2: Port %d, Set %d, Entry %d: Setting up.\n", 
+        port, set_num, entry_num);
     if (DEBUG_LEVEL_RAB > 1) {
-      printk(KERN_INFO "PULP: Done Writing L2 TLB entry. PFN_V= %#x, PFN_P = %#x, at set %d entry %d \n",
-             tlb_entry->pfn_v, tlb_entry->pfn_p, set_num, entry_num);
+      printk(KERN_INFO "PULP - RAB L2: PFN_V= %#5x, PFN_P = %#5x\n", 
+        tlb_entry->pfn_v, tlb_entry->pfn_p);
     }
+
     if (tlbl2.set[set_num].next_entry_idx == TLBL2_NUM_ENTRIES_PER_SET) {
       tlbl2.set[set_num].is_full = 1;
       tlbl2.set[set_num].next_entry_idx = 0;
@@ -575,8 +585,7 @@ int pulp_l2tlb_check_availability(TlbL2Entry_t *tlb_entry, char port)
   if (tlbl2.set[set_num].is_full == 1) {
     full = 1;
     if (DEBUG_LEVEL_RAB > 0) {
-      printk(KERN_INFO "PULP TLB: Set %d is full in L2TLB. Cannot fill further without replacing."
-             ,set_num);
+      printk(KERN_INFO "PULP - RAB L2: Port %d, Set %d: Full.\n", port, set_num);
     }
     //return -EIO;
   }
@@ -601,6 +610,7 @@ int pulp_l2tlb_invalidate_all_entries(void *rab_config, char port)
     }
     tlbl2.set[set_num].next_entry_idx = 0;
   }
+
   return 0;
 }
 
@@ -619,7 +629,8 @@ int pulp_l2tlb_invalidate_entry(void *rab_config, char port, int set_num, int en
   struct page * page_old;
 
   if (DEBUG_LEVEL_RAB > 1) {
-    printk(KERN_INFO "PULP - RAB: Invalidating L2 TLB entry- Port %d, Set %d, Entry %d.\n",port,set_num, entry_num);
+    printk(KERN_INFO "PULP - RAB L2: Port %d, Set %d, Entry %d: Freeing.\n", 
+      port, set_num, entry_num);
   }
   data = tlbl2.set[set_num].entry[entry_num].flags;
   data = data >> 1;
@@ -649,14 +660,15 @@ int pulp_l2tlb_invalidate_entry(void *rab_config, char port, int set_num, int en
 int pulp_l2tlb_print_all_entries(char port)
 {
   int set_num, entry_num;
-  printk(KERN_INFO "PULP L2TLB Mapping: Port %d\n", port);
+  printk(KERN_INFO "PULP - RAB L2: Printing config of Port %d\n",port);
   for (set_num=0; set_num<TLBL2_NUM_SETS; set_num++) {
     for (entry_num=0; entry_num<tlbl2.set[set_num].next_entry_idx; entry_num++) {
-      printk(KERN_INFO "PULP L2TLB Mapping: Virtual pageframe num = %#x, Physical pageframe num=%#x, Flags=%#x\n",
-             tlbl2.set[set_num].entry[entry_num].pfn_v,
-             tlbl2.set[set_num].entry[entry_num].pfn_p,
-             tlbl2.set[set_num].entry[entry_num].flags
-             );
+      printk(KERN_INFO "Set %d, Entry %d: PFN_V = %#x, PFN_P = %#x, Flags = %#x\n",
+        set_num, entry_num, 
+        tlbl2.set[set_num].entry[entry_num].pfn_v,
+        tlbl2.set[set_num].entry[entry_num].pfn_p,
+        tlbl2.set[set_num].entry[entry_num].flags
+        );
     }
   }
   return 0;
@@ -665,16 +677,16 @@ int pulp_l2tlb_print_all_entries(char port)
 int pulp_l2tlb_print_valid_entries(char port)
 {
   int set_num, entry_num;
-  printk(KERN_INFO "PULP L2TLB Mapping: Port %d\n", port);
+  printk(KERN_INFO "PULP - RAB L2: Printing valid entries of Port %d\n",port);
   for (set_num=0; set_num<TLBL2_NUM_SETS; set_num++) {
     for (entry_num=0; entry_num<tlbl2.set[set_num].next_entry_idx; entry_num++) {
       if (tlbl2.set[set_num].entry[entry_num].flags & 0x1) {
-        printk(KERN_INFO "PULP L2TLB Mapping: Set=%d, Entry=%d, Virtual pageframe num = %#x, Physical pageframe num=%#x, Flags=%#x\n",
-               set_num, entry_num,
-               tlbl2.set[set_num].entry[entry_num].pfn_v,
-               tlbl2.set[set_num].entry[entry_num].pfn_p,
-               tlbl2.set[set_num].entry[entry_num].flags
-               );
+        printk(KERN_INFO "Set %d, Entry %d: PFN_V = %#x, PFN_P = %#x, Flags = %#x\n",
+          set_num, entry_num,
+          tlbl2.set[set_num].entry[entry_num].pfn_v,
+          tlbl2.set[set_num].entry[entry_num].pfn_p,
+          tlbl2.set[set_num].entry[entry_num].flags
+          );
       }
     }
   }

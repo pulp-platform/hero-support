@@ -274,10 +274,14 @@
 #define MBOX_IE_OFFSET_B     0x24
 
 // required for RAB miss handling
-#define AXI_ID_WIDTH         10
 #define AXI_ID_WIDTH_CORE    4
-#define AXI_ID_WIDTH_CLUSTER 2
-#define AXI_ID_WIDTH_SOC     3
+#define AXI_ID_WIDTH_CLUSTER 3
+#if PLATFORM == JUNO
+  #define AXI_ID_WIDTH_SOC   3
+#else // !JUNO
+  #define AXI_ID_WIDTH_SOC   1
+#endif
+#define AXI_ID_WIDTH         (AXI_ID_WIDTH_CORE + AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_SOC)
 
 /*
  * Dependent parameters

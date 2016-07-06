@@ -332,6 +332,14 @@ static int __init pulp_init(void)
     my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
     printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.mpcore);
+
+    my_dev.uart0 = ioremap_nocache(UART0_BASE_ADDR,UART0_SIZE_B);
+    printk(KERN_INFO "PULP: Zynq UART0 control register mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.uart0);
+
+    // make sure to enable automatic flow control on PULP -> Host UART
+    iowrite32(0x20,(void *)((unsigned long)my_dev.uart0+MODEM_CTRL_REG0_OFFSET_B));
+
   #endif // PLATFORM == JUNO
 
   my_dev.gpio = ioremap_nocache(H_GPIO_BASE_ADDR, H_GPIO_SIZE_B);
@@ -346,11 +354,10 @@ static int __init pulp_init(void)
   printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",
     (long unsigned int) my_dev.rab_config); 
   
-  pulp_rab_init();
+  pulp_rab_l1_init();
   rab_mapping_active = 0;
-  pulp_l2tlb_init_zero(my_dev.rab_config, 0);
-  pulp_l2tlb_init_zero(my_dev.rab_config, 1);
-
+  pulp_rab_l2_init(my_dev.rab_config);
+  
   // PULP timer used for RAB performance monitoring
   my_dev.clusters = ioremap_nocache(CLUSTERS_H_BASE_ADDR, CLUSTERS_SIZE_B);
   printk(KERN_INFO "PULP: Clusters mapped to virtual kernel space @ %#lx.\n",
@@ -511,6 +518,7 @@ static int __init pulp_init(void)
     #else // PLATFORM != JUNO
       iounmap(my_dev.slcr);
       iounmap(my_dev.mpcore);
+      iounmap(my_dev.uart0);
     #endif // PLATFORM == JUNO
     iounmap(my_dev.gpio);
     iounmap(my_dev.clusters);
@@ -563,6 +571,7 @@ static void __exit pulp_exit(void)
   #else // PLATFORM != JUNO
     iounmap(my_dev.slcr);
     iounmap(my_dev.mpcore);
+    iounmap(my_dev.uart0);
   #endif // PLATFORM == JUNO
   iounmap(my_dev.gpio);
   iounmap(my_dev.clusters);
@@ -1042,9 +1051,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     RAB_GET_RAB_LVL(rab_lvl, request[0]);
     RAB_GET_OFFLOAD_ID(rab_slice_req->rab_mapping, request[0]);
     RAB_GET_DATE_EXP(rab_slice_req->date_exp, request[0]);
-    RAB_GET_DATE_CUR(rab_slice_req->date_cur, request[0]);
-
-    
+    RAB_GET_DATE_CUR(rab_slice_req->date_cur, request[0]);  
 
     rab_slice_req->addr_start = request[1];
     size_b = request[2];
@@ -1058,6 +1065,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       printk(KERN_INFO "PULP: addr end = %#x.\n",rab_slice_req->addr_end);
       printk(KERN_INFO "PULP: rab_port = %d.\n",rab_slice_req->rab_port);
       printk(KERN_INFO "PULP: use_acp = %d.\n",rab_slice_req->use_acp);
+      printk(KERN_INFO "PULP: rab_lvl = %d.\n",rab_lvl);
       printk(KERN_INFO "PULP: date_exp = %d.\n",rab_slice_req->date_exp);
       printk(KERN_INFO "PULP: date_cur = %d.\n",rab_slice_req->date_cur);
     }
@@ -2014,8 +2022,6 @@ static void pulp_rab_handle_miss(unsigned unused)
   int err, i, j, handled, result;
   unsigned id, id_pe, id_cluster;
   unsigned addr_start, addr_phys;
-  
-  unsigned cycles;
     
   // what get_user_pages needs
   unsigned long start;
@@ -2052,9 +2058,10 @@ static void pulp_rab_handle_miss(unsigned unused)
     id = rab_mh_id[i];
     
     // check the ID
-    id_pe = BF_GET(id, 0, AXI_ID_WIDTH_CORE);
-    //id_cluster = BF_GET(id, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC) - 0x3;
-    id_cluster = BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) - 0x2;
+    id_pe      = BF_GET(id, 0, AXI_ID_WIDTH_CORE);
+    id_cluster = BF_GET(id, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC);
+    // - 0x3;
+    //id_cluster = BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) - 0x2;
 
     // identify RAB port - for now, only handle misses on Port 1: PULP -> Host
     if ( BF_GET(id, AXI_ID_WIDTH, 1) )

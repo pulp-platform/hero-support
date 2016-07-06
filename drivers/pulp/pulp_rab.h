@@ -101,7 +101,7 @@ typedef struct {
 
 
 // methods declarations
-void pulp_rab_init(void);
+void pulp_rab_l1_init(void);
 
 int  pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req);
 
@@ -113,7 +113,8 @@ int  pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct p
 void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping);
 void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping);
 
-void pulp_l2tlb_init_zero(void *rab_config, char port);
+void pulp_rab_l2_init(void *rab_config);
+
 int pulp_l2tlb_setup_entry(void *rab_config, TlbL2Entry_t *tlb_entry, char port, char enable_replace);
 int pulp_l2tlb_check_availability(TlbL2Entry_t *tlb_entry, char port);
 

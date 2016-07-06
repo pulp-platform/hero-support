@@ -63,6 +63,11 @@
 #define MPCORE_ICDICFR3_OFFSET_B 0x1C0C
 #define MPCORE_ICDICFR4_OFFSET_B 0x1C10
 
+// UART0 Controller - PULP -> Host UART
+#define UART0_BASE_ADDR          0xE0000000
+#define UART0_SIZE_B             0x1000    
+#define MODEM_CTRL_REG0_OFFSET_B 0x24
+
 // Level 2 Cache Controller L2C-310
 #define L2C_310_BASE_ADDR 0xF8F02000
 #define L2C_310_SIZE_B    0x1000

@@ -11,7 +11,7 @@
 #define DEBUG_LEVEL_RAB_MH 0
 #define DEBUG_LEVEL_DMA    0
 #define DEBUG_LEVEL_MBOX   0
-//#define PROFILE_DMA
+#define PROFILE_DMA
 //#define PROFILE_RAB
 //#define PROFILE_RAB_MH
 
@@ -34,6 +34,7 @@ typedef struct {
   #else
     void *slcr;
     void *mpcore;
+    void *uart0;
   #endif // PLATFORM == JUNO
 } PulpDev;
 
