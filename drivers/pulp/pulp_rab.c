@@ -154,8 +154,8 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
   unsigned off_slices, off_ptrs, off_mappings;
   struct page ** pages_old;
 
-  off_slices = rab_slice_req->rab_mapping*RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES;
-  off_ptrs  = rab_slice_req->rab_mapping*RAB_N_PORTS*RAB_N_SLICES;
+  off_slices   = rab_slice_req->rab_mapping*RAB_TABLE_WIDTH*RAB_N_PORTS*RAB_N_SLICES;
+  off_ptrs     = rab_slice_req->rab_mapping*RAB_N_PORTS*RAB_N_SLICES;
   off_mappings = rab_slice_req->rab_mapping*RAB_N_PORTS*RAB_N_SLICES*3;
 
   if (DEBUG_LEVEL_RAB > 0) {
@@ -171,7 +171,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
   if (pages_old) { // not used for a constant mapping
     
     // deactivate the slice
-    entry = 0x10*(rab_slice_req->rab_port*RAB_N_SLICES+rab_slice_req->rab_slice);
+    entry = 0x20*(rab_slice_req->rab_port*RAB_N_SLICES+rab_slice_req->rab_slice);
     if (rab_mapping_active == rab_slice_req->rab_mapping)
       iowrite32(0, (void *)((unsigned long)rab_config+entry+0x38));
 
