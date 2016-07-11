@@ -666,8 +666,6 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
 
   // make the request
   ioctl(pulp->fd,PULP_IOCTL_RAB_FREE,(unsigned)date_cur);
-
-  return;
 }
 
 /**
@@ -939,8 +937,6 @@ void pulp_rab_free_striped(PulpDev *pulp)
 
   // make the request
   ioctl(pulp->fd,PULP_IOCTL_RAB_FREE_STRIPED,offload_id);
-  
-  return;
 } 
 
 void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl)
@@ -949,15 +945,11 @@ void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_
   rab_mh_cfg[0] = (unsigned)use_acp;
   rab_mh_cfg[1] = (unsigned)rab_mh_lvl;
   ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,rab_mh_cfg);
-  
-  return;
 }
 
 void pulp_rab_mh_disable(PulpDev *pulp)
 {
   ioctl(pulp->fd,PULP_IOCTL_RAB_MH_DIS);
-
-  return;
 }
 
 /**
@@ -1081,6 +1073,9 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
  */
 void pulp_reset(PulpDev *pulp, unsigned full)
 {
+
+printf("%s %d\n",__FILE__,__LINE__);
+
 #if PLATFORM != JUNO
   unsigned slcr_value;
 
@@ -1094,12 +1089,15 @@ void pulp_reset(PulpDev *pulp, unsigned full)
     // enable reset
     pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 0xF);
 
+    printf("%s %d\n",__FILE__,__LINE__);
+
     // wait
     usleep(100000);
-    
+
     // disable reset
     pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', slcr_value);
 
+    printf("%s %d\n",__FILE__,__LINE__);
   }
   else {
     // enable reset
@@ -1120,7 +1118,7 @@ void pulp_reset(PulpDev *pulp, unsigned full)
     pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);
     usleep(100000);
 
-printf("%s %d\n",__FILE__,__LINE__);
+    printf("%s %d\n",__FILE__,__LINE__);
 
 #if PLATFORM != JUNO
   }
@@ -1231,8 +1229,6 @@ void pulp_exe_start(PulpDev *pulp)
 
   printf("Starting program execution.\n");
   pulp_write32(pulp->gpio.v_addr,0x8,'b',value);
-
-  return;
 }
 
 /**
@@ -1244,8 +1240,6 @@ void pulp_exe_stop(PulpDev *pulp)
 {
   printf("Stopping program execution.\n");
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);
-
-  return;
 }
 
 /**

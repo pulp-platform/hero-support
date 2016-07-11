@@ -234,10 +234,10 @@ static unsigned rab_mh_date;
 static unsigned rab_mh_use_acp = 0;
 static unsigned rab_mh_lvl = 0;
 #ifdef PROFILE_RAB_MH
-  static unsigned clk_cntr_resp_tmp[N_CORES];
-  static unsigned clk_cntr_resp[N_CORES];
-  static unsigned clk_cntr_sched[N_CORES];
-  static unsigned clk_cntr_refill[N_CORES];
+  static unsigned clk_cntr_resp_tmp[N_CORES_TIMER];
+  static unsigned clk_cntr_resp[N_CORES_TIMER];
+  static unsigned clk_cntr_sched[N_CORES_TIMER];
+  static unsigned clk_cntr_refill[N_CORES_TIMER];
   static unsigned n_misses = 0;
   static unsigned n_first_misses = 0;
 #endif
@@ -812,7 +812,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       if (rab_mh) { 
 #ifdef PROFILE_RAB_MH
         // read PE timers
-        for (i=0; i<N_CORES; i++) {
+        for (i=0; i<N_CORES_TIMER; i++) {
           clk_cntr_resp_tmp[i] = ioread32((void *)((unsigned long)my_dev.clusters
             +TIMER_GET_TIME_LO_OFFSET_B+(i+1)*PE_TIMER_OFFSET_B));
         }
@@ -894,9 +894,9 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   #ifdef PROFILE_RAB_MH
         // read PE timers
         int i;
-        for (i=0; i<N_CORES; i++) {
-          clk_cntr_resp_tmp[i] = ioread32((void *)((unsigned long)my_dev.clusters+TIMER_GET_TIME_LO_OFFSET_B
-                                                   +(i+1)*PE_TIMER_OFFSET_B));
+        for (i=0; i<N_CORES_TIMER; i++) {
+          clk_cntr_resp_tmp[i] = ioread32((void *)((unsigned long)my_dev.clusters
+            + TIMER_GET_TIME_LO_OFFSET_B + (i+1)*PE_TIMER_OFFSET_B));
         }
   #endif
         schedule_work(&rab_mh_w);
@@ -1953,7 +1953,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     user_mm = current->mm;
 
 #ifdef PROFILE_RAB_MH
-    for (i=0; i<N_CORES; i++) {
+    for (i=0; i<N_CORES_TIMER; i++) {
       clk_cntr_refill[i] = 0;
       clk_cntr_sched[i] = 0;
       clk_cntr_resp[i] = 0;
@@ -1981,7 +1981,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     rab_mh_date = 0;
 
 #ifdef PROFILE_RAB_MH
-    for (i=0; i<N_CORES; i++) {
+    for (i=0; i<N_CORES_TIMER; i++) {
       printk(KERN_INFO "clk_cntr_refill[%d] = %d \n",i,clk_cntr_refill[i]);
       printk(KERN_INFO "clk_cntr_sched[%d]  = %d \n",i,clk_cntr_sched[i]);
       printk(KERN_INFO "clk_cntr_resp[%d]   = %d \n",i,clk_cntr_resp[i]);
@@ -2031,6 +2031,7 @@ static void pulp_rab_handle_miss(unsigned unused)
   // needed for RAB management
   RabSliceReq rab_slice_request;
   RabSliceReq *rab_slice_req = &rab_slice_request;
+
   // needed for L2TLB
   TlbL2Entry_t l2tlb_entry_request;
   TlbL2Entry_t *l2tlb_entry = &l2tlb_entry_request;
@@ -2092,7 +2093,7 @@ static void pulp_rab_handle_miss(unsigned unused)
       clk_cntr_get_user_pages = 0;
       n_first_misses = 0;
       n_misses = 0;
-      for (j=0; j<N_CORES; j++) {
+      for (j=0; j<N_CORES_TIMER; j++) {
         clk_cntr_refill[j] = 0;
         clk_cntr_sched[j]  = 0;
         clk_cntr_resp[j]   = 0;
@@ -2105,13 +2106,13 @@ static void pulp_rab_handle_miss(unsigned unused)
                                                +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
     // save resp_tmp
     clk_cntr_resp[id_pe] += clk_cntr_resp_tmp[id_pe];
-    
 #endif
 
     // check if there has been a miss to the same page before
     handled = 0;    
     for (j=0; j<i; j++) {
-      if ( addr_start == rab_mh_addr[j]) {
+      if ( (addr_start & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT))
+           == (rab_mh_addr[j] & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT)) ) {
         handled = 1;
         if (DEBUG_LEVEL_RAB_MH > 0) {
           printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
@@ -2148,7 +2149,7 @@ static void pulp_rab_handle_miss(unsigned unused)
       }
 
       // align address to page border / 4kB
-      start = (unsigned long)(addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT));
+      start = (unsigned long)(addr_start) & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned long)*8-PAGE_SHIFT);
       
       // get pointer to user-space buffer and lock it into memory, get a single page
       // try read/write mode first - fall back to read only
@@ -2299,7 +2300,6 @@ static void pulp_rab_handle_miss(unsigned unused)
     // error handling
   miss_handling_error:
     if (err) {
-      printk(KERN_INFO "PULP: In miss handling error\n");
       printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
 
       // for debugging
@@ -2322,7 +2322,7 @@ static void pulp_rab_handle_miss(unsigned unused)
   iowrite32(clk_cntr_get_user_pages,
             (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_GET_USER_PAGES_OFFSET_B));
 
-  for (j=0; j<N_CORES; j++) {
+  for (j=0; j<N_CORES_TIMER; j++) {
     iowrite32(clk_cntr_refill[j],
               (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_REFILL_OFFSET_B+4*j));
     iowrite32(clk_cntr_sched[j],

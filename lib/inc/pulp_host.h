@@ -296,6 +296,13 @@
 #define GPIO_EOC_0              0
 #define GPIO_EOC_N  (N_CLUSTERS-1) // max 15
 
+// Fulmine uses Timer v.1 which has 4 core timers only
+#if N_CORES > 4
+  #define N_CORES_TIMER 4
+#else
+  #define N_CORES_TIMER N_CORES
+#endif
+
 #define MBOX_BASE_ADDR 0x1A121000  // Interface 1
 
 /*
@@ -359,7 +366,7 @@
 //#define MEM_SHARING 2
 //#define PROFILE_RAB
 
-// needed for profile_rab & profile_rab_mh
+// needed for profile_rab_striping & profile_rab_miss_handling
 #define CLK_CNTR_RESPONSE_OFFSET_B 0x00
 #define CLK_CNTR_UPDATE_OFFSET_B   0x04
 #define CLK_CNTR_SETUP_OFFSET_B    0x08
