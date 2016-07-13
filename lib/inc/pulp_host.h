@@ -26,9 +26,11 @@
 //#define HOST_BUSY  0x1002
 #define HOST_DONE  0x1003
 
-#define TO_RUNTIME 0x10000000 // pass PULP driver
-#define RAB_UPDATE 0x10000001 // handled by PULP driver
-#define RAB_SWITCH 0x10000002 // handled by PULP driver
+#define MBOX_N_BITS_REQ_TYPE 4    // number of MSBs to specify the type
+
+#define TO_RUNTIME 0x10000000 // bypass PULP driver
+#define RAB_UPDATE 0x20000000 // handled by PULP driver
+#define RAB_SWITCH 0x30000000 // handled by PULP driver
 
 /*
  * Macros
@@ -110,6 +112,13 @@
   ( BF_SET(request, n_stripes, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
 	       + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
 	       RAB_CONFIG_N_BITS_N_STRIPES) )
+
+#define MBOX_GET_REQ_TYPE(type, request) \
+  ( type = BF_GET(request, 32-MBOX_N_BITS_REQ_TYPE, \
+         MBOX_N_BITS_REQ_TYPE) << (32-MBOX_N_BITS_REQ_TYPE) )
+#define MBOX_GET_N_WORDS(n_words, request) \
+  ( n_words = BF_GET(request, 0, 32-MBOX_N_BITS_REQ_TYPE) )
+
 
 /*
  * General settings
