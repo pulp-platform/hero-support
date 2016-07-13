@@ -8,12 +8,12 @@
 #define DEBUG_LEVEL_PULP   0
 #define DEBUG_LEVEL_MEM    0
 #define DEBUG_LEVEL_RAB    0
-#define DEBUG_LEVEL_RAB_MH 1
+#define DEBUG_LEVEL_RAB_MH 0
 #define DEBUG_LEVEL_DMA    0
 #define DEBUG_LEVEL_MBOX   0
 //#define PROFILE_DMA
 //#define PROFILE_RAB
-#define PROFILE_RAB_MH
+//#define PROFILE_RAB_MH
 
 // type definitions
 typedef struct {

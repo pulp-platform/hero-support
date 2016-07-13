@@ -1929,7 +1929,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
                              (void __user *)((char *)arg+byte), n_bytes_left);
       
       if (ret < 0) {
-        printk(KERN_WARNING "PULP: Cannot copy ACP flag from user space.\n");
+        printk(KERN_WARNING "PULP: Cannot copy miss handling arguments from user space.\n");
         return ret;
       }
       byte += (n_bytes_left - ret);
