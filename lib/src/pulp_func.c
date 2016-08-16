@@ -719,7 +719,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   size_b = 0;
   offload_id = 0;
 
-  if ( !strcmp(task->name, "profile_rab") ) { // valid for PROFILE_RAB only
+  if ( !strcmp(task->name, "profile_rab_striping") ) { // valid for PROFILE_RAB_STR only
 
     for (i=0;i<n_elements;i++) {
       max_stripe_size_b[i] = MAX_STRIPE_SIZE; 
@@ -828,7 +828,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
       else {
         addr_start = (unsigned)(task->data_desc[k].ptr);
 
-        if ( !strcmp(task->name, "profile_rab") ) {
+        if ( !strcmp(task->name, "profile_rab_striping") ) {
     
           size_b = max_stripe_size_b[k];
           tx_band_start = j*size_b;
@@ -988,7 +988,9 @@ int pulp_dma_xfer(PulpDev *pulp,
 }
 
 /**
- * Setup a DMA transfer using the Zynq PS DMA engine
+ * Offload an OpenMP task to PULP and setup the RAB
+ *
+ * Currently only used by profile_rab_striping, may be removed soon.
  *
  * @pulp : pointer to the PulpDev structure
  * @task : pointer to the TaskDesc structure
@@ -1012,7 +1014,7 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   // RAB setup
   pulp_offload_rab_setup(pulp, task, &data_idxs, n_idxs);
     
-#ifndef PROFILE_RAB
+#ifndef PROFILE_RAB_STR
   // Pass data descriptor to PULP
   pulp_offload_pass_desc(pulp, task, &data_idxs);
 #endif  
@@ -1027,9 +1029,6 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
     }
   }
 
-  // reset sync address
-  pulp_write32(pulp->l2_mem.v_addr,0xFFF8,'b',0);
-
   /*
    * offload
    */
@@ -1039,29 +1038,10 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
     return err;
   }
   pulp_exe_start(pulp);
-#ifdef PROFILE_RAB
+
+#ifdef PROFILE_RAB_STR
   pulp_write32(pulp->mbox.v_addr,MBOX_WRDATA_OFFSET_B,'b',PULP_START);
 #endif
-  // poll l2_mem address for finish
-  volatile int done;
-  done = 0;
-  while (!done) {
-    done = pulp_read32(pulp->l2_mem.v_addr,0xFFF8,'b');
-    usleep(100000);
-    //printf("Waiting...\n");
-  }
-  pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);
-  
-  // reset sync address
-  pulp_write32(pulp->l2_mem.v_addr,0xFFF8,'b',0);
-
-  // -> dynamic linking here?
-  
-  // tell PULP where to get the binary from and to start
-  // -> write address to mbox
-
-  // if sync, wait for PULP to finish
-  // else configure the driver to listen for the interrupt and which process to wakeup
 
   return 0;
 }
@@ -1376,7 +1356,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   n_data_int = 1;
 
   // Mark striped data elements
-  if ( !strcmp(task->name, "profile_rab") ) { // valid for PROFILE_RAB only
+  if ( !strcmp(task->name, "profile_rab_striping") ) { // valid for PROFILE_RAB_STR only
         
     n_data_int = 0;
     for (i=0; i<task->n_data; i++) {
@@ -1495,7 +1475,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
 
   // set up RAB stripes
   //pulp_rab_req_striped(pulp, task, data_idxs, n_idxs, prot, port);
-  if ( !strcmp(task->name, "profile_rab") ) {
+  if ( !strcmp(task->name, "profile_rab_striping") ) {
     pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port);
   }
   else if ( !strcmp(task->name, "rod") ) {
@@ -1704,7 +1684,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   date_cur = (unsigned char)(task->task_id + 4);
   pulp_rab_free(pulp, date_cur);
 
-  if ( !strcmp(task->name, "profile_rab") || !strcmp(task->name, "rod")
+  if ( !strcmp(task->name, "profile_rab_striping") || !strcmp(task->name, "rod")
        || !strcmp(task->name, "ct") || !strcmp(task->name, "jpeg") ) {
     // free striped RAB slices
     pulp_rab_free_striped(pulp);   

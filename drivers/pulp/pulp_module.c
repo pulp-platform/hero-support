@@ -205,7 +205,7 @@ static RabStripeElem * elem_cur;
 static RabStripeReq rab_stripe_req[RAB_N_MAPPINGS];
 static unsigned rab_mapping;
 static unsigned rab_mapping_active;
-#if defined(PROFILE_RAB) || defined(PROFILE_RAB_MH)
+#if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
   static unsigned arm_clk_cntr_value = 0;
   static unsigned arm_clk_cntr_value_start = 0;
   static unsigned clk_cntr_response = 0;
@@ -1291,7 +1291,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     
   case PULP_IOCTL_RAB_REQ_STRIPED: // Request striped RAB slices
    
-#ifdef PROFILE_RAB 
+#ifdef PROFILE_RAB_STR 
     // reset the ARM clock counter
     asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
 #endif
@@ -1448,11 +1448,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       // number of pages
       len = pulp_mem_get_num_pages(rab_slice_req->addr_start,size_b);
 
-#ifdef PROFILE_RAB
+#ifdef PROFILE_RAB_STR
       n_pages_setup += len;
 #endif   
 
-#ifdef PROFILE_RAB
+#ifdef PROFILE_RAB_STR
       // read the ARM clock counter
       asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
 #endif   
@@ -1464,7 +1464,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         return err;
       }
 
-#ifdef PROFILE_RAB
+#ifdef PROFILE_RAB_STR
       arm_clk_cntr_value_start = arm_clk_cntr_value;
 
       // read the ARM clock counter
@@ -1481,7 +1481,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         return n_segments;
       }
 
-#ifdef PROFILE_RAB
+#ifdef PROFILE_RAB_STR
       arm_clk_cntr_value_start = arm_clk_cntr_value;
 
       // read the ARM clock counter
@@ -1511,7 +1511,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }
     #endif // PLATFORM != JUNO
 
-#ifdef PROFILE_RAB
+#ifdef PROFILE_RAB_STR
       arm_clk_cntr_value_start = arm_clk_cntr_value;
 
       // read the ARM clock counter
@@ -1674,7 +1674,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     rab_stripe_req[rab_mapping].stripe_idx = 0;
 
-#ifdef PROFILE_RAB
+#ifdef PROFILE_RAB_STR
     // read the ARM clock counter
     asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
     clk_cntr_setup += arm_clk_cntr_value;
@@ -1699,7 +1699,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   case PULP_IOCTL_RAB_FREE_STRIPED: // Free striped RAB slices
 
-#ifdef PROFILE_RAB 
+#ifdef PROFILE_RAB_STR 
     // reset the ARM clock counter
     asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
 #endif
@@ -1746,7 +1746,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       rab_stripe_req[rab_mapping].n_elements = 0;
     }
 
-#ifdef PROFILE_RAB 
+#ifdef PROFILE_RAB_STR 
     // read the ARM clock counter
     asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
     clk_cntr_cleanup += arm_clk_cntr_value;
@@ -2353,11 +2353,11 @@ void pulp_rab_update(void)
   unsigned flags = 0;
 #endif
 
-  if (DEBUG_LEVEL_RAB > 0) {
+  if (DEBUG_LEVEL_RAB_STR > 0) {
       printk(KERN_INFO "PULP: RAB update requested.\n");
   }
   
-#ifdef PROFILE_RAB 
+#ifdef PROFILE_RAB_STR 
   // stop the PULP timer  
   iowrite32(0x1,(void *)((unsigned long)my_dev.clusters+TIMER_STOP_OFFSET_B));
 
@@ -2397,7 +2397,7 @@ void pulp_rab_update(void)
                   (void *)((unsigned long)my_dev.rab_config+offset+0x30)); // offset  
         // activate the slice
         iowrite32(flags, (void *)((unsigned long)my_dev.rab_config+offset+0x38));
-  #ifdef PROFILE_RAB 
+  #ifdef PROFILE_RAB_STR 
           n_slices_updated++;
   #endif
       }
@@ -2407,7 +2407,7 @@ void pulp_rab_update(void)
   // signal ready to PULP
   iowrite32(HOST_READY,(void *)((unsigned long)my_dev.mbox+MBOX_WRDATA_OFFSET_B));
         
-#ifdef PROFILE_RAB 
+#ifdef PROFILE_RAB_STR 
   // read the ARM clock counter
   asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
   clk_cntr_update += arm_clk_cntr_value;
@@ -2428,13 +2428,13 @@ void pulp_rab_update(void)
 #if defined(PROFILE_RAB) || defined(JPEG) 
   if (idx == rab_stripe_req[rab_mapping_active].n_stripes) {
     rab_stripe_req[rab_mapping_active].stripe_idx = 0;
-    if (DEBUG_LEVEL_RAB > 0) {
+    if (DEBUG_LEVEL_RAB_STR > 0) {
       printk(KERN_INFO "PULP: RAB stripe table wrap around.\n");
     }
   }
 #endif
 
-  if (DEBUG_LEVEL_RAB > 0) {
+  if (DEBUG_LEVEL_RAB_STR > 0) {
     printk(KERN_INFO "PULP: RAB update completed.\n");
   }
 
