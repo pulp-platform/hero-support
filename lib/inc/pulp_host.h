@@ -1,18 +1,29 @@
 #ifndef PULP_HOST_H___
 #define PULP_HOST_H___
 
-#define CHIP_BIGPULP 7
-#define PULP_CHIP CHIP_BIGPULP
-
-#include "archi/bigpulp/pulp.h"
-
-#define DEBUG_LEVEL 0
-
 // PLATFORM is exported in sourceme.sh and passed by the Makefile
 #define ZEDBOARD 1
 #define ZC706    2
 #define MINI_ITX 3
 #define JUNO     4
+
+// from include/archi/pulp.h
+#define CHIP_BIGPULP         7
+#define CHIP_BIGPULP_Z_7020  8
+#define CHIP_BIGPULP_Z_7045  9
+
+#define PULP_CHIP_FAMILY CHIP_BIGPULP
+#if PLATFORM == ZEDBOARD
+  #define PULP_CHIP CHIP_BIGPULP_Z_7020
+#elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  #define PULP_CHIP CHIP_BIGPULP_Z_7045
+#else // PLATFORM == JUNO
+  #define PULP_CHIP CHIP_BIGPULP
+#endif
+
+#include "archi/bigpulp/pulp.h"
+
+#define DEBUG_LEVEL 0
 
 // mailbox communication
 #define PULP_READY 0x0
@@ -174,7 +185,7 @@
     #define N_CORES          2
     #define L2_MEM_SIZE_KB  64
     #define L1_MEM_SIZE_KB  32
-    #define RAB_N_SLICES     8
+    #define RAB_N_SLICES     4
   
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
   
@@ -372,8 +383,8 @@
 //#define ZYNQ_PMM
 
 // needed for profile_rab_str, dma_test
-#define MEM_SHARING 2
-#define PROFILE_RAB_STR
+//#define MEM_SHARING 2
+//#define PROFILE_RAB_STR
 
 // needed for profile_rab_striping & profile_rab_miss_handling
 #define CLK_CNTR_RESPONSE_OFFSET_B 0x00
