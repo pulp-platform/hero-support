@@ -24,7 +24,7 @@ int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsign
                     struct page *** pages, unsigned n_pages, 
                     unsigned addr_start, unsigned addr_end);
 int pulp_mem_check_num_sg( struct page *** pages, unsigned n_pages);
-int pulp_mem_l2tlb_get_entries(unsigned ** virtual_page_vec, unsigned ** phy_page_vec,
-                               struct page *** pages, unsigned n_pages, unsigned addr_start);
+int pulp_mem_l2_get_entries(unsigned ** virtual_page_vec, unsigned ** phy_page_vec,
+                            struct page *** pages, unsigned n_pages, unsigned addr_start);
 
 #endif/*_PULP_MEM_H_*/

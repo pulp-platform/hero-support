@@ -321,7 +321,7 @@ int pulp_mem_check_num_sg(struct page *** pages, unsigned n_pages)
  * @n_pages: Number of pages to translate.
  * @addr_start: virtual start address of the mapping.
  */
-int pulp_mem_l2tlb_get_entries(unsigned ** pfn_v_vec, unsigned ** pfn_p_vec,
+int pulp_mem_l2_get_entries(unsigned ** pfn_v_vec, unsigned ** pfn_p_vec,
                            struct page *** pages, unsigned n_pages, unsigned addr_start)
 {
   int i;

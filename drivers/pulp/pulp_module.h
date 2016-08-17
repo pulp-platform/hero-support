@@ -13,7 +13,7 @@
 #define DEBUG_LEVEL_DMA     0
 #define DEBUG_LEVEL_MBOX    0
 //#define PROFILE_DMA
-#define PROFILE_RAB_STR
+//#define PROFILE_RAB_STR
 //#define PROFILE_RAB_MH
 
 // type definitions

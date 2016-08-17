@@ -63,65 +63,68 @@
   ( y= ((y) &~ BF_MASK_GEN(start, len)) | BF_PREP(x, start, len) )
 
 // RAB related
+#define RAB_GET_FLAGS_HW(flags_hw, request) \
+  ( flags_hw = BF_GET(request, 0, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_ACP) )
+#define RAB_SET_FLAGS_HW(request, flags_hw) \
+  ( BF_SET(request, flags_hw, 0, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_ACP) )
+
 #define RAB_GET_PROT(prot, request) ( prot = request & 0x7 )
 #define RAB_SET_PROT(request, prot) \
   ( BF_SET(request, prot, 0, RAB_CONFIG_N_BITS_PROT) )
 
+#define RAB_GET_ACP(use_acp, request) \
+  ( use_acp = BF_GET(request, RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_ACP) )
+#define RAB_SET_ACP(request, use_acp) \
+  ( BF_SET(request, use_acp, RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_ACP) )
+
 #define RAB_GET_PORT(port, request) \
-  ( port = BF_GET(request, RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_PORT) )
+  ( port = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_ACP, RAB_CONFIG_N_BITS_PORT) )
 #define RAB_SET_PORT(request, port) \
-  ( BF_SET(request, port, RAB_CONFIG_N_BITS_PROT, RAB_CONFIG_N_BITS_PORT) )
+  ( BF_SET(request, port, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_ACP, RAB_CONFIG_N_BITS_PORT) )
 
-#define RAB_GET_USE_ACP(use_acp, request) \
-  ( use_acp = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
-		      RAB_CONFIG_N_BITS_USE_ACP) )
-#define RAB_SET_USE_ACP(request, use_acp) \
-  ( BF_SET(request, use_acp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT, \
-	   RAB_CONFIG_N_BITS_USE_ACP) )
-
-#define RAB_GET_RAB_LVL(rab_lvl, request) \
+#define RAB_GET_LVL(rab_lvl, request) \
   ( rab_lvl = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-		       + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_RAB_LVL) )
-#define RAB_SET_RAB_LVL(request, rab_lvl) \
+		       + RAB_CONFIG_N_BITS_ACP, RAB_CONFIG_N_BITS_LVL) )
+#define RAB_SET_LVL(request, rab_lvl) \
   ( BF_SET(request, rab_lvl, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	         + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_RAB_LVL) )
+	         + RAB_CONFIG_N_BITS_ACP, RAB_CONFIG_N_BITS_LVL) )
 
 #define RAB_GET_DATE_EXP(date_exp, request) \
   ( date_exp = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-           + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_RAB_LVL, RAB_CONFIG_N_BITS_DATE) )
+           + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_LVL, RAB_CONFIG_N_BITS_DATE) )
 #define RAB_SET_DATE_EXP(request, date_exp) \
   ( BF_SET(request, date_exp, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	         + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_RAB_LVL, RAB_CONFIG_N_BITS_DATE) )
+	         + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_LVL, RAB_CONFIG_N_BITS_DATE) )
 
 #define RAB_GET_DATE_CUR(date_cur, request) \
   ( date_cur = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-		       + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_RAB_LVL, RAB_CONFIG_N_BITS_DATE) )
+		       + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_LVL, RAB_CONFIG_N_BITS_DATE) )
 #define RAB_SET_DATE_CUR(request, date_cur) \
   ( BF_SET(request, date_cur, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	         + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_RAB_LVL, RAB_CONFIG_N_BITS_DATE) )
+	         + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_LVL, RAB_CONFIG_N_BITS_DATE) )
 
 // for RAB striping - ATTENTION: not compatible with date_exp, date_cur!!!
 #define RAB_GET_OFFLOAD_ID(offload_id, request) \
   ( offload_id = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-          + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_OFFLOAD_ID) )
+          + RAB_CONFIG_N_BITS_ACP, RAB_CONFIG_N_BITS_OFFLOAD_ID) )
 #define RAB_SET_OFFLOAD_ID(request, offload_id) \
   ( BF_SET(request, offload_id, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-          + RAB_CONFIG_N_BITS_USE_ACP, RAB_CONFIG_N_BITS_OFFLOAD_ID) )
+          + RAB_CONFIG_N_BITS_ACP, RAB_CONFIG_N_BITS_OFFLOAD_ID) )
 
 #define RAB_GET_N_ELEM(n_elem, request) \
   ( n_elem = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-		     + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
+		     + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
 #define RAB_SET_N_ELEM(request, n_elem) \
   ( BF_SET(request, n_elem, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	       + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
+	       + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID, RAB_CONFIG_N_BITS_N_ELEM) )
 
 #define RAB_GET_N_STRIPES(n_stripes, request) \
   ( n_stripes = BF_GET(request, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-		     + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
+		     + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
 		     RAB_CONFIG_N_BITS_N_STRIPES) )
 #define RAB_SET_N_STRIPES(request, n_stripes) \
   ( BF_SET(request, n_stripes, RAB_CONFIG_N_BITS_PROT + RAB_CONFIG_N_BITS_PORT \
-	       + RAB_CONFIG_N_BITS_USE_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
+	       + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_OFFLOAD_ID + RAB_CONFIG_N_BITS_N_ELEM, \
 	       RAB_CONFIG_N_BITS_N_STRIPES) )
 
 #define MBOX_GET_REQ_TYPE(type, request) \
@@ -130,6 +133,8 @@
 #define MBOX_GET_N_WORDS(n_words, request) \
   ( n_words = BF_GET(request, 0, 32-MBOX_N_BITS_REQ_TYPE) )
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 /*
  * General settings
@@ -185,7 +190,8 @@
     #define N_CORES          2
     #define L2_MEM_SIZE_KB  64
     #define L1_MEM_SIZE_KB  32
-    #define RAB_N_SLICES     4
+    #define RAB_L1_N_SLICES_PORT_0   4
+    #define RAB_L1_N_SLICES_PORT_1   4
   
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
   
@@ -196,10 +202,11 @@
     #define L3_MEM_SIZE_MB 128
     
     // Cluster + RAB config
-    #define N_CORES          8
-    #define L2_MEM_SIZE_KB 256
-    #define L1_MEM_SIZE_KB 256
-    #define RAB_N_SLICES    32
+    #define N_CORES                  8
+    #define L2_MEM_SIZE_KB         256
+    #define L1_MEM_SIZE_KB         256
+    #define RAB_L1_N_SLICES_PORT_0   4
+    #define RAB_L1_N_SLICES_PORT_1  32
   
   #endif // PLATFORM
 
@@ -235,9 +242,12 @@
   #define N_CORES          8
   #define L2_MEM_SIZE_KB 256
   #define L1_MEM_SIZE_KB 256
-  #define RAB_N_SLICES    32
+  #define RAB_L1_N_SLICES_PORT_0   4
+  #define RAB_L1_N_SLICES_PORT_1  32
 
 #endif // PLATFORM
+
+#define RAB_L1_N_SLICES_MAX MAX(RAB_L1_N_SLICES_PORT_0, RAB_L1_N_SLICES_PORT_1)
 
 /*
  * Independent parameters
@@ -255,11 +265,11 @@
 #define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
 
 #define RAB_CONFIG_SIZE_B         0x10000
-#define RAB_N_MAPPINGS            2
+#define RAB_L1_N_MAPPINGS_PORT_1  2
 #define RAB_N_PORTS               2
 #define RAB_CONFIG_N_BITS_PORT    1
-#define RAB_CONFIG_N_BITS_USE_ACP 1
-#define RAB_CONFIG_N_BITS_RAB_LVL 2 
+#define RAB_CONFIG_N_BITS_ACP     1
+#define RAB_CONFIG_N_BITS_LVL     2 
 #define RAB_CONFIG_N_BITS_PROT    3
 #define RAB_CONFIG_N_BITS_DATE    8
 #define RAB_CONFIG_N_BITS_PAGE    16

@@ -639,9 +639,9 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
   // setup the request
   request[0] = 0;
   RAB_SET_PROT(request[0], prot);
+  RAB_SET_ACP(request[0], use_acp);
   RAB_SET_PORT(request[0], port);
-  RAB_SET_USE_ACP(request[0], use_acp);
-  RAB_SET_RAB_LVL(request[0], rab_lvl);
+  RAB_SET_LVL(request[0], rab_lvl);
   RAB_SET_DATE_EXP(request[0], date_exp);
   RAB_SET_DATE_CUR(request[0], date_cur);
   request[1] = addr_start;
@@ -903,8 +903,8 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   // set up the request
   request[0] = 0;
   RAB_SET_PROT(request[0], prot);
+  RAB_SET_ACP(request[0], 0); // for now we deactivate it
   RAB_SET_PORT(request[0], port);
-  RAB_SET_USE_ACP(request[0], 0); // for now we deactivate it
   RAB_SET_OFFLOAD_ID(request[0], offload_id);
   RAB_SET_N_ELEM(request[0], n_elements);
   RAB_SET_N_STRIPES(request[0], n_stripes);
@@ -1971,7 +1971,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   offload_id = 0;
 
   // compute max stripe height
-  stripe_size_b = (RAB_N_SLICES/2-1)*page_size_b;
+  stripe_size_b = (RAB_L1_N_SLICES_PORT_1/2-1)*page_size_b;
   stripe_height = stripe_size_b / i_step;    
   
   n_stripes_per_channel = p_height / stripe_height;
@@ -2106,8 +2106,8 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   // set up the request
   request[0] = 0;
   RAB_SET_PROT(request[0], prot);
+  RAB_SET_ACP(request[0], 0);
   RAB_SET_PORT(request[0], port);
-  RAB_SET_USE_ACP(request[0], 0);
   RAB_SET_OFFLOAD_ID(request[0], offload_id);
   RAB_SET_N_ELEM(request[0], 1);
   RAB_SET_N_STRIPES(request[0], n_stripes);
