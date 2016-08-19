@@ -1301,6 +1301,12 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       printk(KERN_INFO "New striped RAB request\n");
     }
 
+    /*
+     *  get:
+     *  - info on port, prot, acp, offload_id, n_elements, n_stripes
+     *  - address holding max stripe sizes (1 per element)
+     *  - address holding array of ptr to striping tables (1 ptr per element) 
+     */
     // get transfer data from user space - arg already checked above
     ret = 1;
     byte = 0;
@@ -1331,8 +1337,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
                                                      *sizeof(unsigned)),GFP_KERNEL);
     rab_stripe_ptrs = (unsigned **)kmalloc((size_t)(rab_stripe_req[rab_mapping].n_elements
                                                     *sizeof(unsigned *)),GFP_KERNEL);
-
     // get data from user space
+    /*
+     *  get:
+     *  - info on max stripe sizes (1 per element)
+     */
     ret = 1;
     byte = 0;
     n_bytes_left = rab_stripe_req[rab_mapping].n_elements*sizeof(unsigned); 
@@ -1347,6 +1356,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       n_bytes_left = ret;
     }
     
+    /*
+     *  get:
+     *  - addresses to striping tables (1 per element)
+     */
     ret = 1;
     byte = 0;
     n_bytes_left = rab_stripe_req[rab_mapping].n_elements*sizeof(unsigned *); 
@@ -1395,6 +1408,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       elem_cur->rab_stripes = (unsigned *)kmalloc((size_t)(n_entries*sizeof(unsigned)),GFP_KERNEL);   
       
       // get data from user space
+      /*
+       *  get:
+       *  - striping table
+       */
       ret = 1;
       byte = 0;
       n_bytes_left = n_entries*sizeof(unsigned);
@@ -2379,6 +2396,12 @@ void pulp_rab_update(void)
   
       // set up new translations rules
       if ( elem_cur->rab_stripes[idx*n_fields+j*2+1] ) { // offset != 0
+
+        // set up the slice
+        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],  (void *)((unsigned long)my_dev.rab_config+offset+0x20)); // start_addr
+        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+2],(void *)((unsigned long)my_dev.rab_config+offset+0x28)); // end_addr
+        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+1],(void *)((unsigned long)my_dev.rab_config+offset+0x30)); // offset  
+
         // set up the slice
         iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],
                   (void *)((unsigned long)my_dev.rab_config+offset+0x20)); // start_addr

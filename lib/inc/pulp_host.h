@@ -191,7 +191,7 @@
     #define L2_MEM_SIZE_KB  64
     #define L1_MEM_SIZE_KB  32
     #define RAB_L1_N_SLICES_PORT_0   4
-    #define RAB_L1_N_SLICES_PORT_1   4
+    #define RAB_L1_N_SLICES_PORT_1   8
   
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
   

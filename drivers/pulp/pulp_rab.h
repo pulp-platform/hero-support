@@ -12,33 +12,6 @@
 
 #include "pulp_host.h"
 
-#define RAB_TABLE_WIDTH 3
-
-// macros
-#define RAB_GET_PAGE_IDX_START(idx_start, page_idxs ) \
-  ( idx_start = BF_GET( page_idxs, RAB_CONFIG_N_BITS_PAGE, RAB_CONFIG_N_BITS_PAGE))
-#define RAB_SET_PAGE_IDX_START(page_idxs, idx_start) \
-  ( BF_SET(page_idxs, idx_start, RAB_CONFIG_N_BITS_PAGE, RAB_CONFIG_N_BITS_PAGE) )
-
-#define RAB_GET_PAGE_IDX_END(idx_end, page_idxs) \
-  ( idx_end = BF_GET(page_idxs, 0, RAB_CONFIG_N_BITS_PAGE))
-#define RAB_SET_PAGE_IDX_END(page_idxs, idx_end) \
-  ( BF_SET(page_idxs, idx_end, 0, RAB_CONFIG_N_BITS_PAGE) )
-
-
-// These macros can be used to extract the flags from a physical RAB slice
-#define RAB_SLICE_SET_FLAGS(flags, prot, use_acp) \
-  { BF_SET(flags, prot, 0, RAB_SLICE_FLAGS_PROT);                       \
-    BF_SET(flags, use_acp, RAB_SLICE_FLAGS_PROT, RAB_SLICE_FLAGS_USE_ACP); }
-
-#define RAB_SLICE_GET_FLAGS(flags, prot, use_acp) \
-  { prot    = BF_GET(flags, 0, RAB_SLICE_FLAGS_PROT);                   \
-    use_acp = BF_GET(flags, RAB_SLICE_FLAGS_PROT, RAB_SLICE_FLAGS_USE_ACP); }
-
-// defines layout of the flags in a RAB slice
-#define RAB_SLICE_FLAGS_PROT      3
-#define RAB_SLICE_FLAGS_USE_ACP   1
-
 #define RAB_L2_N_ENTRIES_PER_SET 32
 #define RAB_L2_N_SETS            32
 
@@ -65,11 +38,11 @@ typedef struct {
   unsigned      rab_mapping;
   unsigned      n_slices;
   unsigned      n_slices_per_stripe;
-  unsigned      *slices;
+  unsigned    * slices;
   unsigned char flags_hw;  // bits 0-2: prot, bit 3: use_acp
   unsigned char rab_port;
   unsigned      n_stripes;
-  unsigned      *rab_stripes;
+  unsigned    * rab_stripes;
   unsigned      page_ptr_idx;
 } RabStripeElem;
 
