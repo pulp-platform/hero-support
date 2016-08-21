@@ -68,7 +68,7 @@ int pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req)
       break;
     }    
     if ( i == (RAB_L1_N_SLICES_PORT_1) ) {
-      printk(KERN_INFO "PULP RAB L1: No slice available on Port 1.\n");
+      printk(KERN_INFO "PULP RAB L1: No page_ptrs field available on Port 1.\n");
       return -EIO;
     }
   }
@@ -134,6 +134,7 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
       break;
     else if (i == (n_slices-1) ) { // no slice free
       err = 1;
+      printk(KERN_INFO "PULP RAB L1: No slice available on Port %d.\n", rab_slice_req->rab_port);
     }
   }
 
@@ -356,12 +357,21 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
 }
 
 /**
- * Switch the current RAB setup with another mapping.
+ * Get the index of the currently active RAB mapping on Port 1.
+ */
+int pulp_rab_mapping_get_active()
+{
+  return (int)l1.port_1.mapping_active;
+}
+
+/**
+ * Switch the current RAB setup with another mapping. In case a mapping 
+ * contains a striped config, Stripe 0 will be set up.
  *
  * @rab_config: kernel virtual address of the RAB configuration port.
  * @rab_mapping: specifies the mapping to set up the RAB with.
  */
-void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
+void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
 {
   int i;
   unsigned offset;
@@ -421,7 +431,7 @@ void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping)
  * @rab_mapping: specifies the mapping to to print, 0xAAAA for actual
  *               RAB configuration, 0xFFFF for all mappings.
  */
-void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping)
+void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
 {
   int mapping_min, mapping_max;
   int i,j;

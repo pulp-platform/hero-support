@@ -201,10 +201,7 @@ static PulpDev my_dev;
 static struct class *my_class; 
 
 // for RAB
-static RabStripeElem * elem_cur;
 static RabStripeReq rab_stripe_req[RAB_L1_N_MAPPINGS_PORT_1];
-static unsigned rab_mapping;
-static unsigned rab_mapping_active;
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
   static unsigned arm_clk_cntr_value = 0;
   static unsigned arm_clk_cntr_value_start = 0;
@@ -356,9 +353,8 @@ static int __init pulp_init(void)
     (long unsigned int) my_dev.rab_config); 
   
   pulp_rab_l1_init();
-  rab_mapping_active = 0;
   #if PLATFORM != ZEDBOARD
-  	pulp_rab_l2_init(my_dev.rab_config);
+    pulp_rab_l2_init(my_dev.rab_config);
   #endif
 
   // PULP timer used for RAB performance monitoring
@@ -828,7 +824,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
         (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
   
       // for debugging
-      //pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+      //pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
       }
     }
     if ( BF_GET(intr_reg_value,INTR_RAB_MHR_FULL,1) ) { // RAB mhr full
@@ -914,7 +910,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
              rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
   
       // for debugging
-      pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+      pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
       if (RAB_MULTI_IRQ == irq){
         pulp_rab_l2_print_valid_entries(1);
@@ -959,15 +955,15 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
    
   // what get_user_pages needs
   struct page ** pages;
-  unsigned len; 
+  unsigned       len; 
   
   // what mem_map_sg needs needs
-  unsigned * addr_start_vec;
-  unsigned * addr_end_vec;
-  unsigned * addr_offset_vec;
-  unsigned * page_idxs_start;
-  unsigned * page_idxs_end;
-  unsigned n_segments;
+  unsigned *      addr_start_vec;
+  unsigned *      addr_end_vec;
+  unsigned long * addr_offset_vec;
+  unsigned *      page_idxs_start;
+  unsigned *      page_idxs_end;
+  unsigned        n_segments;
 
   // needed for cache flushing
 #if PLATFORM != JUNO
@@ -976,16 +972,21 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   // needed for RAB management
   RabSliceReq rab_slice_request;
   RabSliceReq *rab_slice_req = &rab_slice_request;
-  unsigned n_slices, n_mappings;
+  unsigned n_slices;
+  unsigned n_mappings;
 
   // needed for RAB striping
-  unsigned addr_start, addr_offset;
-  unsigned n_entries, n_fields;
-  unsigned char rab_port, flags_hw;
-  unsigned seg_idx_start, seg_idx_end;
-  unsigned * max_stripe_size_b;
-  unsigned ** rab_stripe_ptrs;
-  unsigned shift, type;
+  RabStripeReqUser    rab_stripe_req_user;
+  RabStripeElemUser * rab_stripe_elem_user;
+  RabStripeElem *     rab_stripe_elem;
+  unsigned *          stripe_addr_start;
+  unsigned *          stripe_addr_end;
+  unsigned            addr_start;
+  unsigned            addr_end;
+  unsigned long       addr_offset;
+  unsigned            seg_idx_start;
+  unsigned            seg_idx_end;
+  unsigned char       id;
 
   // needed for DMA management
   struct dma_async_tx_descriptor ** descs;
@@ -1147,11 +1148,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       for (i=0; i<n_segments; i++) {
         
         if ( !(rab_slice_req->flags_drv & 0x1) ) {
-          rab_slice_req->addr_start = addr_start_vec[i];
-          rab_slice_req->addr_end = addr_end_vec[i];
-          rab_slice_req->addr_offset = addr_offset_vec[i];
+          rab_slice_req->addr_start     = addr_start_vec[i];
+          rab_slice_req->addr_end       = addr_end_vec[i];
+          rab_slice_req->addr_offset    = addr_offset_vec[i];
           rab_slice_req->page_idx_start = page_idxs_start[i];
-          rab_slice_req->page_idx_end = page_idxs_end[i];
+          rab_slice_req->page_idx_end   = page_idxs_end[i];
         }
         
         // some requests need to be set up for every mapping
@@ -1253,37 +1254,35 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     // get current date    
     rab_slice_req->date_cur = BF_GET(arg,0,RAB_CONFIG_N_BITS_DATE);
 
-	// check every slice on every port for every mapping
+    // check every slice on every port for every mapping
     for (i=0; i<RAB_N_PORTS; i++) {
-	  rab_slice_req->rab_port = i;
+    rab_slice_req->rab_port = i;
    
       if (i == 0) {
-      	n_mappings = 1;
-      	n_slices   = RAB_L1_N_SLICES_PORT_0;
+        n_mappings = 1;
+        n_slices   = RAB_L1_N_SLICES_PORT_0;
       }
       else { // Port 1
-      	n_mappings = RAB_L1_N_MAPPINGS_PORT_1;
-      	n_slices   = RAB_L1_N_SLICES_PORT_1;
+        n_mappings = RAB_L1_N_MAPPINGS_PORT_1;
+        n_slices   = RAB_L1_N_SLICES_PORT_1;
       }
    
       for (j=0; j<n_mappings; j++) {
-		rab_slice_req->rab_mapping = j;
-		rab_slice_req->flags_drv = ( j < (n_mappings-1) ) ? 0x4 : 0x0; // unlock and release pages when freeing the last mapping     
-      	for (k=0; k<n_slices; k++) {
-		  rab_slice_req->rab_slice = k;
+        rab_slice_req->rab_mapping = j;
+        rab_slice_req->flags_drv = ( j < (n_mappings-1) ) ? 0x4 : 0x0; // unlock and release pages when freeing the last mapping     
+        for (k=0; k<n_slices; k++) {
+          rab_slice_req->rab_slice = k;
   
           if ( !rab_slice_req->date_cur ||
                (rab_slice_req->date_cur == RAB_MAX_DATE) ||
                (pulp_rab_slice_check(rab_slice_req)) ) // free slice
             pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
-      	}
+        }
       }
     }
-    // reset rab_mapping_active
-    rab_mapping_active = 0;
-    
+
     // for debugging
-    //pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+    //pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
     // Free L2TLB    
     pulp_rab_l2_invalidate_all_entries(my_dev.rab_config, 1);
@@ -1291,178 +1290,184 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     break;
     
   case PULP_IOCTL_RAB_REQ_STRIPED: // Request striped RAB slices
-   
+
 #ifdef PROFILE_RAB_STR 
     // reset the ARM clock counter
     asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
 #endif
  
     if (DEBUG_LEVEL_RAB > 1) {
-      printk(KERN_INFO "New striped RAB request\n");
+      printk(KERN_INFO "PULP: New striped RAB request.\n");
     }
 
     /*
-     *  get:
-     *  - info on port, prot, acp, offload_id, n_elements, n_stripes
-     *  - address holding max stripe sizes (1 per element)
-     *  - address holding array of ptr to striping tables (1 ptr per element) 
+     * get:
+     * - ID, number of elements to stripe
+     * - user-space address of array holding the RabStripeElemUser structs (1 struct per element) 
      */
     // get transfer data from user space - arg already checked above
     ret = 1;
     byte = 0;
-    n_bytes_left = 3*sizeof(unsigned); 
+    n_bytes_left = sizeof(RabStripeReqUser); 
     while (ret > 0) {
-      ret = __copy_from_user((void *)((char *)request+byte),
+      ret = __copy_from_user((void *)((char *)(&rab_stripe_req_user)+byte),
                              (void __user *)((char *)arg+byte), n_bytes_left);
       if (ret < 0) {
-        printk(KERN_WARNING "PULP: Cannot copy striped RAB config from user space.\n");
+        printk(KERN_WARNING "PULP: Cannot copy rab_stripe_req_user from user space.\n");
         return ret;
       }
       byte += (n_bytes_left - ret);
       n_bytes_left = ret;
     }
 
-    // parse request
-    RAB_GET_FLAGS_HW(flags_hw, request[0]); // actually, this information could be retrieved on an element basis, similar to in/out/inout
-    RAB_GET_PORT(rab_port, request[0]);
-    RAB_GET_OFFLOAD_ID(rab_mapping, request[0]);
-    RAB_GET_N_ELEM(rab_stripe_req[rab_mapping].n_elements, request[0]);
-    RAB_GET_N_STRIPES(rab_stripe_req[rab_mapping].n_stripes, request[0]);
-   
-    // allocate memory to hold the RabStripeElem structs
-    rab_stripe_req[rab_mapping].elements = (RabStripeElem **)
-      kmalloc((size_t)(rab_stripe_req[rab_mapping].n_elements*sizeof(RabStripeElem *)),GFP_KERNEL);
-
-    max_stripe_size_b = (unsigned *)kmalloc((size_t)(rab_stripe_req[rab_mapping].n_elements
-                                                     *sizeof(unsigned)),GFP_KERNEL);
-    rab_stripe_ptrs = (unsigned **)kmalloc((size_t)(rab_stripe_req[rab_mapping].n_elements
-                                                    *sizeof(unsigned *)),GFP_KERNEL);
-    // get data from user space
-    /*
-     *  get:
-     *  - info on max stripe sizes (1 per element)
-     */
-    ret = 1;
-    byte = 0;
-    n_bytes_left = rab_stripe_req[rab_mapping].n_elements*sizeof(unsigned); 
-    while (ret > 0) {
-      ret = copy_from_user((void *)((char *)max_stripe_size_b+byte),
-                           (void __user *)((unsigned long)request[1]+byte), n_bytes_left);
-      if (ret < 0) {
-        printk(KERN_WARNING "PULP: Cannot copy stripe information from user space.\n");
-        return ret;
-      }
-      byte += (n_bytes_left - ret);
-      n_bytes_left = ret;
-    }
-    
-    /*
-     *  get:
-     *  - addresses to striping tables (1 per element)
-     */
-    ret = 1;
-    byte = 0;
-    n_bytes_left = rab_stripe_req[rab_mapping].n_elements*sizeof(unsigned *); 
-    while (ret > 0) {
-      ret = copy_from_user((void *)((char *)rab_stripe_ptrs+byte),
-                           (void __user *)((unsigned long)request[2]+byte), n_bytes_left);
-      if (ret < 0) {
-        printk(KERN_WARNING "PULP: Cannot copy stripe information from user space.\n");
-        return ret;
-      }
-      byte += (n_bytes_left - ret);
-      n_bytes_left = ret;
-    }
-    
     if (DEBUG_LEVEL_RAB > 1) {
-      printk(KERN_INFO "PULP: New striped RAB request\n");
-      printk(KERN_INFO "PULP: n_elements = %d \n",rab_stripe_req[rab_mapping].n_elements);
-      printk(KERN_INFO "PULP: n_stripes = %d \n",rab_stripe_req[rab_mapping].n_stripes);
+      printk(KERN_INFO "PULP: id = %d, n_elements = %d\n",rab_stripe_req_user.id, rab_stripe_req_user.n_elements);
+    }
+    if (DEBUG_LEVEL_RAB > 2) {
+      printk(KERN_INFO "PULP: rab_stripe_elem_user_addr = %#x\n",rab_stripe_req_user.rab_stripe_elem_user_addr);
+    }
+
+    // allocate memory to hold the array of RabStripeElemUser structs (1 struct per element)
+    rab_stripe_elem_user = (RabStripeElemUser *)
+      kmalloc((size_t)(rab_stripe_req_user.n_elements*sizeof(RabStripeElemUser)),GFP_KERNEL);
+    if ( rab_stripe_elem_user == NULL ) {
+      printk(KERN_WARNING "PULP: Memory allocation failed.\n");
+      return -ENOMEM;
+    }
+
+    /*
+     * get:
+     * - array of RabStripeElemUser structs
+     */
+    // get data from user space
+    ret = 1;
+    byte = 0;
+    n_bytes_left = rab_stripe_req_user.n_elements*sizeof(RabStripeElemUser); 
+    while (ret > 0) {
+      ret = copy_from_user((void *)((char *)rab_stripe_elem_user+byte),
+                           (void __user *)((unsigned long)rab_stripe_req_user.rab_stripe_elem_user_addr+byte),
+                           n_bytes_left);
+      if (ret < 0) {
+        printk(KERN_WARNING "PULP: Cannot copy rab_stripe_elem_user from user space.\n");
+        return ret;
+      }
+      byte += (n_bytes_left - ret);
+      n_bytes_left = ret;
+    }
+
+    // allocate memory to hold the array of RabStripeElem structs (1 struct per element)
+    rab_stripe_elem = (RabStripeElem *)
+      kmalloc((size_t)(rab_stripe_req_user.n_elements*sizeof(RabStripeElem)),GFP_KERNEL);
+    if ( rab_stripe_elem == NULL ) {
+      printk(KERN_WARNING "PULP: Memory allocation failed.\n");
+      return -ENOMEM;
     }
 
     // process every data element independently
-    for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
-      
-      // allocate memory to hold the RabStripeElem struct
-      elem_cur = (RabStripeElem *)kmalloc((size_t)sizeof(RabStripeElem),GFP_KERNEL);
-      
+    for (i=0; i<rab_stripe_req_user.n_elements; i++) {
+
+      /*
+       * preparations
+       */
       // compute the maximum number of required slices (per stripe)
-      n_slices = max_stripe_size_b[i]/PAGE_SIZE;
-      if (n_slices*PAGE_SIZE < max_stripe_size_b[i])
+      n_slices = rab_stripe_elem_user[i].max_stripe_size_b/PAGE_SIZE;
+      if (n_slices*PAGE_SIZE < rab_stripe_elem_user[i].max_stripe_size_b)
         n_slices++; // remainder
       n_slices++;   // non-aligned
 
       if (DEBUG_LEVEL_RAB > 1) {
-        printk(KERN_INFO "PULP: Element %d, n_slices = %d \n", i, n_slices);
+        printk(KERN_INFO "PULP: Element %d, n_slices = %d\n", i, n_slices);
       }
 
-      // fill the RabStripeElem struct
-      elem_cur->n_slices_per_stripe = n_slices;
-      elem_cur->rab_port = rab_port;
-      elem_cur->flags_hw = flags_hw;
-      elem_cur->n_stripes = rab_stripe_req[rab_mapping].n_stripes;
-      
-      // allocate memory to hold rab_stripes
-      n_fields = 2*n_slices + 1; // for every stripe: start, offset, start, offset, ..., end
-      n_entries = n_fields*(elem_cur->n_stripes+1);
-      elem_cur->rab_stripes = (unsigned *)kmalloc((size_t)(n_entries*sizeof(unsigned)),GFP_KERNEL);   
-      
-      // get data from user space
+      // fill RabStripeElem struct for futher use
+      rab_stripe_elem[i].id                  = rab_stripe_elem_user[i].id;
+      rab_stripe_elem[i].type                = rab_stripe_elem_user[i].type;
+      rab_stripe_elem[i].n_slices_per_stripe = n_slices;
+      rab_stripe_elem[i].n_stripes           = rab_stripe_elem_user[i].n_stripes;
+      rab_stripe_elem[i].flags_hw            = rab_stripe_elem_user[i].flags;
+
+      // compute the actual number of required slices
+      if (rab_stripe_elem[i].type == 4)
+        rab_stripe_elem[i].n_slices = 4*n_slices; // double buffering: *2 + inout: *2
+      else
+        rab_stripe_elem[i].n_slices = 2*n_slices; // double buffering: *2
+
+      // set stripe_idx = stripe to configure at first update request
+      if (rab_stripe_elem[i].type == 3)
+        rab_stripe_elem[i].stripe_idx = 0;
+      else
+        rab_stripe_elem[i].stripe_idx = 1;
+
+      // allocate memory to hold array of slice idxs - slices will be requested later
+      rab_stripe_elem[i].slice_idxs = (unsigned *)
+        kmalloc((size_t)(rab_stripe_elem[i].n_slices*sizeof(unsigned)),GFP_KERNEL);
+      if ( rab_stripe_elem[i].slice_idxs == NULL ) {
+        printk(KERN_WARNING "PULP: Memory allocation failed.\n");
+        return -ENOMEM;
+      }
+
       /*
-       *  get:
-       *  - striping table
+       * get actual striping data from user space:
+       * - array of stripe start/end addresses (2 32b user-space addr per stripe)
        */
+      // allocate memory to hold addr_start and addr_end array
+      stripe_addr_start = (unsigned *)kmalloc((size_t)(rab_stripe_elem[i].n_stripes*sizeof(unsigned)),GFP_KERNEL);
+      if ( stripe_addr_start == NULL ) {
+        printk(KERN_WARNING "PULP: Memory allocation failed.\n");
+        return -ENOMEM;
+      }
+      stripe_addr_end   = (unsigned *)kmalloc((size_t)(rab_stripe_elem[i].n_stripes*sizeof(unsigned)),GFP_KERNEL);
+      if ( stripe_addr_end == NULL ) {
+        printk(KERN_WARNING "PULP: Memory allocation failed.\n");
+        return -ENOMEM;
+      }
+
+      // get data from user space
       ret = 1;
       byte = 0;
-      n_bytes_left = n_entries*sizeof(unsigned);
+      n_bytes_left = rab_stripe_elem_user[i].n_stripes*sizeof(unsigned); 
       while (ret > 0) {
-        ret = copy_from_user((void *)((char *)(elem_cur->rab_stripes)+byte),
-                             (void __user *)((char *)rab_stripe_ptrs[i]+byte), n_bytes_left);
+        ret = copy_from_user((void *)((char *)stripe_addr_start+byte),
+                             (void __user *)((unsigned long)rab_stripe_elem_user[i].stripe_addr_start+byte),
+                             n_bytes_left);
         if (ret < 0) {
-          printk(KERN_WARNING "PULP: Cannot copy stripe information from user space.\n");
+          printk(KERN_WARNING "PULP: Cannot copy stripe start addresses from user space.\n");
           return ret;
         }
         byte += (n_bytes_left - ret);
         n_bytes_left = ret;
       }
-            
-      // detect type of element: 2 = in, 3 = out, 4 = inout
-      if ( elem_cur->rab_stripes[0] == 0 )
-        type = 3;
-      else if ( elem_cur->rab_stripes[n_entries-1] == 0 )
-        type = 2;
-      else
-        type = 4;
-      
-      // allocate memory to hold slices
-      if (type == 4)
-        elem_cur->n_slices = 4*n_slices; // double buffering: *2 + inout: *2
-      else
-        elem_cur->n_slices = 2*n_slices; // double buffering: *2
-      elem_cur->slices = (unsigned *)kmalloc((size_t)(elem_cur->n_slices*sizeof(unsigned)),GFP_KERNEL);
 
-      if ( type == 3 ) {
-        shift = 1;
-        j = n_fields;
+      ret = 1;
+      byte = 0;
+      n_bytes_left = rab_stripe_elem_user[i].n_stripes*sizeof(unsigned); 
+      while (ret > 0) {
+        ret = copy_from_user((void *)((char *)stripe_addr_end+byte),
+                             (void __user *)((unsigned long)rab_stripe_elem_user[i].stripe_addr_end+byte),
+                             n_bytes_left);
+        if (ret < 0) {
+          printk(KERN_WARNING "PULP: Cannot copy stripe end addresses from user space.\n");
+          return ret;
+        }
+        byte += (n_bytes_left - ret);
+        n_bytes_left = ret;
       }
-      else {
-        shift = 0;
-        j = 0;
-      }
-      
-      rab_slice_req->addr_start = elem_cur->rab_stripes[j];
-      rab_slice_req->addr_end   = elem_cur->rab_stripes[elem_cur->n_stripes*n_fields+j-1];
-      size_b = rab_slice_req->addr_end - rab_slice_req->addr_start;
+
+      addr_start = stripe_addr_start[0];
+      addr_end   = stripe_addr_end[rab_stripe_elem[i].n_stripes-1];
+      size_b     = addr_end - addr_start;
 
       if (DEBUG_LEVEL_RAB > 2) {
-        printk(KERN_INFO "PULP: Element %d: \n",i);
-        printk(KERN_INFO "PULP: addr_start = %#x \n",rab_slice_req->addr_start);
-        printk(KERN_INFO "PULP: addr_end   = %#x \n",rab_slice_req->addr_end);
+        printk(KERN_INFO "PULP: addr_start = %#x \n",addr_start);
+        printk(KERN_INFO "PULP: addr_end   = %#x \n",addr_end);
         printk(KERN_INFO "PULP: size_b     = %#x \n",size_b);
       }
 
+      /*
+       * get user-space pages ready
+       */
       // number of pages
-      len = pulp_mem_get_num_pages(rab_slice_req->addr_start,size_b);
+      len = pulp_mem_get_num_pages(addr_start,size_b);
 
 #ifdef PROFILE_RAB_STR
       n_pages_setup += len;
@@ -1474,7 +1479,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif   
 
       // get and lock user-space pages
-      err = pulp_mem_get_user_pages(&pages, rab_slice_req->addr_start, len, rab_slice_req->flags_hw & 0x4);
+      err = pulp_mem_get_user_pages(&pages, addr_start, len, rab_stripe_elem[i].flags_hw & 0x4);
       if (err) {
         printk(KERN_WARNING "PULP: Locking of user-space pages failed.\n");
         return err;
@@ -1491,7 +1496,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       // virtual to physcial address translation + segmentation
       n_segments = pulp_mem_map_sg(&addr_start_vec, &addr_end_vec, &addr_offset_vec,
                                    &page_idxs_start, &page_idxs_end, &pages, len, 
-                                   rab_slice_req->addr_start, rab_slice_req->addr_end);
+                                   addr_start, addr_end);
       if ( n_segments < 1 ) {
         printk(KERN_WARNING "PULP: Virtual to physical address translation failed.\n");
         return n_segments;
@@ -1506,7 +1511,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif   
 
     #if PLATFORM != JUNO
-      if( !(elem_cur->flags_hw & 0x8) ) {
+      if( !(rab_stripe_elem[i].flags_hw & 0x8) ) {
         // flush caches for all segments
         for (j=0; j<n_segments; j++) { 
           for (k=page_idxs_start[j]; k<(page_idxs_end[j]+1); k++) {
@@ -1536,74 +1541,83 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif   
 
       /*
-       * fill rab_stripes table
+       * generate the striping table
        */
+      // allocate memory to hold array of RabStripe structs
+      rab_stripe_elem[i].stripes = (RabStripe *)
+        kmalloc((size_t)rab_stripe_elem[i].n_stripes*sizeof(RabStripe),GFP_KERNEL);
+      if ( rab_stripe_elem[i].stripes == NULL ) {
+        printk(KERN_WARNING "PULP - MEM: Memory allocation failed.\n");
+        return -ENOMEM;
+      }
+
       seg_idx_start = 0;
       seg_idx_end = 0;
-      for (j=0; j<(elem_cur->n_stripes+1); j++) {
 
-        // detect dummy rows in rab_stripes table
-        if ( (j == 0) && ( shift == 1) )
-          continue;
-        else if ( (j == elem_cur->n_stripes) && (shift == 0) )
-          break;
+      // loop over stripes
+      for (j=0; j<rab_stripe_elem[i].n_stripes; j++) {
 
         // determine the segment indices
         while ( ((seg_idx_start+1) < n_segments) && 
-                (elem_cur->rab_stripes[j*n_fields] >= addr_start_vec[seg_idx_start+1]) ) {
+                (stripe_addr_start[j] >= addr_start_vec[seg_idx_start+1]) ) {
           seg_idx_start++;
         }
         while ( (seg_idx_end < n_segments) && 
-                (elem_cur->rab_stripes[j*n_fields+n_fields-1] > addr_end_vec[seg_idx_end]) ) {
+                (stripe_addr_end[j] > addr_end_vec[seg_idx_end]) ) {
           seg_idx_end++;
-        }
-  
-        n_slices = seg_idx_end - seg_idx_start + 1; // number of required slices
-        if ( n_slices > (elem_cur->n_slices_per_stripe) ) {
-          printk(KERN_WARNING "PULP: Stripe %d of Element %d touches too many memory segments.\n",j,i);
-          //printk(KERN_INFO "%d slices reserved, %d segments\n",elem_cur->n_slices_per_stripe, n_segments);
-          //printk(KERN_INFO "start segment = %d, end segment = %d\n",seg_idx_start,seg_idx_end);
         }
 
         if (DEBUG_LEVEL_RAB > 3) {
           printk(KERN_INFO "PULP: Stripe %d: seg_idx_start = %d, seg_idx_end = %d \n",
                  j,seg_idx_start,seg_idx_end);
         }
+  
+        n_slices = seg_idx_end - seg_idx_start + 1; // number of required slices
+        rab_stripe_elem[i].stripes[j].n_slices = n_slices;
+        if ( n_slices > (rab_stripe_elem[i].n_slices_per_stripe) ) {
+          printk(KERN_WARNING "PULP: Stripe %d of Element %d touches too many memory segments.\n",j,i);
+          //printk(KERN_INFO "%d slices reserved, %d segments\n",elem_cur->n_slices_per_stripe, n_segments);
+          //printk(KERN_INFO "start segment = %d, end segment = %d\n",seg_idx_start,seg_idx_end);
+        }
 
-        // extract the physical addresses + virtual start addresses of the segments 
-        for (k=0; k<(elem_cur->n_slices_per_stripe); k++) {
+        // allocate memory to hold array of RabStripeSlice structs
+        rab_stripe_elem[i].stripes[j].slice_configs = (RabStripeSlice *)
+          kmalloc((size_t)n_slices*sizeof(RabStripeSlice),GFP_KERNEL);
+        if ( rab_stripe_elem[i].stripes[j].slice_configs == NULL ) {
+          printk(KERN_WARNING "PULP - MEM: Memory allocation failed.\n");
+          return -ENOMEM;
+        }
+
+        // extract the physical addresses + virtual start addresses of the segments, loop over slices 
+        for (k=0; k<n_slices; k++) {
           if (k == 0) {
-            addr_start  = elem_cur->rab_stripes[j*n_fields];
+            addr_start  = stripe_addr_start[j];
             addr_offset = addr_offset_vec[seg_idx_start];
             // inter-page offset: for multi-page segments
-            addr_offset += (BF_GET(addr_start,PAGE_SHIFT,32-PAGE_SHIFT) << PAGE_SHIFT)
-              - (BF_GET(addr_start_vec[seg_idx_start],PAGE_SHIFT,32-PAGE_SHIFT) << PAGE_SHIFT); 
+            addr_offset += (unsigned long)((BF_GET(addr_start,PAGE_SHIFT,32-PAGE_SHIFT) << PAGE_SHIFT)
+              - (BF_GET(addr_start_vec[seg_idx_start],PAGE_SHIFT,32-PAGE_SHIFT) << PAGE_SHIFT)); 
             // intra-page offset: no additional offset for first slice of first stripe
-            if ( !(j == 0) && !((j == 1) && (shift == 1)) )
-              addr_offset += (elem_cur->rab_stripes[j*n_fields] & BIT_MASK_GEN(PAGE_SHIFT));
+            if ( j != 0 )
+              addr_offset += (unsigned long)(stripe_addr_start[j] & BIT_MASK_GEN(PAGE_SHIFT));
           }
-          else if ( k < n_slices ) {
+          else { // ( k < n_slices )
             addr_start  = addr_start_vec[seg_idx_start + k];
             addr_offset = addr_offset_vec[seg_idx_start + k];
           }
-          else if ( k == n_slices ) { // put addr_end as addr_start for first unused slice
-            addr_start = elem_cur->rab_stripes[j*n_fields+n_fields-1]; 
-            addr_offset = 0;
-          }
-          else { // not all slices used for that stripe
-            addr_start = 0;
-            addr_offset = 0;
-          }
           // write data to table
-          elem_cur->rab_stripes[j*n_fields+k*2]   = addr_start;
-          elem_cur->rab_stripes[j*n_fields+k*2+1] = addr_offset;
+          rab_stripe_elem[i].stripes[j].slice_configs[k].addr_start  = addr_start;
+          rab_stripe_elem[i].stripes[j].slice_configs[k].addr_end    = addr_end;
+          rab_stripe_elem[i].stripes[j].slice_configs[k].addr_offset = addr_offset;
         }
       }
+
       if (DEBUG_LEVEL_RAB > 3) {
-        for (j=0; j<(elem_cur->n_stripes+1) ;j++) {
+        for (j=0; j<rab_stripe_elem[i].n_stripes; j++) {
           printk(KERN_INFO "PULP: Stripe %d:\n",j);
-          for (k=0; k<n_fields; k++) {
-            printk(KERN_INFO "%#x\n",elem_cur->rab_stripes[j*n_fields+k]);
+          for (k=0; k<rab_stripe_elem[i].stripes[j].n_slices; k++) {
+            printk(KERN_INFO "%#x\n", rab_stripe_elem[i].stripes[j].slice_configs[k].addr_start );
+            printk(KERN_INFO "%#x\n", rab_stripe_elem[i].stripes[j].slice_configs[k].addr_end   );
+            printk(KERN_INFO "%#lx\n",rab_stripe_elem[i].stripes[j].slice_configs[k].addr_offset);
           }
           printk(KERN_INFO "\n");
         }
@@ -1611,10 +1625,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
       /*
        *  request the slices
-       */ 
-      // to do: protect with semaphore!?
-      rab_slice_req->rab_mapping = rab_mapping;
-      rab_slice_req->flags_hw = elem_cur->flags_hw;
+       */
+      rab_slice_req->rab_port    = 1;
+      rab_slice_req->rab_mapping = rab_stripe_req_user.id % RAB_L1_N_MAPPINGS_PORT_1;
+      rab_slice_req->flags_hw    = rab_stripe_elem[i].flags_hw;
 
       // do not overwrite any remappings, the remappings will be freed manually
       rab_slice_req->date_cur = 0x1;
@@ -1622,27 +1636,28 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
       // assign all pages to all slices
       rab_slice_req->page_idx_start = page_idxs_start[0];
-      rab_slice_req->page_idx_end = page_idxs_end[n_segments-1];
+      rab_slice_req->page_idx_end   = page_idxs_end[n_segments-1];
 
       //  check for free field in page_ptrs list
       err = pulp_rab_page_ptrs_get_field(rab_slice_req);
       if (err) {
         return err;
       }
+      rab_stripe_elem[i].page_ptr_idx = rab_slice_req->page_ptr_idx;
 
-      for (j=0; j<elem_cur->n_slices; j++) {
+      for (j=0; j<rab_stripe_elem[i].n_slices; j++) {
         // set up only the used slices of the first stripe, the others need just to be requested  
-        if ( (j>(elem_cur->n_slices_per_stripe-1)) || (elem_cur->rab_stripes[j*2+1] == 0) ) {
+        if ( j > (rab_stripe_elem[i].stripes[0].n_slices-1) ) {
           rab_slice_req->addr_start  = 0;
           rab_slice_req->addr_end    = 0;
           rab_slice_req->addr_offset = 0;
-          rab_slice_req->flags_hw    = flags_hw & 0xE;
+          rab_slice_req->flags_hw    = rab_stripe_elem[i].flags_hw & 0xE; // do not yet enable
         }
         else {
-          rab_slice_req->addr_start  = elem_cur->rab_stripes[j*2];
-          rab_slice_req->addr_end    = elem_cur->rab_stripes[j*2+2];
-          rab_slice_req->addr_offset = elem_cur->rab_stripes[j*2+1];
-          rab_slice_req->flags_hw    = flags_hw;
+          rab_slice_req->addr_start  = rab_stripe_elem[i].stripes[0].slice_configs[j].addr_start;
+          rab_slice_req->addr_end    = rab_stripe_elem[i].stripes[0].slice_configs[j].addr_end;
+          rab_slice_req->addr_offset = rab_stripe_elem[i].stripes[0].slice_configs[j].addr_offset;
+          rab_slice_req->flags_hw    = rab_stripe_elem[i].flags_hw;
         }
         // force check in pulp_rab_slice_setup
         if (j == 0)
@@ -1655,7 +1670,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         if (err) {
           return err;
         }
-        elem_cur->slices[j] = rab_slice_req->rab_slice;
+        rab_stripe_elem[i].slice_idxs[j] = rab_slice_req->rab_slice;
 
         // free memory of slices to be re-configured
         pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
@@ -1670,24 +1685,31 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       if (DEBUG_LEVEL_RAB > 2) {
         printk(KERN_INFO "PULP: Element %d: \n",i);
         printk(KERN_INFO "PULP: Striped slices: \n");
-        for (j=0; j<elem_cur->n_slices ;j++) {
-          printk(KERN_INFO "%d, ",elem_cur->slices[j]);
+        for (j=0; j<rab_stripe_elem[i].n_slices; j++) {
+          printk(KERN_INFO "%d, ",rab_stripe_elem[i].slice_idxs[j]);
         }
         printk(KERN_INFO "\n");
       } 
 
-      // store the pointer to the RabStripeElem struct
-      rab_stripe_req[rab_mapping].elements[i] = elem_cur;
-
       // free memory
+      kfree(stripe_addr_start);
+      kfree(stripe_addr_end);
+
+      // free memory - allocated inside pulp_mem_map_sg()
       kfree(addr_start_vec);
       kfree(addr_end_vec);
       kfree(addr_offset_vec);
       kfree(page_idxs_start);
       kfree(page_idxs_end);
-    }
+    } // for n_elements
 
-    rab_stripe_req[rab_mapping].stripe_idx = 0;
+    // fill RabStripeReq struct for further use
+    rab_stripe_req[rab_slice_req->rab_mapping].id         = rab_stripe_req_user.id;
+    rab_stripe_req[rab_slice_req->rab_mapping].n_elements = rab_stripe_req_user.n_elements;
+    rab_stripe_req[rab_slice_req->rab_mapping].elements   = &rab_stripe_elem[0];
+  
+    // free memory
+    kfree(rab_stripe_elem_user);
 
 #ifdef PROFILE_RAB_STR
     // read the ARM clock counter
@@ -1695,20 +1717,12 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     clk_cntr_setup += arm_clk_cntr_value;
 
     // update counters in shared memory
-    iowrite32(clk_cntr_setup,
-              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_SETUP_OFFSET_B));
-    iowrite32(clk_cntr_cache_flush,
-              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_CACHE_FLUSH_OFFSET_B));
-    iowrite32(clk_cntr_get_user_pages,
-              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_GET_USER_PAGES_OFFSET_B));
-    iowrite32(clk_cntr_map_sg,
-              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_MAP_SG_OFFSET_B));
-    iowrite32(n_pages_setup,
-              (void *)((unsigned long)my_dev.l3_mem+N_PAGES_SETUP_OFFSET_B));
+    iowrite32(clk_cntr_setup,          (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_SETUP_OFFSET_B));
+    iowrite32(clk_cntr_cache_flush,    (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_CACHE_FLUSH_OFFSET_B));
+    iowrite32(clk_cntr_get_user_pages, (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_GET_USER_PAGES_OFFSET_B));
+    iowrite32(clk_cntr_map_sg,         (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_MAP_SG_OFFSET_B));
+    iowrite32(n_pages_setup,           (void *)((unsigned long)my_dev.l3_mem+N_PAGES_SETUP_OFFSET_B));
 #endif
-
-    // for debugging
-    //pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
 
     break;
 
@@ -1719,28 +1733,32 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
 #endif
 
-    // get offload ID/RAB mapping
-    rab_mapping = BF_GET(arg,0,RAB_CONFIG_N_BITS_OFFLOAD_ID);
-    rab_slice_req->rab_mapping = rab_mapping;
+    // get id/rab_mapping
+    id = (unsigned char)arg;
+    rab_slice_req->rab_port = 1;
+    rab_slice_req->rab_mapping = id % RAB_L1_N_MAPPINGS_PORT_1;
 
-    if ( rab_stripe_req[rab_mapping].n_elements > 0 ) {
+    if (DEBUG_LEVEL_RAB > 1) {
+      printk(KERN_INFO "PULP: id = %d, n_elements = %d\n",id, rab_stripe_req[rab_slice_req->rab_mapping].n_elements);
+    }
+
+    if ( rab_stripe_req[rab_slice_req->rab_mapping].n_elements > 0 ) {
+
+      rab_stripe_elem = rab_stripe_req[rab_slice_req->rab_mapping].elements;
 
       // process every data element independently
-      for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
+      for (i=0; i<rab_stripe_req[rab_slice_req->rab_mapping].n_elements; i++) {
 
         if (DEBUG_LEVEL_RAB > 1) {
-          printk(KERN_INFO "Shared Element %d:\n",i);
-        }
-      
-        elem_cur = rab_stripe_req[rab_mapping].elements[i];
-     
+          printk(KERN_INFO "PULP: Element %d:\n",i);
+        }    
+
         // free the slices
-        for (j=0; j<elem_cur->n_slices; j++){
-          rab_slice_req->rab_port = elem_cur->rab_port;
-          rab_slice_req->rab_slice = elem_cur->slices[j];
+        for (j=0; j<rab_stripe_elem[i].n_slices; j++){
+          rab_slice_req->rab_slice = rab_stripe_elem[i].slice_idxs[j];
 
           // unlock and release pages when freeing the last slice
-          if (j < (elem_cur->n_slices-1) )
+          if (j < (rab_stripe_elem[i].n_slices-1) )
             rab_slice_req->flags_drv = 0x2;
           else
             rab_slice_req->flags_drv = 0x0;
@@ -1749,16 +1767,18 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         }
 
         // free memory
-        kfree(elem_cur->slices);
-        kfree(elem_cur->rab_stripes);
-        kfree(elem_cur);
+        kfree(rab_stripe_elem[i].slice_idxs);
+        for (j=0; j<rab_stripe_elem[i].n_stripes; j++) {
+          kfree(rab_stripe_elem[i].stripes[j].slice_configs);
+        }
+        kfree(rab_stripe_elem[i].stripes);
       }
 
       //free memory
-      kfree(rab_stripe_req[rab_mapping].elements);
+      kfree(rab_stripe_req[rab_slice_req->rab_mapping].elements);
     
       // mark the stripe request as freed
-      rab_stripe_req[rab_mapping].n_elements = 0;
+      rab_stripe_req[rab_slice_req->rab_mapping].n_elements = 0;
     }
 
 #ifdef PROFILE_RAB_STR 
@@ -2036,7 +2056,8 @@ static void pulp_rab_handle_miss(unsigned unused)
 {
   int err, i, j, handled, result;
   unsigned id, id_pe, id_cluster;
-  unsigned addr_start, addr_phys;
+  unsigned addr_start;
+  unsigned long addr_phys;
     
   // what get_user_pages needs
   unsigned long start;
@@ -2094,7 +2115,7 @@ static void pulp_rab_handle_miss(unsigned unused)
          ( (id_pe < 0) || (id_pe > N_CORES-1) ) ) {
       printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces. id = %#x | addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
       // for debugging
-      //      pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+      //      pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
       continue;
     }
@@ -2157,7 +2178,7 @@ static void pulp_rab_handle_miss(unsigned unused)
 
       // what get_user_pages returns
       pages = (struct page **)kmalloc((size_t)(sizeof(struct page *)),GFP_KERNEL);
-      if (pages == NULL) {
+      if ( pages == NULL ) {
         printk(KERN_WARNING "PULP: Memory allocation failed.\n");
         err = 1;
         goto miss_handling_error;
@@ -2185,9 +2206,9 @@ static void pulp_rab_handle_miss(unsigned unused)
       }
       
       // virtual-to-physical address translation
-      addr_phys = (unsigned)page_to_phys(pages[0]);
+      addr_phys = (unsigned long)page_to_phys(pages[0]);
       if (DEBUG_LEVEL_MEM > 1) {
-        printk(KERN_INFO "PULP: Physical address = %#x\n",addr_phys);
+        printk(KERN_INFO "PULP: Physical address = %#lx\n",addr_phys);
       }
 
 #ifdef PROFILE_RAB_MH
@@ -2205,7 +2226,7 @@ static void pulp_rab_handle_miss(unsigned unused)
       rab_slice_req->date_exp = (unsigned char)rab_mh_date; 
       rab_slice_req->page_idx_start = 0;
       rab_slice_req->page_idx_end   = 0;
-      rab_slice_req->rab_mapping = rab_mapping_active;
+      rab_slice_req->rab_mapping = (unsigned)pulp_rab_mapping_get_active();
       rab_slice_req->flags_drv = 0;
 
       rab_slice_req->addr_start  = (unsigned)start;
@@ -2234,8 +2255,8 @@ static void pulp_rab_handle_miss(unsigned unused)
       err = 0;
       if (use_l1 == 0) { // Use L2
         l2_entry->flags = rab_slice_req->flags_hw;
-        l2_entry->pfn_v = (unsigned)start >> PAGE_SHIFT;
-        l2_entry->pfn_p = addr_phys >> PAGE_SHIFT;
+        l2_entry->pfn_v = (unsigned)(start >> PAGE_SHIFT);
+        l2_entry->pfn_p = (unsigned)(addr_phys >> PAGE_SHIFT);
         l2_entry->page_ptr = pages[0];
         err_l2 = pulp_rab_l2_setup_entry(my_dev.rab_config, l2_entry, rab_slice_req->rab_port, 1);   
       } else { // Use L1
@@ -2291,7 +2312,7 @@ static void pulp_rab_handle_miss(unsigned unused)
     }
     
     // // for debugging
-    // pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+    // pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
     // wake up the sleeping PE
     iowrite32(BIT_N_SET(id_pe),
@@ -2316,7 +2337,7 @@ static void pulp_rab_handle_miss(unsigned unused)
       printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
 
       // for debugging
-      pulp_rab_print_mapping(my_dev.rab_config,0xAAAA);
+      pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
     }
 
   }
@@ -2357,13 +2378,21 @@ static void pulp_rab_handle_miss(unsigned unused)
 // NEW - move to pulp_rab.h/c when cleaning up ioctl stuff
 //
 // Bottom-half -> should actually go into a tasklet                         
-void pulp_rab_update(void)
+void pulp_rab_update(unsigned update_req)
 {
   int i,j;
-  unsigned idx, n_slices, n_fields, offset;
+  unsigned elem_mask, type;
+  unsigned rab_mapping;
+  unsigned stripe_idx, idx_mask, n_slices, offset;
+  RabStripeElem * elem;
+
+  elem_mask = 0;
+  RAB_UPDATE_GET_ELEM(elem_mask, update_req);
+  type = 0;
+  RAB_UPDATE_GET_TYPE(type, update_req); 
 
   if (DEBUG_LEVEL_RAB_STR > 0) {
-      printk(KERN_INFO "PULP: RAB update requested.\n");
+    printk(KERN_INFO "PULP: RAB update requested, elem_mask = %#x, type = %d\n", elem_mask, type);
   }
   
 #ifdef PROFILE_RAB_STR 
@@ -2378,44 +2407,53 @@ void pulp_rab_update(void)
 #endif
   
 #if !defined(MEM_SHARING) || (MEM_SHARING == 2)
-  rab_stripe_req[rab_mapping_active].stripe_idx++;
-  idx = rab_stripe_req[rab_mapping_active].stripe_idx;
-  
+  rab_mapping = (unsigned)pulp_rab_mapping_get_active();
+
   // process every data element independently
-  for (i=0; i<rab_stripe_req[rab_mapping_active].n_elements; i++) {
-    elem_cur = rab_stripe_req[rab_mapping_active].elements[i];
-    n_slices = (elem_cur->n_slices_per_stripe);
-    n_fields = 1+elem_cur->n_slices;
-  
+  for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
+
+    if ( !(elem_mask & (0x1 << i)) )
+      continue;
+
+    elem = &rab_stripe_req[rab_mapping].elements[i];
+    
+    n_slices   = elem->n_slices_per_stripe;
+    stripe_idx = elem->stripe_idx;
+    if ( elem->type == 4 ) // inout
+      idx_mask = 0x3;
+    else // in, out
+      idx_mask = 0x1;
+
     // process every slice independently
     for (j=0; j<n_slices; j++) {
-      offset = 0x20*(elem_cur->rab_port*RAB_L1_N_SLICES_PORT_1+elem_cur->slices[(idx & 0x1)*n_slices+j]);
-  
-      // deactivate slices
-      iowrite32(0x0,(void *)((unsigned long)my_dev.rab_config+offset+0x1c));
-  
-      // set up new translations rules
-      if ( elem_cur->rab_stripes[idx*n_fields+j*2+1] ) { // offset != 0
+      offset = 0x20*(1*RAB_L1_N_SLICES_MAX+elem->slice_idxs[(stripe_idx & idx_mask)*n_slices+j]);
 
-        // set up the slice
-        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],  (void *)((unsigned long)my_dev.rab_config+offset+0x20)); // start_addr
-        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+2],(void *)((unsigned long)my_dev.rab_config+offset+0x28)); // end_addr
-        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+1],(void *)((unsigned long)my_dev.rab_config+offset+0x30)); // offset  
+      // deactivate slice
+      iowrite32(0x0,(void *)((unsigned long)my_dev.rab_config+offset+0x38));
 
-        // set up the slice
-        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2],
-                  (void *)((unsigned long)my_dev.rab_config+offset+0x20)); // start_addr
-        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+2],
-                  (void *)((unsigned long)my_dev.rab_config+offset+0x28)); // end_addr
-        iowrite32(elem_cur->rab_stripes[idx*n_fields+j*2+1],
-                  (void *)((unsigned long)my_dev.rab_config+offset+0x30)); // offset  
-        // activate the slice
-        iowrite32(elem_cur->flags_hw, (void *)((unsigned long)my_dev.rab_config+offset+0x38));
-  #ifdef PROFILE_RAB_STR 
-          n_slices_updated++;
-  #endif
+      // set up new translations rule
+      if ( j < elem->stripes[stripe_idx].n_slices ) {
+        iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_start,  (void *)((unsigned long)my_dev.rab_config+offset+0x20)); // start_addr
+        iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_end,    (void *)((unsigned long)my_dev.rab_config+offset+0x28)); // end_addr
+        iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_offset, (void *)((unsigned long)my_dev.rab_config+offset+0x30)); // offset  
+        iowrite32(elem->flags_hw,                                         (void *)((unsigned long)my_dev.rab_config+offset+0x38));
+#ifdef PROFILE_RAB_STR 
+        n_slices_updated++;
+#endif
       }
     }
+    // increase stripe idx counter
+    elem->stripe_idx++;
+
+#if defined(PROFILE_RAB_STR) || defined(JPEG) 
+    if (elem->stripe_idx == elem->n_stripes) {
+      elem->stripe_idx = 0;
+      if (DEBUG_LEVEL_RAB_STR > 0) {
+        printk(KERN_INFO "PULP: RAB stripe table wrap around.\n");
+      }
+    }
+#endif
+
   }
 #endif
   // signal ready to PULP
@@ -2429,25 +2467,12 @@ void pulp_rab_update(void)
   n_updates++;
   
   // update counters in shared memory
-  iowrite32(clk_cntr_response,
-            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_RESPONSE_OFFSET_B));
-  iowrite32(clk_cntr_update,
-            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_UPDATE_OFFSET_B));
-  iowrite32(n_slices_updated,
-            (void *)((unsigned long)my_dev.l3_mem+N_SLICES_UPDATED_OFFSET_B));
-  iowrite32(n_updates,
-            (void *)((unsigned long)my_dev.l3_mem+N_UPDATES_OFFSET_B));
+  iowrite32(clk_cntr_response, (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_RESPONSE_OFFSET_B));
+  iowrite32(clk_cntr_update,   (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_UPDATE_OFFSET_B));
+  iowrite32(n_slices_updated,  (void *)((unsigned long)my_dev.l3_mem+N_SLICES_UPDATED_OFFSET_B));
+  iowrite32(n_updates,         (void *)((unsigned long)my_dev.l3_mem+N_UPDATES_OFFSET_B));
 #endif    
   
-#if defined(PROFILE_RAB) || defined(JPEG) 
-  if (idx == rab_stripe_req[rab_mapping_active].n_stripes) {
-    rab_stripe_req[rab_mapping_active].stripe_idx = 0;
-    if (DEBUG_LEVEL_RAB_STR > 0) {
-      printk(KERN_INFO "PULP: RAB stripe table wrap around.\n");
-    }
-  }
-#endif
-
   if (DEBUG_LEVEL_RAB_STR > 0) {
     printk(KERN_INFO "PULP: RAB update completed.\n");
   }
@@ -2457,25 +2482,35 @@ void pulp_rab_update(void)
 
 void pulp_rab_switch(void)
 {
+  int i;
+  unsigned rab_mapping;
+
   if (DEBUG_LEVEL_RAB > 0) {
     printk(KERN_INFO "PULP: RAB switch requested.\n");
   }
   
   // for debugging
-  //pulp_rab_print_mapping(my_dev.rab_config, 0xAAAA);
+  //pulp_rab_mapping_print(my_dev.rab_config, 0xAAAA);
   
   // switch RAB mapping
-  rab_mapping_active = (rab_mapping_active) ? 0 : 1;
-  pulp_rab_switch_mapping(my_dev.rab_config,rab_mapping_active);
-  // reset striping idx
-  rab_stripe_req[rab_mapping_active].stripe_idx = 0;
-  
+  rab_mapping = (pulp_rab_mapping_get_active()) ? 0 : 1;
+  pulp_rab_mapping_switch(my_dev.rab_config,rab_mapping);
+
+  // reset stripe idxs for striped mappings 
+  for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
+
+    if ( rab_stripe_req[rab_mapping].elements[i].type == 3 ) // out
+      rab_stripe_req[rab_mapping].elements[i].stripe_idx = 0;
+    else  // in, inout
+      rab_stripe_req[rab_mapping].elements[i].stripe_idx = 1;
+  }
+
   if (DEBUG_LEVEL_RAB > 0) {
     printk(KERN_INFO "PULP: RAB switch completed.\n");
   }
     
   // for debugging
-  //pulp_rab_print_mapping(my_dev.rab_config, 0xAAAA);
+  //pulp_rab_mapping_print(my_dev.rab_config, 0xAAAA);
   
   // signal ready to PULP
   iowrite32(HOST_READY,(void *)((unsigned long)my_dev.mbox+MBOX_WRDATA_OFFSET_B));

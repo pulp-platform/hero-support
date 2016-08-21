@@ -37,7 +37,9 @@
 //#define HOST_BUSY  0x1002
 #define HOST_DONE  0x1003
 
-#define MBOX_N_BITS_REQ_TYPE 4    // number of MSBs to specify the type
+#define MBOX_N_BITS_REQ_TYPE   4  // number of MSBs to specify the type
+#define RAB_UPDATE_N_BITS_ELEM 8  // number of bits to specify the mask of elements to be updated
+#define RAB_UPDATE_N_BITS_TYPE 2  // number of bits to specify the update type
 
 #define TO_RUNTIME 0x10000000 // bypass PULP driver
 #define RAB_UPDATE 0x20000000 // handled by PULP driver
@@ -129,9 +131,14 @@
 
 #define MBOX_GET_REQ_TYPE(type, request) \
   ( type = BF_GET(request, 32-MBOX_N_BITS_REQ_TYPE, \
-         MBOX_N_BITS_REQ_TYPE) << (32-MBOX_N_BITS_REQ_TYPE) )
+         MBOX_N_BITS_REQ_TYPE) << (32-MBOX_N_BITS_REQ_TYPE) )  
 #define MBOX_GET_N_WORDS(n_words, request) \
   ( n_words = BF_GET(request, 0, 32-MBOX_N_BITS_REQ_TYPE) )
+
+#define RAB_UPDATE_GET_ELEM(elem_mask, request) \
+  ( elem_mask = BF_GET(request, 0, RAB_UPDATE_N_BITS_ELEM) )
+#define RAB_UPDATE_GET_TYPE(type, request) \
+  ( type = BF_GET(request, RAB_UPDATE_N_BITS_ELEM, RAB_UPDATE_N_BITS_TYPE) )  
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -377,6 +384,26 @@
 #define TIMER_GET_TIME_HI_OFFSET_B (TIMER_H_OFFSET_B + 0x10) 
 
 #define PE_TIMER_OFFSET_B         0x40
+
+/*
+ * Type Definitions
+ */
+// Stripe request structs - user space 
+typedef struct {
+  unsigned short id;
+  unsigned short n_elements;
+  unsigned       rab_stripe_elem_user_addr; // 32b user-space addr of stripe element array
+} RabStripeReqUser;
+
+typedef struct {
+  unsigned char id;
+  unsigned char max_stripe_size_b;
+  unsigned char type;              // in = 2, out = 3, inout = 4
+  unsigned char flags;
+  unsigned      n_stripes;
+  unsigned      stripe_addr_start; // 32b user-space addr of addr_start array
+  unsigned      stripe_addr_end;   // 32b user-space addr of addr_end array
+} RabStripeElemUser;
 
 /*
  * Program execution

@@ -114,7 +114,7 @@ void pulp_mbox_intr(void *mbox)
           spin_unlock(&mbox_fifo_lock);
 
           if (RAB_UPDATE == req_type) {
-            pulp_rab_update();
+            pulp_rab_update(mbox_data);
           } 
           else if (RAB_SWITCH == req_type) {
             pulp_rab_switch();
@@ -260,7 +260,7 @@ ssize_t pulp_mbox_read(struct file *filp, char __user *buf, size_t count, loff_t
 
           if (RAB_UPDATE == req_type) {
             printk(KERN_INFO "PULP: RAB update in MBOX read detected.\n");
-            pulp_rab_update();
+            pulp_rab_update(mbox_data);
           } 
           else if (RAB_SWITCH == req_type) {
             printk(KERN_INFO "PULP: RAB switch in MBOX read detected.\n");

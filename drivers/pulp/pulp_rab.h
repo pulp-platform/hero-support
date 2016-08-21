@@ -1,12 +1,12 @@
 #ifndef _PULP_RAB_H_
 #define _PULP_RAB_H_
 
-#include <linux/module.h>	 /* Needed by all modules */
-#include <linux/kernel.h>	 /* KERN_ALERT, container_of */
+#include <linux/module.h>  /* Needed by all modules */
+#include <linux/kernel.h>  /* KERN_ALERT, container_of */
 #include <linux/mm.h>      /* vm_area_struct struct, page struct, PAGE_SHIFT, pageo_phys */
 #include <linux/pagemap.h> /* page_cache_release() */
 #include <linux/slab.h>    /* kmalloc() */
-#include <asm/io.h>		     /* ioremap, iounmap, iowrite32 */
+#include <asm/io.h>        /* ioremap, iounmap, iowrite32 */
 
 #include "pulp_module.h"
 
@@ -26,7 +26,7 @@ typedef struct {
   unsigned char rab_port;  
   unsigned      rab_mapping;
   unsigned      rab_slice;
-  unsigned char flags_drv; // bit 0 = const mapping, bit 1 = striped mapping, bit 2 = set up in every mapping
+  unsigned char flags_drv; // bit 0 = const mapping, bit 1 = striped mapping, bit 2 = set up in every RAB mapping
   // actual config
   unsigned      addr_start;
   unsigned      addr_end;
@@ -34,23 +34,37 @@ typedef struct {
   unsigned char flags_hw;  // bits 0-2: prot, bit 3: use_acp
 } RabSliceReq;
 
+// Stripe request structs - kernel space 
 typedef struct {
-  unsigned      rab_mapping;
-  unsigned      n_slices;
-  unsigned      n_slices_per_stripe;
-  unsigned    * slices;
-  unsigned char flags_hw;  // bits 0-2: prot, bit 3: use_acp
-  unsigned char rab_port;
-  unsigned      n_stripes;
-  unsigned    * rab_stripes;
-  unsigned      page_ptr_idx;
+  unsigned      addr_start;
+  unsigned      addr_end;
+  unsigned long addr_offset;
+} RabStripeSlice;
+
+typedef struct {
+  unsigned         n_slices;      // number of slices used for that stripe 
+  RabStripeSlice * slice_configs; // ptr to array of slice configs
+} RabStripe;
+
+typedef struct {
+  // management
+  unsigned char id;
+  unsigned char type;                // in = 2, out = 3, inout = 4
+  unsigned char page_ptr_idx;
+  unsigned      n_slices;            // number of slices allocated
+  unsigned      n_slices_per_stripe; // number of slices used per stripe
+  unsigned *    slice_idxs;          // ptr to array containing idxs of allocated slices 
+  // actual config
+  unsigned      stripe_idx;          // idx next stripe to configure
+  unsigned      n_stripes; 
+  RabStripe *   stripes;             // ptr to array of stripe structs
+  unsigned char flags_hw;
 } RabStripeElem;
 
 typedef struct {
-  unsigned         n_elements;
-  RabStripeElem ** elements;
-  unsigned         n_stripes;
-  unsigned         stripe_idx;
+  unsigned short  id;
+  unsigned short  n_elements;
+  RabStripeElem * elements;
 } RabStripeReq;
 
 // L1 TLB structs
@@ -84,7 +98,7 @@ typedef struct {
 } L1EntryPort1;
 
 typedef struct {
-  L1EntryPort1               slices[RAB_L1_N_SLICES_PORT_1];
+  L1EntryPort1   slices            [RAB_L1_N_SLICES_PORT_1];
   struct page ** page_ptrs         [RAB_L1_N_SLICES_PORT_1];
   unsigned       page_ptr_ref_cntrs[RAB_L1_N_SLICES_PORT_1];
 } L1TlbMappingPort1;
@@ -128,8 +142,9 @@ int  pulp_rab_slice_get(RabSliceReq *rab_slice_req);
 void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req);
 int  pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct page **pages);
 
-void pulp_rab_switch_mapping(void *rab_config, unsigned rab_mapping);
-void pulp_rab_print_mapping(void *rab_config, unsigned rab_mapping);
+int  pulp_rab_mapping_get_active(void);
+void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping);
+void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping);
 
 void pulp_rab_l2_init(void *rab_config);
 

@@ -19,7 +19,7 @@
 #endif // PLATFORM != JUNO
 unsigned  pulp_mem_get_num_pages(unsigned addr_start, unsigned size_b);
 int pulp_mem_get_user_pages(struct page *** pages, unsigned addr_start, unsigned n_pages, unsigned write);
-int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsigned ** addr_offset_vec,
+int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsigned long ** addr_offset_vec,
                     unsigned ** page_start_idxs, unsigned ** page_end_idxs, 
                     struct page *** pages, unsigned n_pages, 
                     unsigned addr_start, unsigned addr_end);

@@ -3,7 +3,7 @@
 
 #include <linux/cdev.h>		/* cdev struct */
 
-#include "pulp_host.h"    /* for JUNO */
+#include "pulp_host.h"    /* macros, struct definitions */
 
 #define DEBUG_LEVEL_PULP    0
 #define DEBUG_LEVEL_MEM     0
@@ -40,7 +40,7 @@ typedef struct {
 } PulpDev;
 
 // NEW - move to pulp_rab.h/c when cleaning up ioctl stuff
-void pulp_rab_update(void);
+void pulp_rab_update(unsigned update_req);
 void pulp_rab_switch(void);
 
 #endif // _PULP_MODULE_H_ 
