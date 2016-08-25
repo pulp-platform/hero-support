@@ -1320,10 +1320,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       n_bytes_left = ret;
     }
 
-    if (DEBUG_LEVEL_RAB > 1) {
+    if (DEBUG_LEVEL_RAB_STR > 1) {
       printk(KERN_INFO "PULP: id = %d, n_elements = %d\n",rab_stripe_req_user.id, rab_stripe_req_user.n_elements);
     }
-    if (DEBUG_LEVEL_RAB > 2) {
+    if (DEBUG_LEVEL_RAB_STR > 2) {
       printk(KERN_INFO "PULP: rab_stripe_elem_user_addr = %#x\n",rab_stripe_req_user.rab_stripe_elem_user_addr);
     }
 
@@ -1375,7 +1375,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         n_slices++; // remainder
       n_slices++;   // non-aligned
 
-      if (DEBUG_LEVEL_RAB > 1) {
+      if (DEBUG_LEVEL_RAB_STR > 1) {
         printk(KERN_INFO "PULP: Element %d, n_slices = %d\n", i, n_slices);
       }
 
@@ -1457,7 +1457,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       addr_end   = stripe_addr_end[rab_stripe_elem[i].n_stripes-1];
       size_b     = addr_end - addr_start;
 
-      if (DEBUG_LEVEL_RAB > 2) {
+      if (DEBUG_LEVEL_RAB_STR > 2) {
         printk(KERN_INFO "PULP: addr_start = %#x \n",addr_start);
         printk(KERN_INFO "PULP: addr_end   = %#x \n",addr_end);
         printk(KERN_INFO "PULP: size_b     = %#x \n",size_b);
@@ -1567,7 +1567,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
           seg_idx_end++;
         }
 
-        if (DEBUG_LEVEL_RAB > 3) {
+        if (DEBUG_LEVEL_RAB_STR > 3) {
           printk(KERN_INFO "PULP: Stripe %d: seg_idx_start = %d, seg_idx_end = %d \n",
                  j,seg_idx_start,seg_idx_end);
         }
@@ -1588,8 +1588,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
           return -ENOMEM;
         }
 
-        // extract the physical addresses + virtual start addresses of the segments, loop over slices 
+        // extract the addr of segments, loop over slices 
         for (k=0; k<n_slices; k++) {
+          // virtual start + physical addr 
           if (k == 0) {
             addr_start  = stripe_addr_start[j];
             addr_offset = addr_offset_vec[seg_idx_start];
@@ -1601,9 +1602,15 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
               addr_offset += (unsigned long)(stripe_addr_start[j] & BIT_MASK_GEN(PAGE_SHIFT));
           }
           else { // ( k < n_slices )
-            addr_start  = addr_start_vec[seg_idx_start + k];
+            addr_start  = addr_start_vec [seg_idx_start + k];
             addr_offset = addr_offset_vec[seg_idx_start + k];
           }
+          // virtual end addr
+          if ( k < (n_slices-1) ) // end addr defined by segment end
+            addr_end = addr_end_vec[seg_idx_start + k];
+          else // last slice, end at stripe end
+            addr_end = stripe_addr_end[j];
+
           // write data to table
           rab_stripe_elem[i].stripes[j].slice_configs[k].addr_start  = addr_start;
           rab_stripe_elem[i].stripes[j].slice_configs[k].addr_end    = addr_end;
@@ -1611,14 +1618,14 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         }
       }
 
-      if (DEBUG_LEVEL_RAB > 3) {
+      if (DEBUG_LEVEL_RAB_STR > 3) {
         for (j=0; j<rab_stripe_elem[i].n_stripes; j++) {
           printk(KERN_INFO "PULP: Stripe %d:\n",j);
           for (k=0; k<rab_stripe_elem[i].stripes[j].n_slices; k++) {
-            printk(KERN_INFO "%#x\n", rab_stripe_elem[i].stripes[j].slice_configs[k].addr_start );
-            printk(KERN_INFO "%#x\n", rab_stripe_elem[i].stripes[j].slice_configs[k].addr_end   );
-            printk(KERN_INFO "%#lx\n",rab_stripe_elem[i].stripes[j].slice_configs[k].addr_offset);
-          }
+            printk(KERN_INFO "addr_start [%d] %#x\n",  k, rab_stripe_elem[i].stripes[j].slice_configs[k].addr_start );
+            printk(KERN_INFO "addr_end   [%d] %#x\n",  k, rab_stripe_elem[i].stripes[j].slice_configs[k].addr_end   );
+            printk(KERN_INFO "addr_offset[%d] %#lx\n", k, rab_stripe_elem[i].stripes[j].slice_configs[k].addr_offset);
+          } 
           printk(KERN_INFO "\n");
         }
       } 
@@ -2380,7 +2387,7 @@ static void pulp_rab_handle_miss(unsigned unused)
 // Bottom-half -> should actually go into a tasklet                         
 void pulp_rab_update(unsigned update_req)
 {
-  int i,j;
+  int i, j;
   unsigned elem_mask, type;
   unsigned rab_mapping;
   unsigned stripe_idx, idx_mask, n_slices, offset;
@@ -2426,7 +2433,12 @@ void pulp_rab_update(unsigned update_req)
 
     // process every slice independently
     for (j=0; j<n_slices; j++) {
-      offset = 0x20*(1*RAB_L1_N_SLICES_MAX+elem->slice_idxs[(stripe_idx & idx_mask)*n_slices+j]);
+      offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+elem->slice_idxs[(stripe_idx & idx_mask)*n_slices+j]);
+
+      if (DEBUG_LEVEL_RAB_STR > 3) {
+        printk("stripe_idx = %d, n_slices = %d, j = %d, offset = %#x\n",
+          stripe_idx, elem->stripes[stripe_idx].n_slices, j, offset);
+      }
 
       // deactivate slice
       iowrite32(0x0,(void *)((unsigned long)my_dev.rab_config+offset+0x38));

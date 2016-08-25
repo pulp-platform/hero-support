@@ -140,8 +140,8 @@
 #define RAB_UPDATE_GET_TYPE(type, request) \
   ( type = BF_GET(request, RAB_UPDATE_N_BITS_ELEM, RAB_UPDATE_N_BITS_TYPE) )  
 
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+// #define MAX(x, y) (((x) > (y)) ? (x) : (y))
+// #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 /*
  * General settings
@@ -254,7 +254,7 @@
 
 #endif // PLATFORM
 
-#define RAB_L1_N_SLICES_MAX MAX(RAB_L1_N_SLICES_PORT_0, RAB_L1_N_SLICES_PORT_1)
+//#define RAB_L1_N_SLICES_MAX MAX(RAB_L1_N_SLICES_PORT_0, RAB_L1_N_SLICES_PORT_1)
 
 /*
  * Independent parameters
@@ -397,9 +397,9 @@ typedef struct {
 
 typedef struct {
   unsigned char id;
-  unsigned char max_stripe_size_b;
   unsigned char type;              // in = 2, out = 3, inout = 4
   unsigned char flags;
+  unsigned      max_stripe_size_b;
   unsigned      n_stripes;
   unsigned      stripe_addr_start; // 32b user-space addr of addr_start array
   unsigned      stripe_addr_end;   // 32b user-space addr of addr_end array
@@ -410,7 +410,7 @@ typedef struct {
  */
 #define SYNC_OFFSET_B 0xB000
 
-#define MAX_STRIPE_SIZE 0x4000
+#define MAX_STRIPE_SIZE_B 0x2000
 
 //#define MEM_SHARING 3
 

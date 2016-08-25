@@ -203,7 +203,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
   if (pages_old) { // not used for a constant mapping, Port 0 can only hold constant mappings
     
     // deactivate the slice
-    entry = 0x20*(port*RAB_L1_N_SLICES_MAX+slice);
+    entry = 0x20*(port*RAB_L1_N_SLICES_PORT_0+slice);
     if ( l1.port_1.mapping_active == mapping )
       iowrite32(0, (void *)((unsigned long)rab_config+entry+0x38));
 
@@ -338,7 +338,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
 
   // set up new slice, configure the hardware
   if ( (port == 0) || (l1.port_1.mapping_active == mapping) ) {
-    offset = 0x20*(port*RAB_L1_N_SLICES_MAX+slice);
+    offset = 0x20*(port*RAB_L1_N_SLICES_PORT_0+slice);
   
     iowrite32(rab_slice_req->addr_start,  (void *)((unsigned long)rab_config+offset+0x20));
     iowrite32(rab_slice_req->addr_end,    (void *)((unsigned long)rab_config+offset+0x28));
@@ -389,7 +389,7 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
     RAB_GET_PROT(prot, l1.port_1.mappings[mapping_active].slices[i].flags);
     if (prot) { // de-activate slices with old active config
 
-      offset = 0x20*(1*RAB_L1_N_SLICES_MAX+i);
+      offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+i);
       iowrite32(0x0,(void *)((unsigned long)rab_config+offset+0x38));
 
       if (DEBUG_LEVEL_RAB > 0)
@@ -402,7 +402,7 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
     RAB_GET_PROT(prot, l1.port_1.mappings[rab_mapping].slices[i].flags);
     if (prot & 0x1) { // activate slices with new active config
 
-      offset = 0x20*(1*RAB_L1_N_SLICES_MAX+i);
+      offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+i);
   
       iowrite32(l1.port_1.mappings[rab_mapping].slices[i].addr_start,  (void *)((unsigned long)rab_config+offset+0x20));
       iowrite32(l1.port_1.mappings[rab_mapping].slices[i].addr_end,    (void *)((unsigned long)rab_config+offset+0x28));
@@ -475,7 +475,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
         n_slices = RAB_L1_N_SLICES_PORT_1;
 
       for (i=0; i<n_slices; i++) {
-        offset = 0x20*(j*RAB_L1_N_SLICES_MAX+i);
+        offset = 0x20*(j*RAB_L1_N_SLICES_PORT_0+i);
 
         flags = ioread32((void *)((unsigned long)rab_config+offset+0x38));
         RAB_GET_PROT(prot, flags);

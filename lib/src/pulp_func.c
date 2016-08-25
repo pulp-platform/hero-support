@@ -607,6 +607,41 @@ int pulp_mbox_read(PulpDev *pulp, unsigned *buffer, unsigned n_words)
 }
 
 /**
+ * Write one word to mbox.
+ *
+ * @pulp      : pointer to the PulpDev structure
+ * @word      : word to write
+ */
+int pulp_mbox_write(PulpDev *pulp, unsigned word)
+{
+  unsigned timeout, status;
+  unsigned us_delay = 100;
+
+  // check if mbox is full
+  if ( pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b') & 0x2 ) {
+    timeout = 1000;
+    status = 1;
+    // wait for not full or timeout
+    while ( status && (timeout > 0) ) {
+      usleep(us_delay);
+      timeout--;
+      status = (pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b') & 0x2);
+    }
+    if ( status ) {
+      printf("ERROR: mbox timeout.\n");
+      return -ETIME;
+    }
+  } 
+ 
+  // mbox is ready to receive
+  pulp_write32(pulp->mbox.v_addr,MBOX_WRDATA_OFFSET_B,'b', word);
+  if (DEBUG_LEVEL > 2)
+    printf("Wrote %#x to mbox.\n",word);
+
+  return 0;  
+}
+
+/**
  * Clear interrupt status flag in mbox. The next write of PULP will
  * again be handled by the PULP driver.
  *
@@ -675,24 +710,31 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
  * @task:       pointer to the TaskDesc structure
  * @data_idxs:  pointer to array marking the elements to pass by reference
  * @n_elements: number of striped data elements
- * @prot      : protection flags, one bit each for write, read, and enable
- * @port      : RAB port, 0 = Host->PULP, 1 = PULP->Host
  */
 int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
-                         unsigned **data_idxs, int n_elements,  
-                         unsigned char prot, unsigned char port)
+                         unsigned **data_idxs, int n_elements)
 {
-  int i,j,k,m;
+  int i,j,k;
 
-  /////////////////////////////////////////////////////////////////
+  RabStripeReqUser stripe_request;
 
-  unsigned request[3];
-  unsigned n_stripes, n_slices_max, n_fields, offload_id;
+  stripe_request.id         = 0;
+  stripe_request.n_elements = (short)n_elements;
 
-  unsigned addr_start, addr_end, size_b, page_size_b;
+  RabStripeElemUser * elements = (RabStripeElemUser *)
+    malloc((size_t)(stripe_request.n_elements*sizeof(RabStripeElemUser)));
+  if ( elements == NULL ) {
+    printf("ERROR: Malloc failed for RabStripeElemUser structs.\n");
+    return -ENOMEM;
+  }
 
-  unsigned * max_stripe_size_b;
-  unsigned ** rab_stripes;
+  stripe_request.rab_stripe_elem_user_addr = (unsigned)&elements[0];
+
+  unsigned * addr_start;
+  unsigned * addr_end;
+
+  unsigned flags, prot;
+  unsigned size_b;
 
   // extracted from accelerator code
   // for ROD
@@ -706,36 +748,25 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   unsigned width, height, bHeight, nbBands;
   unsigned band_size_1ch = 0, band_size_3ch = 0;
 
-  page_size_b = getpagesize();
-
-  max_stripe_size_b = (unsigned *)malloc((size_t)(n_elements*sizeof(unsigned))); 
-  rab_stripes = (unsigned **)malloc((size_t)(n_elements*sizeof(unsigned *)));
-  if ( (rab_stripes == NULL) || (max_stripe_size_b == NULL) ) {
-    printf("ERROR: Malloc failed.\n");
-    return -ENOMEM;
-  }
-
   unsigned tx_band_start = 0;
   size_b = 0;
-  offload_id = 0;
 
   if ( !strcmp(task->name, "profile_rab_striping") ) { // valid for PROFILE_RAB_STR only
 
-    for (i=0;i<n_elements;i++) {
-      max_stripe_size_b[i] = MAX_STRIPE_SIZE; 
+    for (i=0; i<stripe_request.n_elements; i++) {
+      elements[i].max_stripe_size_b = MAX_STRIPE_SIZE_B;
+    
+      elements[i].n_stripes = (task->data_desc[i].size)/elements[i].max_stripe_size_b;
+      if ( (elements[i].n_stripes * elements[i].max_stripe_size_b) < task->data_desc[i].size)
+        elements[i].n_stripes++;
     }
-
-    n_stripes = (task->data_desc[0].size)/max_stripe_size_b[0];
-    if (n_stripes * max_stripe_size_b[0] < task->data_desc[0].size)
-      n_stripes++;
-
   }
   else if ( !strcmp(task->name, "rod") ) { // valid for ROD only
 
     // max sizes hardcoded
-    max_stripe_size_b[0] = 0x1100;
-    max_stripe_size_b[1] = 0x1100;
-    max_stripe_size_b[2] = 0xe00;  
+    elements[0].max_stripe_size_b = 0x1100;
+    elements[1].max_stripe_size_b = 0x1100;
+    elements[2].max_stripe_size_b = 0xe00;  
   
     R = 3;
     TILE_HEIGHT = 10;
@@ -753,16 +784,17 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
     tx_band_size_out_last = sizeof(unsigned char)*((band_height + odd )* w);
   
     overlap = sizeof(unsigned char)*(R * w);
-    n_stripes = n_bands;
-
+    elements[0].n_stripes = n_bands;
+    elements[1].n_stripes = n_bands;
+    elements[2].n_stripes = n_bands;
   }
   else if ( !strcmp(task->name, "ct") ) { // valid for CT only
 
     // max sizes hardcoded
-    max_stripe_size_b[0] = 0x3000;
+    elements[0].max_stripe_size_b = 0x3000;
 
-    width = *(unsigned *)(task->data_desc[1].ptr);
-    height = *(unsigned *)(task->data_desc[2].ptr);
+    width   = *(unsigned *)(task->data_desc[1].ptr);
+    height  = *(unsigned *)(task->data_desc[2].ptr);
     bHeight = *(unsigned *)(task->data_desc[3].ptr);
 
     nbBands = (height / bHeight);
@@ -770,19 +802,18 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
     band_size_3ch = (width*bHeight*3);  
     //printf("buffer size = %#x \n",(band_size_3ch*2+band_size_1ch)*sizeof(unsigned char));
 
-    n_stripes = nbBands;
-
+    elements[0].n_stripes = nbBands;
   }
   else if ( !strcmp(task->name, "jpeg") ) { // valid for JPEG only
 
     // max sizes hardcoded
-    max_stripe_size_b[0] = 0x1000;
-    n_stripes = 18;
-
+    elements[0].max_stripe_size_b = 0x1000;
+    elements[0].n_stripes         = 18;
   }
   else {
 
-    n_stripes = 1;
+    elements[0].max_stripe_size_b = 0;
+    elements[0].n_stripes         = 1;
     printf("ERROR: Unknown task name %s\n",task->name);
 
   }
@@ -797,130 +828,110 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
     
     if (DEBUG_LEVEL > 2) {
       printf("size_b[%d] = %#x\n",i,task->data_desc[k].size);
-      printf("max_stripe_size_b[%d] = %#x\n",i,max_stripe_size_b[i]);
+      printf("elements[%d].max_stripe_size_b = %#x\n",i,elements[i].max_stripe_size_b);
     }
+
+    flags = 0;
+    if      (task->data_desc[k].type == 2) // in = read
+      prot = 0x2 | 0x1;
+    else if (task->data_desc[k].type == 3) // out = write
+      prot = 0x4 | 0x1;
+    else // 4 inout = read & write
+      prot = 0x4 | 0x2 | 0x1;
+    RAB_SET_PROT(flags, prot);
+    RAB_SET_ACP(flags, task->data_desc[k].use_acp);
      
-    n_slices_max = max_stripe_size_b[i]/page_size_b;
-    if (n_slices_max*page_size_b < max_stripe_size_b[i])
-      n_slices_max++; // remainder
-    n_slices_max++;   // non-aligned
+    elements[i].id    = (unsigned char)i;               // not used right now
+    elements[i].type  = (unsigned char)(*data_idxs)[k]; // != data_desc[k].type
+    elements[i].flags = (unsigned char)flags;
 
-    n_fields = 2*n_slices_max + 1; // addr_start & addr_offset per slice, addr_end  
-
-    rab_stripes[i] = (unsigned *)malloc((size_t)((n_stripes+1)*(n_fields)*sizeof(unsigned)));
-    if ( rab_stripes[i] == NULL  ) {
-      printf("ERROR: Malloc failed for rab_stripes[%i].\n",i);
+    addr_start = (unsigned *)malloc((size_t)elements[i].n_stripes*sizeof(unsigned));
+    addr_end   = (unsigned *)malloc((size_t)elements[i].n_stripes*sizeof(unsigned));
+    if ( (addr_start == NULL) || (addr_end == NULL) ) {
+      printf("ERROR: Malloc failed for addr_start/addr_end.\n");
       return -ENOMEM;
     }
 
+    elements[i].stripe_addr_start = (unsigned)&addr_start[0];
+    elements[i].stripe_addr_end   = (unsigned)&addr_end[0];
+
     // fill in stripe data
-    for (j=0; j<(n_stripes+1); j++) {
+    for (j=0; j<elements[i].n_stripes; j++) {
 
-      // first stripe for output elements, last stripe for input elements
-      if ( ((j == 0) && ((*data_idxs)[k] == 3)) || ((j == n_stripes) && ((*data_idxs)[k] == 2)) ) {
-        addr_start = 0;
-        addr_end = 0;
-      }
-      else if ( (j == n_stripes) && ((*data_idxs)[k] == 4))  { // last stripe for inout elements
-        addr_start = 0xFFFFFFFF;
-        addr_end = 0xFFFFFFFF;
-      }
-      else {
-        addr_start = (unsigned)(task->data_desc[k].ptr);
-
-        if ( !strcmp(task->name, "profile_rab_striping") ) {
+      if ( !strcmp(task->name, "profile_rab_striping") ) {
     
-          size_b = max_stripe_size_b[k];
-          tx_band_start = j*size_b;
+        size_b = elements[i].max_stripe_size_b;
+        tx_band_start = j*size_b;
 
-        }
-        else if ( !strcmp(task->name, "rod") ) {
-    
-          if ( (*data_idxs)[k] == 2 ) { // input elements
-            if (j == 0) {
-              tx_band_start = 0;
-              size_b = tx_band_size_in_first;
-            }
-            else {
-              tx_band_start = tx_band_size_in_first + tx_band_size_in * (j-1) - (overlap * (2 + (j-1)*2));
-              if (j == n_stripes-1 )      
-                size_b = tx_band_size_in_last;
-              else
-                size_b = tx_band_size_in;
-            }
+      }
+      else if ( !strcmp(task->name, "rod") ) {
+  
+        if ( (*data_idxs)[k] == 2 ) { // input elements
+          if (j == 0) {
+            tx_band_start = 0;
+            size_b = tx_band_size_in_first;
           }
-          else {// 3, output elements
-            tx_band_start = tx_band_size_out * (j-1);
-            if (j == n_stripes ) 
-              size_b = tx_band_size_out_last;
+          else {
+            tx_band_start = tx_band_size_in_first + tx_band_size_in * (j-1) - (overlap * (2 + (j-1)*2));
+            if (j == elements[i].n_stripes )      
+              size_b = tx_band_size_in_last;
             else
-              size_b = tx_band_size_out;
+              size_b = tx_band_size_in;
           }
-
         }
-        else if ( !strcmp(task->name, "ct") ) {
-    
-          tx_band_start = j*band_size_3ch;
-          size_b = band_size_3ch;
-
-        }
-        else if ( !strcmp(task->name, "jpeg") ) {
-    
-          tx_band_start = j*max_stripe_size_b[0];
-          size_b = max_stripe_size_b[0];
-
-        }
-        else {
-          printf("ERROR: Unknown task name %s\n",task->name);
+        else {// 3, output elements
+          tx_band_start = tx_band_size_out * j;
+          if (j == elements[i].n_stripes ) 
+            size_b = tx_band_size_out_last;
+          else
+            size_b = tx_band_size_out;
         }
 
-        addr_start += tx_band_start;
-        addr_end = addr_start + size_b;
       }
- 
-      // write the rab_stripes table
-      *(rab_stripes[i] + j*n_fields + 0) = addr_start;
-      for (m = 1; m<(n_fields-1); m++)
-        *(rab_stripes[i] + j*n_fields + m) = 0;
-      *(rab_stripes[i] + j*n_fields + n_fields-1) = addr_end; 
+      else if ( !strcmp(task->name, "ct") ) {
+    
+        tx_band_start = j*band_size_3ch;
+        size_b = band_size_3ch;
+
+      }
+      else if ( !strcmp(task->name, "jpeg") ) {
+    
+        tx_band_start = j*elements[i].max_stripe_size_b;
+        size_b = elements[i].max_stripe_size_b;
+
+      }
+      else 
+        printf("ERROR: Unknown task name %s\n",task->name);
+     
+      // write the address arrays
+      addr_start[j] = (unsigned)(task->data_desc[k].ptr) + tx_band_start;
+      addr_end[j]   = addr_start[j] + size_b;
     }
 
     if (DEBUG_LEVEL > 2) {
-      printf("RAB stripe table @ %#x\n",(unsigned)rab_stripes[i]);
       printf("Shared Element %d: \n",k);
-      for (j=0; j<(n_stripes+1); j++) {
-        if (j>2 && j<(n_stripes+1-3))
+      printf("stripe_addr_start @ %#x\n",elements[i].stripe_addr_start);
+      printf("stripe_addr_end   @ %#x\n",elements[i].stripe_addr_end);
+      for (j=0; j<elements[i].n_stripes; j++) {
+        if (j>2 && j<(elements[i].n_stripes-3))
           continue;
         printf("%d\t",j);
-        for (m=0; m<n_fields; m++) {
-          printf("%#x\t",*(rab_stripes[i] + j*n_fields + m));
-        }
+        printf("%#x - ", ((unsigned *)(elements[i].stripe_addr_start))[j]);
+        printf("%#x\n",  ((unsigned *)(elements[i].stripe_addr_end))[j]);
         printf("\n");
       }
     }
   }
 
-  // set up the request
-  request[0] = 0;
-  RAB_SET_PROT(request[0], prot);
-  RAB_SET_ACP(request[0], 0); // for now we deactivate it
-  RAB_SET_PORT(request[0], port);
-  RAB_SET_OFFLOAD_ID(request[0], offload_id);
-  RAB_SET_N_ELEM(request[0], n_elements);
-  RAB_SET_N_STRIPES(request[0], n_stripes);
-
-  request[1] = (unsigned)max_stripe_size_b; // addr of array holding max stripe sizes
-  request[2] = (unsigned)rab_stripes;       // addr of array holding pointers to stripe data
-  
   // make the request
-  ioctl(pulp->fd,PULP_IOCTL_RAB_REQ_STRIPED,request);
+  ioctl(pulp->fd,PULP_IOCTL_RAB_REQ_STRIPED,(unsigned *)&stripe_request);
 
   // free memory
-  free(max_stripe_size_b);
-  for (i=0; i<n_elements; i++) {
-    free(rab_stripes[i]);
+  for (i=0; i<stripe_request.n_elements; i++) {
+    free((unsigned *)elements[i].stripe_addr_start);
+    free((unsigned *)elements[i].stripe_addr_end);
   }
-  free(rab_stripes);
+  free(elements);
 
   return 0;
 } 
@@ -1014,10 +1025,8 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   // RAB setup
   pulp_offload_rab_setup(pulp, task, &data_idxs, n_idxs);
     
-#ifndef PROFILE_RAB_STR
   // Pass data descriptor to PULP
   pulp_offload_pass_desc(pulp, task, &data_idxs);
-#endif  
 
   // free memory
   free(data_idxs);
@@ -1038,10 +1047,6 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
     return err;
   }
   pulp_exe_start(pulp);
-
-#ifdef PROFILE_RAB_STR
-  pulp_write32(pulp->mbox.v_addr,MBOX_WRDATA_OFFSET_B,'b',PULP_START);
-#endif
 
   return 0;
 }
@@ -1476,16 +1481,16 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   // set up RAB stripes
   //pulp_rab_req_striped(pulp, task, data_idxs, n_idxs, prot, port);
   if ( !strcmp(task->name, "profile_rab_striping") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, task->n_data, prot, port);
+    pulp_rab_req_striped(pulp, task, data_idxs, task->n_data);
   }
   else if ( !strcmp(task->name, "rod") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 3, prot, port);
+    pulp_rab_req_striped(pulp, task, data_idxs, 3);
   }
   else if ( !strcmp(task->name, "ct") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
+    pulp_rab_req_striped(pulp, task, data_idxs, 1);
   }
   else if ( !strcmp(task->name, "jpeg") ) {
-    pulp_rab_req_striped(pulp, task, data_idxs, 1, prot, port);
+    pulp_rab_req_striped(pulp, task, data_idxs, 1);
   }
   else {
     if ( strcmp(task->name, "face_detect") )
@@ -1509,12 +1514,10 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
  */
 int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
 {
-  int i, timeout, us_delay;
-  unsigned status, n_data;
+  int i;
+  unsigned n_data;
 
   n_data = task->n_data;
-
-  us_delay = 100;
 
   if (DEBUG_LEVEL > 2) {
     printf("Mailbox status = %#x.\n",pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b'));
@@ -1522,34 +1525,15 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
 
   for (i=0;i<n_data;i++) {
 
-    // check if mbox is full
-    if ( pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b') & 0x2 ) {
-      timeout = 1000;
-      status = 1;
-      // wait for not full or timeout
-      while ( status && (timeout > 0) ) {
-        usleep(us_delay);
-        timeout--;
-        status = (pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b') & 0x2);
-      }
-      if ( status ) {
-        printf("ERROR: mbox timeout.\n");
-        return i;
-      } 
-    }
-
-    // mbox is ready to receive
     if ( (*data_idxs)[i] ) {
       // pass data element by reference
-      pulp_write32(pulp->mbox.v_addr,MBOX_WRDATA_OFFSET_B,'b',
-                   (unsigned)(task->data_desc[i].ptr));
+      pulp_mbox_write(pulp, (unsigned)(task->data_desc[i].ptr));
       if (DEBUG_LEVEL > 2)
         printf("Element %d: wrote %#x to mbox.\n",i,(unsigned) (task->data_desc[i].ptr));
     }
     else {
       // pass data element by value
-      pulp_write32(pulp->mbox.v_addr,MBOX_WRDATA_OFFSET_B,'b',
-                   *(unsigned *)(task->data_desc[i].ptr));
+      pulp_mbox_write(pulp, *(unsigned *)(task->data_desc[i].ptr));
       if (DEBUG_LEVEL > 2)
         printf("Element %d: wrote %#x to mbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
     }    
@@ -1725,14 +1709,8 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
     return -EBUSY;
   }
 
-  // check if mbox is full
-  if ( pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b') & 0x2 ) {
-    printf("ERROR: PULP mbox full.\n");
-    return -EXFULL;
-  } 
-  
   // start execution
-  pulp_write32(pulp->mbox.v_addr, MBOX_WRDATA_OFFSET_B, 'b', PULP_START);
+  pulp_mbox_write(pulp, PULP_START);
 
   return 0;
 }
@@ -1956,19 +1934,31 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
                                    unsigned n_channels, unsigned char **channels,
                                    unsigned *s_height)
 {
-  int i,j,k;
+  int i,j;
 
-  unsigned request[3];
+  RabStripeReqUser stripe_request;
+
+  stripe_request.id         = 0;
+  stripe_request.n_elements = 1;
+
+  RabStripeElemUser * elements = (RabStripeElemUser *)
+    malloc((size_t)(stripe_request.n_elements*sizeof(RabStripeElemUser)));
+  if ( elements == NULL ) {
+    printf("ERROR: Malloc failed for RabStripeElemUser structs.\n");
+    return -ENOMEM;
+  }
+
+  stripe_request.rab_stripe_elem_user_addr = (unsigned)&elements[0];
+
+  unsigned * addr_start;
+  unsigned * addr_end;
+
+  unsigned addr_start_tmp, addr_end_tmp;
   unsigned stripe_size_b, stripe_height, n_stripes_per_channel;
-  unsigned n_stripes, n_slices_max, n_fields, offload_id;
 
-  unsigned addr_start, addr_end, page_size_b;
-
-  unsigned * max_stripe_size_b;
-  unsigned ** rab_stripes;
+  unsigned page_size_b;
 
   page_size_b = getpagesize();
-  offload_id = 0;
 
   // compute max stripe height
   stripe_size_b = (RAB_L1_N_SLICES_PORT_1/2-1)*page_size_b;
@@ -1991,54 +1981,47 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   }
 
   // generate the rab_stripes table
-  n_stripes = n_stripes_per_channel * n_channels;
+  elements[0].id    = 0;   // not used right now
+  elements[0].type  = 2;   // for now in
+  elements[0].flags = 0x7;
+  elements[0].max_stripe_size_b = stripe_size_b;
+  elements[0].n_stripes = n_stripes_per_channel * n_channels;
 
-  max_stripe_size_b = &stripe_size_b;
-  rab_stripes = (unsigned **)malloc((size_t)(sizeof(unsigned *)));
-  if (rab_stripes == NULL) {
-    printf("ERROR: Malloc failed for rab_stripes.\n");
+  addr_start = (unsigned *)malloc((size_t)elements[0].n_stripes*sizeof(unsigned));
+  addr_end   = (unsigned *)malloc((size_t)elements[0].n_stripes*sizeof(unsigned));
+  if ( (addr_start == NULL) || (addr_end == NULL) ) {
+    printf("ERROR: Malloc failed for addr_start/addr_end.\n");
     return -ENOMEM;
   }
-  
-  n_slices_max = *max_stripe_size_b/page_size_b;
-  if (n_slices_max*page_size_b < *max_stripe_size_b)
-    n_slices_max++; // remainder
-  n_slices_max++;   // non-aligned
 
-  n_fields = 2*n_slices_max + 1; // addr_start & addr_offset per slice, addr_end
+  elements[0].stripe_addr_start = (unsigned)&addr_start[0];
+  elements[0].stripe_addr_end   = (unsigned)&addr_end[0];
 
-  *rab_stripes = (unsigned *)malloc((size_t)((n_stripes+1)*(n_fields)*sizeof(unsigned)));
-  if (*rab_stripes == NULL) {
-    printf("ERROR: Malloc failed for *rab_stripes.\n");
-    return -ENOMEM;
-  }
-  memset(*rab_stripes, 0, (n_stripes+1)*(n_fields)*sizeof(unsigned));
-  
+  // fill in stripe data
   for (i=0; i<n_channels; i++) {
     for (j=0; j<n_stripes_per_channel; j++) {
       // align to words
-      addr_start = ((unsigned)channels[i] + stripe_size_b*j);
-      BF_SET(addr_start,0,0,4);
-      addr_end   = ((unsigned)channels[i] + stripe_size_b*(j+1));
-      BF_SET(addr_end,0,0,4);
-      addr_end += 0x4;
-      *(*rab_stripes + i*n_stripes_per_channel*n_fields + j*n_fields + 0) = addr_start; 
-      for (k=1; k<(n_fields-1); k++) {
-        *(*rab_stripes + i*n_stripes_per_channel*n_fields + j*n_fields + k) = 0;
-      }
-      *(*rab_stripes + i*n_stripes_per_channel*n_fields + j*n_fields + n_fields-1) = addr_end;
+      addr_start_tmp = ((unsigned)channels[i] + stripe_size_b*j);
+      BF_SET(addr_start_tmp,0,0,4);
+      addr_end_tmp   = ((unsigned)channels[i] + stripe_size_b*(j+1));
+      BF_SET(addr_end_tmp,0,0,4);
+      addr_end_tmp += 0x4;
+
+      addr_start[i*n_stripes_per_channel + j] = addr_start_tmp;
+      addr_end  [i*n_stripes_per_channel + j] = addr_end_tmp;
     }
   }
 
   if (DEBUG_LEVEL > 2) {
-    printf("RAB stripe table @ %#x\n",(unsigned)rab_stripes);
-    for (i=0; i<(n_stripes+1); i++) {
-      if (i>2 && i<(n_stripes+1-3))
+    printf("Shared Element %d: \n",0);
+    printf("stripe_addr_start @ %#x\n",elements[0].stripe_addr_start);
+    printf("stripe_addr_end   @ %#x\n",elements[0].stripe_addr_end);
+    for (j=0; j<elements[0].n_stripes; j++) {
+      if (j>2 && j<(elements[0].n_stripes-3))
         continue;
-      printf("%d\t",i);
-      for (j=0; j<n_fields; j++) {
-        printf("%#x\t",*(*rab_stripes + i*n_fields + j));
-      }
+      printf("%d\t",j);
+      printf("%#x - ", ((unsigned *)(elements[0].stripe_addr_start))[j]);
+      printf("%#x\n",  ((unsigned *)(elements[0].stripe_addr_end))[j]);
       printf("\n");
     }
   }
@@ -2103,24 +2086,13 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   fclose(fp);
 #endif
 
-  // set up the request
-  request[0] = 0;
-  RAB_SET_PROT(request[0], prot);
-  RAB_SET_ACP(request[0], 0);
-  RAB_SET_PORT(request[0], port);
-  RAB_SET_OFFLOAD_ID(request[0], offload_id);
-  RAB_SET_N_ELEM(request[0], 1);
-  RAB_SET_N_STRIPES(request[0], n_stripes);
-
-  request[1] = (unsigned)max_stripe_size_b; // addr of pointer to max stripe size
-  request[2] = (unsigned)rab_stripes;       // addr of pointer to stripe data
-
   // make the request
-  ioctl(pulp->fd,PULP_IOCTL_RAB_REQ_STRIPED,request);
+  ioctl(pulp->fd,PULP_IOCTL_RAB_REQ_STRIPED,(unsigned *)&stripe_request);
 
   // free memory
-  free(*rab_stripes);
-  free(rab_stripes);
+  free((unsigned *)elements[0].stripe_addr_start);
+  free((unsigned *)elements[0].stripe_addr_end);
+  free(elements);
 
   return 0;
 }

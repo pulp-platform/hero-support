@@ -73,6 +73,7 @@ int pulp_munmap(PulpDev *pulp);
 int pulp_init(PulpDev *pulp);
 
 int pulp_mbox_read(PulpDev *pulp, unsigned *buffer, unsigned n_words);
+int pulp_mbox_write(PulpDev *pulp, unsigned word);
 void pulp_mbox_clear_is(PulpDev *pulp);
 
 int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
@@ -85,8 +86,7 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
 void pulp_rab_free(PulpDev *pulp, unsigned char date_cur);
 
 int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
-                         unsigned **data_idxs, int n_elements,  
-                         unsigned char prot, unsigned char port);
+                         unsigned **data_idxs, int n_elements);
 void pulp_rab_free_striped(PulpDev *pulp);
 
 void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
