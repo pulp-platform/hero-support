@@ -522,7 +522,7 @@ void pulp_rab_l2_init(void *rab_config)
       for (i_entry=0; i_entry<RAB_L2_N_ENTRIES_PER_SET; i_entry++) {
         // Clear VA ram. No need to clear PA ram.
         offset = ((i_port+1)*0x4000) + (i_set*RAB_L2_N_ENTRIES_PER_SET*4) + (i_entry*4);
-        iowrite32( 0, (void *)((unsigned)rab_config + offset)); 
+        iowrite32( 0, (void *)((unsigned long)rab_config + offset)); 
         l2.set[i_set].entry[i_entry].flags = 0;
         l2.set[i_set].entry[i_entry].pfn_p = 0;
         l2.set[i_set].entry[i_entry].pfn_v = 0;
@@ -577,11 +577,11 @@ int pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, cha
     
     data_v = tlb_entry->flags;
     BF_SET(data_v, tlb_entry->pfn_v, 4, 20); // Parameterise TODO.
-    iowrite32(data_v, (void *)((unsigned)rab_config+off_v));
+    iowrite32(data_v, (void *)((unsigned long)rab_config+off_v));
 
     off_p = (port+1)*0x4000 + set_num*RAB_L2_N_ENTRIES_PER_SET*4 + entry_num*4 + 1024*4 ; // PA RAM address. Parameterise TODO.
     data_p =  tlb_entry->pfn_p;
-    iowrite32(data_p, (void *)((unsigned)rab_config+off_p));
+    iowrite32(data_p, (void *)((unsigned long)rab_config+off_p));
     
     //printk("off_v = %#x, off_p = %#x \n",(unsigned)off_v, (unsigned)off_p);
     //printk("data_v = %#x, data_p = %#x \n",(unsigned)data_v, (unsigned)data_p);
@@ -675,8 +675,8 @@ int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int e
   data = data << 1; // LSB is now zero.
   l2.set[set_num].entry[entry_num].flags = data; // Update kernel struct
   BF_SET(data, l2.set[set_num].entry[entry_num].pfn_v, 4, 20); // Parameterise TODO.
-  iowrite32( data, (void *)((unsigned)rab_config+((port+1)*0x4000) + 
-                            (set_num*RAB_L2_N_ENTRIES_PER_SET*4) + (entry_num*4)) );
+  iowrite32( data, (void *)((unsigned long)rab_config+((port+1)*0x4000) + 
+    (set_num*RAB_L2_N_ENTRIES_PER_SET*4) + (entry_num*4)) );
 
   // unlock pages and invalidate cache.
   page_old = l2.set[set_num].entry[entry_num].page_ptr;  
