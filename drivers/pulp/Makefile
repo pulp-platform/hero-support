@@ -1,5 +1,4 @@
 obj-m     := pulp.o
-pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o cache.o
 
 PLATFORM      := ${shell echo ${PLATFORM}}
 
@@ -15,6 +14,18 @@ ccflags-y := -I${ARM_INC_DIR1}
 ccflags-y += -I${PULP_INC_DIR1} -I${PULP_INC_DIR2}
 ccflags-y += -DPLATFORM=${PLATFORM}
 
+ifeq ($(PLATFORM),4)
+	# JUNO requires cache.o from kernel directory
+	pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o cache.o
+else
+	pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o
+endif
+
+ifeq ($(PLATFORM),4)
+	# JUNO requires cache.o from kernel directory
+	COPY := ${shell cp ${KERNEL_DIR}/arch/arm64/mm/cache.o cache.o_shipped}
+endif
+
 all: modules
 modules:
 	$(MAKE) -S ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_DIR) M=$(shell pwd) modules
@@ -28,3 +39,4 @@ clean:
 	rm -f .*.o.cmd
 	rm -f .*.ko.cmd
 	rm -f *.read
+	rm -f *.o_shipped
