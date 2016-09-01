@@ -1,5 +1,5 @@
 obj-m     := pulp.o
-pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o
+pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o cache.o
 
 PLATFORM      := ${shell echo ${PLATFORM}}
 

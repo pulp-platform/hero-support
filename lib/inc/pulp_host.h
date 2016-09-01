@@ -48,7 +48,7 @@
 /*
  * Macros
  */
-#define BIT_N_SET(n)        ( 1 << (n) )
+#define BIT_N_SET(n)        ( 1UL << (n) )
 #define BIT_SET(y, mask)    ( y |=  (mask) )
 #define BIT_CLEAR(y, mask)  ( y &= ~(mask) )
 #define BIT_FLIP(y, mask)   ( y ^=  (mask) )

@@ -1,6 +1,9 @@
 #!/bin/bash
 
 if [ "${PLATFORM}" -eq "4" ]; then # JUNO
+  # Copy cache.o from kerner directory
+  cp ${KERNEL_DIR}/arch/arm64/mm/cache.o cache.o_shipped
+
   # Make
   make
 

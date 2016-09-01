@@ -41,7 +41,7 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
 #else // PLATFORM == JUNO
 
   // clean cache lines to the PoC
-  __flush_dcache_area(kaddr,size_b);
+  __flush_dcache_area(kaddr,(size_t)size_b);
 
 #endif // PLATFORM != JUNO
 
@@ -90,7 +90,7 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
 #else // PLATFORM == JUNO
 
   // clean cache lines to the PoC (if lines are not dirty, just invalidate)
-  __flush_dcache_area(kaddr,size_b);
+  __flush_dcache_area(kaddr,(size_t)size_b);
 
 #endif
 
