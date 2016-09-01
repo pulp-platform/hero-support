@@ -1,6 +1,5 @@
 #include "pulp_mem.h"
 
-#if PLATFORM != JUNO
 /**
  * Flush user-space memory pages. Required when PULP reads from
  * user-space memory.
@@ -14,14 +13,19 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
 
   void * kaddr;
   unsigned size_b;
-  long unsigned int paddr;
 
-  /* create a kernel-space mapping, the L1 cache maintenance functions
+#if PLATFORM != JUNO
+  long unsigned int paddr;
+#endif
+
+  /* create a kernel-space mapping, the cache maintenance functions
      work on kernel virtual addresses, only exist for low memory */
   kaddr = kmap(page); 
   
   kaddr = kaddr + offset_start;
   size_b = offset_end - offset_start;
+
+#if PLATFORM != JUNO
 
   // clean L1 cache lines
   __cpuc_flush_dcache_area(kaddr,size_b);
@@ -33,6 +37,13 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
 
   // clean L2 cache lines
   outer_cache.flush_range(paddr,paddr+size_b);
+
+#else // PLATFORM == JUNO
+
+  // clean cache lines to the PoC
+  __flush_dcache_area(kaddr,size_b);
+
+#endif // PLATFORM != JUNO
 
   // destroy kernel-space mapping
   kunmap(page);
@@ -51,14 +62,19 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
 
   void * kaddr;
   unsigned size_b;
-  long unsigned int paddr;
 
-  /* create a kernel-space mapping, the L1 cache maintenance functions
+#if PLATFORM != JUNO
+  long unsigned int paddr;
+#endif
+
+  /* create a kernel-space mapping, the cache maintenance functions
      work on kernel virtual addresses, only exist for low memory */
   kaddr = kmap(page); 
   
   kaddr = kaddr + offset_start;
   size_b = offset_end - offset_start;
+
+#if PLATFORM != JUNO
 
   /* extract the physical address, the L2 cache maintenance functions
      work on physical addresses */
@@ -71,10 +87,17 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   // clean L1 cache lines (if lines are not dirty, just invalidate)
   __cpuc_flush_dcache_area(kaddr,size_b);
 
+#else // PLATFORM == JUNO
+
+  // clean cache lines to the PoC (if lines are not dirty, just invalidate)
+  __flush_dcache_area(kaddr,size_b);
+
+#endif
+
   // destroy kernel-space mapping
   kunmap(page);
 }
-#endif // PLATFORM != JUNO
+
 
 /**
  * Get the number of pages to remap.

@@ -13,10 +13,8 @@
 #include "pulp_host.h"
 
 // funtions
-#if PLATFORM != JUNO
-  void pulp_mem_cache_flush(struct page * page, unsigned offset_start, unsigned offset_end);
-  void pulp_mem_cache_inv(struct page * page, unsigned offset_start, unsigned offset_end);
-#endif // PLATFORM != JUNO
+void pulp_mem_cache_flush(struct page * page, unsigned offset_start, unsigned offset_end);
+void pulp_mem_cache_inv(struct page * page, unsigned offset_start, unsigned offset_end);
 unsigned  pulp_mem_get_num_pages(unsigned addr_start, unsigned size_b);
 int pulp_mem_get_user_pages(struct page *** pages, unsigned addr_start, unsigned n_pages, unsigned write);
 int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsigned long ** addr_offset_vec,

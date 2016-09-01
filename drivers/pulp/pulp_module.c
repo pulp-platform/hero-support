@@ -966,9 +966,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   unsigned        n_segments;
 
   // needed for cache flushing
-#if PLATFORM != JUNO
   unsigned offset_start, offset_end;
-#endif
+
   // needed for RAB management
   RabSliceReq rab_slice_request;
   RabSliceReq *rab_slice_req = &rab_slice_request;
@@ -1188,25 +1187,23 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
           }
         }
 
-        #if PLATFORM != JUNO
-          // flush caches
-          if ( !(rab_slice_req->flags_drv & 0x1) && !(rab_slice_req->flags_hw & 0x8) ) {
-            for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
-              // flush the whole page?
-              if (!i) 
-                offset_start = BF_GET(addr_start_vec[i],0,PAGE_SHIFT);
-              else
-                offset_start = 0;
-              
-              if (i == (n_segments-1) )
-                offset_end = BF_GET(addr_end_vec[i],0,PAGE_SHIFT);
-              else 
-                offset_end = PAGE_SIZE;
-              
-              pulp_mem_cache_flush(pages[j],offset_start,offset_end);
-            }
+        // flush caches
+        if ( !(rab_slice_req->flags_drv & 0x1) && !(rab_slice_req->flags_hw & 0x8) ) {
+          for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
+            // flush the whole page?
+            if (!i) 
+              offset_start = BF_GET(addr_start_vec[i],0,PAGE_SHIFT);
+            else
+              offset_start = 0;
+            
+            if (i == (n_segments-1) )
+              offset_end = BF_GET(addr_end_vec[i],0,PAGE_SHIFT);
+            else 
+              offset_end = PAGE_SIZE;
+            
+            pulp_mem_cache_flush(pages[j],offset_start,offset_end);
           }
-        #endif // PLATFORM != JUNO
+        }
       } // for n_segments
     } 
     else { // Use L2 TLB
@@ -1222,13 +1219,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         // Setup entry
         err = pulp_rab_l2_setup_entry(my_dev.rab_config, l2_entry, rab_slice_req->rab_port, 0);
         
-        #if PLATFORM != JUNO
-          // flush caches
-          if ( !(rab_slice_req->flags_drv & 0x1) && !(rab_slice_req->flags_hw & 0x8) ) {
-            // flush the whole page?
-            pulp_mem_cache_flush(pages[i],0,PAGE_SIZE);
-          }
-        #endif // PLATFORM != JUNO
+        // flush caches
+        if ( !(rab_slice_req->flags_drv & 0x1) && !(rab_slice_req->flags_hw & 0x8) ) {
+          // flush the whole page?
+          pulp_mem_cache_flush(pages[i],0,PAGE_SIZE);
+        }
       } // for (i=0; i<len; i++) {
   
       kfree(pages); // No need of pages since we have the individual page ptr for L2 entry in page_ptr.
@@ -1510,27 +1505,25 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       clk_cntr_map_sg += (arm_clk_cntr_value - arm_clk_cntr_value_start);
 #endif   
 
-    #if PLATFORM != JUNO
-      if( !(rab_stripe_elem[i].flags_hw & 0x8) ) {
-        // flush caches for all segments
-        for (j=0; j<n_segments; j++) { 
-          for (k=page_idxs_start[j]; k<(page_idxs_end[j]+1); k++) {
-            // flush the whole page?
-            if (!j) 
-              offset_start = BF_GET(addr_start_vec[j],0,PAGE_SHIFT);
-            else
-              offset_start = 0;
+    if( !(rab_stripe_elem[i].flags_hw & 0x8) ) {
+      // flush caches for all segments
+      for (j=0; j<n_segments; j++) { 
+        for (k=page_idxs_start[j]; k<(page_idxs_end[j]+1); k++) {
+          // flush the whole page?
+          if (!j) 
+            offset_start = BF_GET(addr_start_vec[j],0,PAGE_SHIFT);
+          else
+            offset_start = 0;
 
-            if (j == (n_segments-1) )
-              offset_end = BF_GET(addr_end_vec[j],0,PAGE_SHIFT);
-            else 
-              offset_end = PAGE_SIZE;
+          if (j == (n_segments-1) )
+            offset_end = BF_GET(addr_end_vec[j],0,PAGE_SHIFT);
+          else 
+            offset_end = PAGE_SIZE;
   
-            pulp_mem_cache_flush(pages[k],offset_start,offset_end);
-          }
+          pulp_mem_cache_flush(pages[k],offset_start,offset_end);
         }
       }
-    #endif // PLATFORM != JUNO
+    }
 
 #ifdef PROFILE_RAB_STR
       arm_clk_cntr_value_start = arm_clk_cntr_value;
@@ -1892,7 +1885,6 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }
       size_b = addr_end_vec[i] - addr_start_vec[i];
 
-      #if PLATFORM != JUNO
       // flush caches
       for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
         // flush the whole page?
@@ -1908,7 +1900,6 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   
         pulp_mem_cache_flush(pages[j],offset_start,offset_end);
       }
-      #endif // PLATFORM != JUNO
 
       // prepare the transfers, fill the descriptors
       err = pulp_dma_xfer_prep(&descs[i], &pulp_dma_chan[dma_cmd],
@@ -2292,11 +2283,9 @@ static void pulp_rab_handle_miss(unsigned unused)
       clk_cntr_setup += (arm_clk_cntr_value - arm_clk_cntr_value_start);
 #endif
 
-#if PLATFORM != JUNO
       // flush the entire page from the caches if ACP is not used
       if (!rab_mh_acp)
         pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
-#endif      
 
       if (use_l1 == 0)
         kfree(pages);
