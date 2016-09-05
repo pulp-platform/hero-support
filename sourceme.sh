@@ -14,21 +14,23 @@ export VIVADO_VERSION="vivado-2015.1"
 #  ZC706:    2
 #  MINI_ITX: 3
 #  JUNO:     4
-export PLATFORM="3"
+export PLATFORM="4"
 
 # Platform dependent variables
 if [ "${PLATFORM}" -eq "4" ]; then
     echo "Configuring for JUNO platform"
 
+    # system workspace directory - on Ubuntu machine
+    export WORKSPACE_DIR=/scratch/vogelpi
+
+    # Linaro variables
     export LINARO_RELEASE=16.03
     export OE_RELEASE=15.09
-
-    # system workspace directory
-    #export WORKSPACE_DIR=/usr/scratch/fliana/vogelpi/linaro-${LINARO_RELEASE}
-    export WORKSPACE_DIR=/scratch/vogelpi/linaro-${LINARO_RELEASE}
+    export MANIFEST=latest
+    export TYPE=oe
 
     # directory containing the kernel sources
-    export KERNEL_DIR=${WORKSPACE_DIR}/workspace/linux/out/juno-oe
+    export KERNEL_DIR=${WORKSPACE_DIR}/linaro-${LINARO_RELEASE}/workspace/linux/out/juno-oe
 
     # machine to which the make_and_copy.sh scripts transfer the compiled stuff
     export SCP_TARGET_MACHINE="juno@bordcomputer"
@@ -38,8 +40,7 @@ if [ "${PLATFORM}" -eq "4" ]; then
     export SCP_TARGET_PATH_DRIVERS="~/juno/share/drivers"
 
     # path to external ARM libraries (on scratch)
-    #export ARM_LIB_EXT_DIR=/usr/scratch/fliana/vogelpi/libs-juno/lib
-    export ARM_LIB_EXT_DIR=/scratch/vogelpi/libs-juno/lib
+    export ARM_LIB_EXT_DIR=${WORKSPACE_DIR}/libs-juno/lib
 
     # number of cores on Linux host
     export N_CORES_COMPILE=4
@@ -55,13 +56,20 @@ if [ "${PLATFORM}" -eq "4" ]; then
     GCC_VERSION="4.9" 
 
     # Set up PATH variable
-    #export PATH=/usr/scratch/fliana/vogelpi/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:/usr/scratch/fliana/vogelpi/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
-    export PATH=/scratch/vogelpi/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:/scratch/vogelpi/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
+    export PATH=${WORKSPACE_DIR}/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:${WORKSPACE_DIR}/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
+
+	# directory containing PULP header files - on CentOS machine - needs to be accessible also by Ubuntu machine
+	export PULP_INC_DIR1=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
+	export PULP_INC_DIR2=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include
 else 
     echo "Configuring for ZYNQ platform"
 
-    # system workspace directory
-    export WORKSPACE_DIR=/scratch/vogelpi/mini-itx
+    # system workspace directory - on CentOS machine
+    if [ "${PLATFORM}" -eq "1" ]; then
+    	export WORKSPACE_DIR=/scratch/vogelpi/zedboard
+    else
+    	export WORKSPACE_DIR=/scratch/vogelpi/mini-itx
+    fi
 
     # directory containing the kernel sources
     export KERNEL_DIR=${WORKSPACE_DIR}/workspace/linux-xlnx
@@ -88,6 +96,10 @@ else
 
     # Set up PATH variable
     #${VIVADO_VERSION} bash
+
+    # directory containing PULP header files - on CentOS machine
+	export PULP_INC_DIR1=${WORKSPACE_DIR}/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
+	export PULP_INC_DIR2=${WORKSPACE_DIR}/pulp_pipeline/pkg/sdk/dev/install/include
 fi
 
 # top directory containing custom ARM libraries
@@ -102,13 +114,5 @@ fi
 # directory containing ARM header files
 export ARM_INC_DIR1=${ARM_LIB_DIR1}/inc
 
-# directory containing PULP header files
-export PULP_INC_DIR1=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
-export PULP_INC_DIR2=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include
-
 # PULP HSA home directory
 export PULP_HSA_HOME=/home/vogelpi/pulp_on_fpga/software/hsa_apps
-
-# PULP binary path, i.e., where the compiled accelerator binaries can be found
-#export PULP_SW_PATH=/home/vogelpi/pulp_on_fpga/software/pulp
-
