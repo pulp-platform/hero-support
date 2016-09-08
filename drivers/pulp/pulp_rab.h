@@ -12,6 +12,7 @@
 
 #include "pulp_host.h"
 
+// constants
 #define RAB_L2_N_ENTRIES_PER_SET 32
 #define RAB_L2_N_SETS            32
 
@@ -130,7 +131,6 @@ typedef struct {
 typedef struct {
   L2Set set[RAB_L2_N_SETS];
 } L2Tlb;
-
 
 // methods declarations
 void pulp_rab_l1_init(void);

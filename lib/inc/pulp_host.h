@@ -360,7 +360,7 @@
   #define PULP_H_BASE_ADDR            0x60000000 // Address at which the host sees PULP
   #define L1_MEM_H_BASE_ADDR          PULP_H_BASE_ADDR
   #define L2_MEM_H_BASE_ADDR          0x67000000
-  #define L3_MEM_H_BASE_ADDR         (0x1000000000LL - L3_MEM_SIZE_B)
+  #define L3_MEM_H_BASE_ADDR         (0xA00000000LL - L3_MEM_SIZE_B)
   #define MBOX_H_BASE_ADDR            0x65120000 // Interface 0
   #define SOC_PERIPHERALS_H_BASE_ADDR 0x65100000
   

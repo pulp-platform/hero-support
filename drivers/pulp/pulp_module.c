@@ -62,14 +62,6 @@
 #include <linux/ktime.h>      /* For ktime_get(), ktime_us_delta() */
 /***************************************************************************************/
 
-#include "pulp_host.h"
-
-#if PLATFORM == JUNO
-  #include "juno.h"
-#else
-  #include "zynq.h"
-#endif
-
 #include "pulp_module.h"
 #include "pulp_mem.h"
 #include "pulp_rab.h"
@@ -2436,7 +2428,7 @@ void pulp_rab_update(unsigned update_req)
       if ( j < elem->stripes[stripe_idx].n_slices ) {
         iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_start,  (void *)((unsigned long)my_dev.rab_config+offset+0x20)); // start_addr
         iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_end,    (void *)((unsigned long)my_dev.rab_config+offset+0x28)); // end_addr
-        iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_offset, (void *)((unsigned long)my_dev.rab_config+offset+0x30)); // offset  
+        IOWRITE_L(elem->stripes[stripe_idx].slice_configs[j].addr_offset, (void *)((unsigned long)my_dev.rab_config+offset+0x30)); // offset  
         iowrite32(elem->flags_hw,                                         (void *)((unsigned long)my_dev.rab_config+offset+0x38));
 #ifdef PROFILE_RAB_STR 
         n_slices_updated++;

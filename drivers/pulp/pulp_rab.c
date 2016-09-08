@@ -342,7 +342,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
   
     iowrite32(rab_slice_req->addr_start,  (void *)((unsigned long)rab_config+offset+0x20));
     iowrite32(rab_slice_req->addr_end,    (void *)((unsigned long)rab_config+offset+0x28));
-    iowrite32(rab_slice_req->addr_offset, (void *)((unsigned long)rab_config+offset+0x30));
+    IOWRITE_L(rab_slice_req->addr_offset, (void *)((unsigned long)rab_config+offset+0x30));
     iowrite32(rab_slice_req->flags_hw,    (void *)((unsigned long)rab_config+offset+0x38));
  
     if (DEBUG_LEVEL_RAB > 1) {
@@ -406,7 +406,7 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
   
       iowrite32(l1.port_1.mappings[rab_mapping].slices[i].addr_start,  (void *)((unsigned long)rab_config+offset+0x20));
       iowrite32(l1.port_1.mappings[rab_mapping].slices[i].addr_end,    (void *)((unsigned long)rab_config+offset+0x28));
-      iowrite32(l1.port_1.mappings[rab_mapping].slices[i].addr_offset, (void *)((unsigned long)rab_config+offset+0x30));
+      IOWRITE_L(l1.port_1.mappings[rab_mapping].slices[i].addr_offset, (void *)((unsigned long)rab_config+offset+0x30));
       iowrite32(l1.port_1.mappings[rab_mapping].slices[i].flags,       (void *)((unsigned long)rab_config+offset+0x38));
 
       if (DEBUG_LEVEL_RAB > 0)
@@ -468,7 +468,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
   if ( (rab_mapping ==  0xFFFF) || (rab_mapping == 0xAAAA) ) {
     printk(KERN_INFO "PULP - RAB L1: Printing active configuration: \n");
     
-    for (j=0; j<1; j++) {
+    for (j=0; j<2; j++) {
       if (j == 0) // Port 0
         n_slices = RAB_L1_N_SLICES_PORT_0;
       else // Port 1
@@ -483,7 +483,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
           printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#lx , flags = %#x\n", j, i,
             ioread32((void *)((unsigned long)rab_config+offset+0x20)),
             ioread32((void *)((unsigned long)rab_config+offset+0x28)),
-            (unsigned long)ioread32((void *)((unsigned long)rab_config+offset+0x30)),
+            (unsigned long)IOREAD_L((void *)((unsigned long)rab_config+offset+0x30)),
             flags);  
         }
       }

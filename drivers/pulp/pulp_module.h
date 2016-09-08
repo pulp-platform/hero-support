@@ -5,6 +5,12 @@
 
 #include "pulp_host.h"    /* macros, struct definitions */
 
+#if PLATFORM == JUNO
+  #include "juno.h"
+#else
+  #include "zynq.h"
+#endif
+
 #define DEBUG_LEVEL_PULP    0
 #define DEBUG_LEVEL_MEM     0
 #define DEBUG_LEVEL_RAB     0
@@ -15,6 +21,15 @@
 //#define PROFILE_DMA
 //#define PROFILE_RAB_STR
 //#define PROFILE_RAB_MH
+
+// macros
+#if PLATFORM == JUNO
+  #define IOWRITE_L(value, addr) ( iowrite64(value, addr) )
+  #define IOREAD_L(addr)         ( ioread64(addr)         )
+#else
+  #define IOWRITE_L(value, addr) ( iowrite32(value, addr) )
+  #define IOREAD_L(addr)         ( ioread32(addr)         )
+#endif
 
 // type definitions
 typedef struct {

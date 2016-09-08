@@ -8,6 +8,9 @@ else
     echo "PATH = ${PATH} "
 fi
 
+# copy modified device tree templace
+cp juno-base.dtsi workspace/linux/arch/arm64/boot/dts/arm/juno-base.dtsi
+
 cd workspace
 
 # prepare environment
