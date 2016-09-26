@@ -1730,7 +1730,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     rab_slice_req->rab_port = 1;
     rab_slice_req->rab_mapping = id % RAB_L1_N_MAPPINGS_PORT_1;
 
-    if (DEBUG_LEVEL_RAB > 1) {
+    if (DEBUG_LEVEL_RAB_STR > 1) {
       printk(KERN_INFO "PULP: id = %d, n_elements = %d\n",id, rab_stripe_req[rab_slice_req->rab_mapping].n_elements);
     }
 
@@ -1741,7 +1741,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       // process every data element independently
       for (i=0; i<rab_stripe_req[rab_slice_req->rab_mapping].n_elements; i++) {
 
-        if (DEBUG_LEVEL_RAB > 1) {
+        if (DEBUG_LEVEL_RAB_STR > 1) {
           printk(KERN_INFO "PULP: Element %d:\n",i);
         }    
 
@@ -2072,11 +2072,11 @@ static void pulp_rab_handle_miss(unsigned unused)
     rab_mh_addr[i] = ioread32((void *)((unsigned long)my_dev.rab_config+RAB_MH_ADDR_FIFO_OFFSET_B));
     rab_mh_id[i]   = ioread32((void *)((unsigned long)my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B));
     // detect empty FIFOs
-    if ( rab_mh_id[i] & 0x80000000 )
+    if ( rab_mh_id[i] == 0x80000000 )
       break;
     if (DEBUG_LEVEL_RAB_MH > 0) {
       printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
-             i,rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
+             i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
     }
      
     // handle every miss separately
