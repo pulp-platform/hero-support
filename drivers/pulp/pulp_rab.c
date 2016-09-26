@@ -220,7 +220,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
             port, mapping, slice, i);
         }
         // invalidate caches --- invalidates entire pages only --- really needed?
-        //pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
+        pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
         // unlock
         if (!PageReserved(pages_old[i])) 
           SetPageDirty(pages_old[i]);
@@ -304,7 +304,6 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
     l1.port_1.mappings[mapping].slices[slice].addr_end    = rab_slice_req->addr_end;
     l1.port_1.mappings[mapping].slices[slice].addr_offset = rab_slice_req->addr_offset;
     l1.port_1.mappings[mapping].slices[slice].flags       = rab_slice_req->flags_hw;
-
   }
 
   if (port == 0) {
@@ -517,7 +516,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
 void pulp_rab_l2_init(void *rab_config)
 {
   unsigned int i_port, i_set, i_entry, offset;
-  for (i_port=0; i_port<RAB_N_PORTS; i_port++) {
+  for (i_port=0; i_port<1; i_port++) {
     for (i_set=0; i_set<RAB_L2_N_SETS; i_set++) {
       for (i_entry=0; i_entry<RAB_L2_N_ENTRIES_PER_SET; i_entry++) {
         // Clear VA ram. No need to clear PA ram.

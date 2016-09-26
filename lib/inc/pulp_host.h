@@ -288,7 +288,7 @@
 //#define RAB_CONFIG_CHECK_PROT     1
 #define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
 #define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
-#define RAB_MH_ID_FIFO_OFFSET_B   0x4
+#define RAB_MH_ID_FIFO_OFFSET_B   0x8
 #define RAB_MH_FIFO_DEPTH         16
 
 #define PULP_SIZE_B     0x10000000
