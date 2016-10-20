@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Script to set shell variables required to cross compile code for the ARM host
 #
 # Adjust to your local setup
