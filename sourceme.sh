@@ -68,9 +68,9 @@ if [ "${PLATFORM}" -eq "4" ]; then
     # Set up PATH variable
     export PATH=${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin:${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin:$PATH
 
-	# directory containing PULP header files - on CentOS machine - needs to be accessible also by Ubuntu machine
-	export PULP_INC_DIR1=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
-	export PULP_INC_DIR2=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include
+    # directory containing PULP header files - on CentOS machine - needs to be accessible also by Ubuntu machine
+    export PULP_INC_DIR1=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
+    export PULP_INC_DIR2=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include
 else
     echo "Configuring for ZYNQ platform"
 
@@ -82,11 +82,11 @@ else
 
     # system workspace directory - on CentOS machine
     if   [ "${PLATFORM}" -eq "1" ]; then
-    	export WORKSPACE_DIR=${PREFIX}/zedboard
+        export WORKSPACE_DIR=${PREFIX}/zedboard
     elif [ "${PLATFORM}" -eq "2" ]; then
         export WORKSPACE_DIR=${PREFIX}/zc706
     else
-    	export WORKSPACE_DIR=${PREFIX}/mini-itx
+        export WORKSPACE_DIR=${PREFIX}/mini-itx
     fi
 
     # directory containing the kernel sources
@@ -119,8 +119,8 @@ else
     #${VIVADO_VERSION} bash
 
     # directory containing PULP header files - on CentOS machine
-	export PULP_INC_DIR1=${WORKSPACE_DIR}/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
-	export PULP_INC_DIR2=${WORKSPACE_DIR}/pulp_pipeline/pkg/sdk/dev/install/include
+    export PULP_INC_DIR1=${WORKSPACE_DIR}/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
+    export PULP_INC_DIR2=${WORKSPACE_DIR}/pulp_pipeline/pkg/sdk/dev/install/include
 fi
 
 # top directory containing custom ARM libraries
