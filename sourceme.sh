@@ -63,7 +63,7 @@ if [ "${PLATFORM}" -eq "4" ]; then
     export TUPLE="arm-linux-gnueabihf"
 
     # GCC version 4.9, 5.2
-    GCC_VERSION="4.9" 
+    GCC_VERSION="4.9"
 
     # Set up PATH variable
     export PATH=${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin:${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin:$PATH
@@ -71,7 +71,7 @@ if [ "${PLATFORM}" -eq "4" ]; then
 	# directory containing PULP header files - on CentOS machine - needs to be accessible also by Ubuntu machine
 	export PULP_INC_DIR1=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
 	export PULP_INC_DIR2=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include
-else 
+else
     echo "Configuring for ZYNQ platform"
 
     if [ "$(hostname | cut -d '.' -f 1)" = "riseten" ]; then
@@ -130,7 +130,7 @@ export ARM_LIB_DIR1=/home/vogelpi/pulp_on_fpga/software/hsa_support/lib
 if [ ! -d ${ARM_LIB_DIR1}/lib ]
 then
     mkdir ${ARM_LIB_DIR1}/lib
-fi    
+fi
 
 # directory containing ARM header files
 export ARM_INC_DIR1=${ARM_LIB_DIR1}/inc
