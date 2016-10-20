@@ -66,7 +66,7 @@ if [ "${PLATFORM}" -eq "4" ]; then
     GCC_VERSION="4.9" 
 
     # Set up PATH variable
-    export PATH=${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
+    export PATH=${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin:${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin:$PATH
 
 	# directory containing PULP header files - on CentOS machine - needs to be accessible also by Ubuntu machine
 	export PULP_INC_DIR1=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
