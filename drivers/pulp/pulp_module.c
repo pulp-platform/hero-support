@@ -83,6 +83,7 @@ MODULE_DESCRIPTION("PULPonFPGA driver");
 
 /***************************************************************************************/
 
+// Device Tree (for Juno) {{{
 #if PLATFORM == JUNO
   /***********************************************************************************
    *
@@ -149,13 +150,14 @@ MODULE_DESCRIPTION("PULPonFPGA driver");
 
 /***************************************************************************************/
 #endif
+// }}}
 
 // VM_RESERVERD for mmap
 #ifndef VM_RESERVED
   #define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
 
-// method declarations
+// method declarations {{{
 static int  pulp_open   (struct inode *inode, struct file *filp);
 static int  pulp_release(struct inode *p_inode, struct file *filp);
 static int  pulp_mmap   (struct file *filp, struct vm_area_struct *vma);
@@ -173,8 +175,9 @@ static long pulp_ioctl  (struct file *filp, unsigned int cmd, unsigned long arg)
 #endif // PLATFORM == JUNO
 
 static void pulp_rab_handle_miss(unsigned unused);
+// }}}
 
-// important structs
+// important structs {{{
 struct file_operations pulp_fops = {
   .owner          = THIS_MODULE,
   .open           = pulp_open,
@@ -186,8 +189,9 @@ struct file_operations pulp_fops = {
   .compat_ioctl = pulp_compat_ioctl,
 #endif
 };
+// }}}
 
-// static variables
+// static variables {{{
 static PulpDev my_dev;
 
 static struct class *my_class; 
@@ -218,8 +222,11 @@ static unsigned rab_mh_lvl = 0;
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
 static DmaCleanup pulp_dma_cleanup[2];
+}}}
 
 // methods definitions
+
+// init {{{
 /***********************************************************************************
  *
  * ██╗███╗   ██╗██╗████████╗
@@ -528,7 +535,9 @@ static int __init pulp_init(void)
     return err;
 }
 module_init(pulp_init);
+// }}}
 
+// exit {{{
 /***********************************************************************************
  *
  * ███████╗██╗  ██╗██╗████████╗
@@ -583,7 +592,9 @@ static void __exit pulp_exit(void)
   unregister_chrdev_region(my_dev.dev, 1);
 }
 module_exit(pulp_exit);
+// }}}
 
+// open {{{
 /***********************************************************************************
  *
  *  ██████╗ ██████╗ ███████╗███╗   ██╗
@@ -611,7 +622,9 @@ int pulp_open(struct inode *inode, struct file *filp)
   
   return 0;
 }
+// }}}
 
+// release {{{
 /***********************************************************************************
  *
  * ██████╗ ███████╗██╗     ███████╗ █████╗ ███████╗███████╗
@@ -631,7 +644,9 @@ int pulp_release(struct inode *p_inode, struct file *filp)
  
   return 0;
 }
+// }}}
 
+// mmap {{{
 /***********************************************************************************
  *
  * ███╗   ███╗███╗   ███╗ █████╗ ██████╗ 
@@ -776,6 +791,9 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 //   return NOPAGE_SIGBUS;
 // }
 
+// }}}
+
+// isr {{{
 /***********************************************************************************
  *
  * ██╗███████╗██████╗ 
@@ -931,8 +949,9 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   }
 
 #endif // PLATFORM == JUNO
+// }}}
 
-
+// ioctl {{{
 /***********************************************************************************
  *
  * ██╗ ██████╗  ██████╗████████╗██╗     
@@ -1292,7 +1311,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   return retval;
 }
+// }}}
 
+// rab_handle_miss {{{
 /***********************************************************************************
  *
  * ███╗   ███╗██╗  ██╗██████╗ 
@@ -1622,3 +1643,6 @@ static void pulp_rab_handle_miss(unsigned unused)
 
 #endif
 }
+// }}}
+
+// vim: foldmethod=marker
