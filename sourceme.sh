@@ -18,8 +18,11 @@ export PLATFORM="4"
 if [ "${PLATFORM}" -eq "4" ]; then
     echo "Configuring for JUNO platform"
 
-    # system workspace directory - on Ubuntu machine
-    export WORKSPACE_DIR=/scratch/vogelpi
+    if [ "$(hostname | cut -d '.' -f 1)" = "fliana" ]; then
+        readonly PREFIX=/scratch/vogelpi
+    else
+        readonly PREFIX=/usr/scratch/fliana/vogelpi
+    fi
 
     # Linaro variables
     export LINARO_RELEASE=16.03
@@ -27,8 +30,13 @@ if [ "${PLATFORM}" -eq "4" ]; then
     export MANIFEST=latest
     export TYPE=oe
 
+    # system workspace directories - on Ubuntu machine
+    export WORKSPACE_DIR=${PREFIX}
+    export LINARO_DIR=${PREFIX}/linaro-${LINARO_RELEASE}
+    export OE_DIR=${PREFIX}/oe-${OE_RELEASE}
+
     # directory containing the kernel sources
-    export KERNEL_DIR=${WORKSPACE_DIR}/linaro-${LINARO_RELEASE}/workspace/linux/out/juno-oe
+    export KERNEL_DIR=${LINARO_DIR}/workspace/linux/out/juno-oe
 
     # machine to which the make_and_copy.sh scripts transfer the compiled stuff
     export SCP_TARGET_MACHINE="juno@bordcomputer"
@@ -38,10 +46,10 @@ if [ "${PLATFORM}" -eq "4" ]; then
     export SCP_TARGET_PATH_DRIVERS="~/juno/share/drivers"
 
     # path to ARM libraries: external (opencv, ffmpeg), libc, shared libs in filesystem
-    export ARM_LIB_EXT_DIR=${WORKSPACE_DIR}/libs-juno/lib
-    export ARM_LIBC_DIR=${WORKSPACE_DIR}/oe-${OE_RELEASE}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8/lib
-    export ARM_LIB_FS_DIR=${WORKSPACE_DIR}/oe-${OE_RELEASE}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8/usr
-    export ARM_SYSROOT_DIR=${WORKSPACE_DIR}/oe-${OE_RELEASE}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8
+    export ARM_LIB_EXT_DIR=${PREFIX}/libs-juno/lib
+    export ARM_LIBC_DIR=${OE_DIR}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8/lib
+    export ARM_LIB_FS_DIR=${OE_DIR}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8/usr
+    export ARM_SYSROOT_DIR=${OE_DIR}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8
 
     # number of cores on Linux host
     export N_CORES_COMPILE=4
@@ -58,7 +66,7 @@ if [ "${PLATFORM}" -eq "4" ]; then
     GCC_VERSION="4.9" 
 
     # Set up PATH variable
-    export PATH=${WORKSPACE_DIR}/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:${WORKSPACE_DIR}/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
+    export PATH=${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:${PREFIX}/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
 
 	# directory containing PULP header files - on CentOS machine - needs to be accessible also by Ubuntu machine
 	export PULP_INC_DIR1=/home/vogelpi/riseten-scratch/juno/pulp_pipeline/pkg/sdk/dev/install/include/archi/bigpulp
@@ -66,13 +74,19 @@ if [ "${PLATFORM}" -eq "4" ]; then
 else 
     echo "Configuring for ZYNQ platform"
 
+    if [ "$(hostname | cut -d '.' -f 1)" = "riseten" ]; then
+        readonly PREFIX=/scratch/vogelpi
+    else
+        readonly PREFIX=/usr/scratch/riseten/vogelpi
+    fi
+
     # system workspace directory - on CentOS machine
     if   [ "${PLATFORM}" -eq "1" ]; then
-    	export WORKSPACE_DIR=/scratch/vogelpi/zedboard
+    	export WORKSPACE_DIR=${PREFIX}/zedboard
     elif [ "${PLATFORM}" -eq "2" ]; then
-        export WORKSPACE_DIR=/scratch/vogelpi/zc706
+        export WORKSPACE_DIR=${PREFIX}/zc706
     else
-    	export WORKSPACE_DIR=/scratch/vogelpi/mini-itx
+    	export WORKSPACE_DIR=${PREFIX}/mini-itx
     fi
 
     # directory containing the kernel sources
@@ -86,7 +100,7 @@ else
     export SCP_TARGET_PATH_DRIVERS="~/pulp_on_fpga/share/drivers"
 
     # path to ARM libraries: external (opencv, ffmpeg), libc, shared libs in filesystem
-    export ARM_LIB_EXT_DIR=${WORKSPACE_DIR}/../libs-zynq/lib
+    export ARM_LIB_EXT_DIR=${PREFIX}/libs-zynq/lib
     export ARM_LIBC_DIR=/usr/pack/vivado-2015.1-kgf/SDK/2015.1/gnu/arm/lin/arm-xilinx-linux-gnueabi/libc/lib
     export ARM_LIB_FS_DIR=${WORKSPACE_DIR}/workspace/buildroot/output/target/usr
 
