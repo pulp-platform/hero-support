@@ -316,8 +316,8 @@ static int __init pulp_init(void)
 
     // clear the logs
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4); i++) {
-      // iowrite32(0x0,(void *)((unsigned long)my_dev.rab_ar_log+4*i));
-      // iowrite32(0x0,(void *)((unsigned long)my_dev.rab_aw_log+4*i));
+      iowrite32(0x0,(void *)((unsigned long)my_dev.rab_ar_log+4*i));
+      iowrite32(0x0,(void *)((unsigned long)my_dev.rab_aw_log+4*i));
     }
 
   #else // PLATFORM != JUNO 
@@ -859,7 +859,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
         }
       }
 
-      //pulp_rab_ax_log_print(1);
+      pulp_rab_ax_log_print(1);
 
     }
     if ( BF_GET(intr_reg_value, INTR_RAB_AR_LOG_FULL, 1)
@@ -867,7 +867,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
         (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
 
-      //pulp_rab_ax_log_print(1);
+      pulp_rab_ax_log_print(1);
     }   
   
     return IRQ_HANDLED;
@@ -1305,7 +1305,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     pulp_rab_l2_invalidate_all_entries(my_dev.rab_config, 1);
 
 #if PLATFORM == JUNO
-    //pulp_rab_ax_log_print(0);
+    pulp_rab_ax_log_print(0);
 #endif
 
     break;
