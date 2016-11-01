@@ -54,6 +54,7 @@ if [ "${PLATFORM}" -eq "4" ]; then
 
     export ARCH="arm"
     export CROSS_COMPILE="arm-linux-gnueabihf-"
+    export TUPLE="arm-linux-gnueabihf"
 
     # GCC version 4.9, 5.2
     GCC_VERSION="4.9" 
@@ -100,6 +101,7 @@ else
 
     export ARCH="arm"
     export CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
+    export TUPLE="arm-xilinx-linux-gnueabi"
 
     # Set up PATH variable
     #${VIVADO_VERSION} bash
