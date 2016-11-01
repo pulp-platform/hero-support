@@ -227,8 +227,11 @@
   #define RAB_CONFIG_BASE_ADDR 0x6E030000
   //#define TRACE_CTRL_BASE_ADDR 0x6E040000 // not yet used
   #define INTR_REG_BASE_ADDR   0x6E050000
+  #define RAB_AR_LOG_BASE_ADDR 0x6E100000
+  #define RAB_AW_LOG_BASE_ADDR 0x6E200000
 
   #define INTR_REG_SIZE_B 0x1000
+  #define RAB_AX_LOG_SIZE_B 0x24000
 
   #define INTR_EOC_0              0
   #define INTR_EOC_N   N_CLUSTERS-1 // max 15
@@ -238,6 +241,11 @@
   #define INTR_RAB_MULTI         18
   #define INTR_RAB_PROT          19
   #define INTR_RAB_MHR_FULL      20
+  #define INTR_RAB_AR_LOG_FULL   21
+  #define INTR_RAB_AW_LOG_FULL   22
+
+  #define GPIO_RAB_AR_LOG_CLR    28
+  #define GPIO_RAB_AW_LOG_CLR    29
 
   #define PULP_DEFAULT_FREQ_MHZ 25
   #define CLKING_INPUT_FREQ_MHZ 100
@@ -411,8 +419,6 @@ typedef struct {
 #define SYNC_OFFSET_B 0xB000
 
 #define MAX_STRIPE_SIZE_B 0x2000
-
-//#define MEM_SHARING 3
 
 // needed for ROD, CT, JPEG
 //#define PROFILE

@@ -47,6 +47,8 @@ typedef struct {
   void *l2_mem;
   #if PLATFORM == JUNO
     void *intr_reg;
+    void *rab_ar_log;
+    void *rab_aw_log;
   #else
     void *slcr;
     void *mpcore;
@@ -57,5 +59,9 @@ typedef struct {
 // NEW - move to pulp_rab.h/c when cleaning up ioctl stuff
 void pulp_rab_update(unsigned update_req);
 void pulp_rab_switch(void);
+
+#if PLATFORM == JUNO
+void pulp_rab_ax_log_print(unsigned pause);
+#endif
 
 #endif // _PULP_MODULE_H_ 

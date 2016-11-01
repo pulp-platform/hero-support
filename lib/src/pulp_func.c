@@ -1229,7 +1229,7 @@ void pulp_exe_stop(PulpDev *pulp)
 
 /**
  * Polls the GPIO register for the end of computation signal for at
- * most timeous_s seconds.
+ * most timeout_s seconds.
  *
  * @pulp      : pointer to the PulpDev structure
  * @timeout_s : maximum number of seconds to wait for end of 

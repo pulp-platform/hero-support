@@ -39,8 +39,11 @@ if [ "${PLATFORM}" -eq "4" ]; then
     export SCP_TARGET_PATH="~/juno/share/apps"
     export SCP_TARGET_PATH_DRIVERS="~/juno/share/drivers"
 
-    # path to external ARM libraries (on scratch)
+    # path to ARM libraries: external (opencv, ffmpeg), libc, shared libs in filesystem
     export ARM_LIB_EXT_DIR=${WORKSPACE_DIR}/libs-juno/lib
+    export ARM_LIBC_DIR=${WORKSPACE_DIR}/oe-${OE_RELEASE}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8/lib
+    export ARM_LIB_FS_DIR=${WORKSPACE_DIR}/oe-${OE_RELEASE}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8/usr
+    export ARM_SYSROOT_DIR=${WORKSPACE_DIR}/oe-${OE_RELEASE}/openembedded/build/tmp-glibc/sysroots/lib32-genericarmv8
 
     # number of cores on Linux host
     export N_CORES_COMPILE=4
@@ -65,8 +68,10 @@ else
     echo "Configuring for ZYNQ platform"
 
     # system workspace directory - on CentOS machine
-    if [ "${PLATFORM}" -eq "1" ]; then
+    if   [ "${PLATFORM}" -eq "1" ]; then
     	export WORKSPACE_DIR=/scratch/vogelpi/zedboard
+    elif [ "${PLATFORM}" -eq "2" ]; then
+        export WORKSPACE_DIR=/scratch/vogelpi/zc706
     else
     	export WORKSPACE_DIR=/scratch/vogelpi/mini-itx
     fi
@@ -81,8 +86,10 @@ else
     export SCP_TARGET_PATH="~/pulp_on_fpga/share/apps"
     export SCP_TARGET_PATH_DRIVERS="~/pulp_on_fpga/share/drivers"
 
-    # path to external ARM libraries (on scratch)
-    export ARM_LIB_EXT_DIR=/scratch/vogelpi/libs-zynq/lib
+    # path to ARM libraries: external (opencv, ffmpeg), libc, shared libs in filesystem
+    export ARM_LIB_EXT_DIR=${WORKSPACE_DIR}/../libs-zynq/lib
+    export ARM_LIBC_DIR=/usr/pack/vivado-2015.1-kgf/SDK/2015.1/gnu/arm/lin/arm-xilinx-linux-gnueabi/libc/lib
+    export ARM_LIB_FS_DIR=${WORKSPACE_DIR}/workspace/buildroot/output/target/usr
 
     # number of cores on Linux host
     export N_CORES_COMPILE=8

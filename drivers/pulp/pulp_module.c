@@ -251,6 +251,8 @@ static int __init pulp_init(void)
   int err;
   #if PLATFORM != JUNO
     unsigned mpcore_icdicfr3, mpcore_icdicfr4;
+  #else
+    int i;
   #endif
 
   printk(KERN_ALERT "PULP: Loading device driver.\n");
@@ -303,6 +305,20 @@ static int __init pulp_init(void)
     my_dev.intr_reg = ioremap_nocache(INTR_REG_BASE_ADDR,INTR_REG_SIZE_B);
     printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.intr_reg);
+
+    my_dev.rab_ar_log = ioremap_nocache(RAB_AR_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
+    printk(KERN_INFO "PULP: RAB AR log mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.rab_ar_log);
+
+    my_dev.rab_aw_log = ioremap_nocache(RAB_AW_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
+    printk(KERN_INFO "PULP: RAB AW log mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.rab_aw_log);
+
+    // clear the logs
+    for (i=0; i<(RAB_AX_LOG_SIZE_B/4); i++) {
+      // iowrite32(0x0,(void *)((unsigned long)my_dev.rab_ar_log+4*i));
+      // iowrite32(0x0,(void *)((unsigned long)my_dev.rab_aw_log+4*i));
+    }
 
   #else // PLATFORM != JUNO 
     my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
@@ -506,6 +522,8 @@ static int __init pulp_init(void)
     iounmap(my_dev.mbox);
     #if PLATFORM == JUNO
       iounmap(my_dev.intr_reg);
+      iounmap(my_dev.rab_ar_log);
+      iounmap(my_dev.rab_aw_log);
     #else // PLATFORM != JUNO
       iounmap(my_dev.slcr);
       iounmap(my_dev.mpcore);
@@ -559,6 +577,8 @@ static void __exit pulp_exit(void)
   iounmap(my_dev.mbox);
   #if PLATFORM == JUNO
     iounmap(my_dev.intr_reg);
+    iounmap(my_dev.rab_ar_log);
+    iounmap(my_dev.rab_aw_log);
   #else // PLATFORM != JUNO
     iounmap(my_dev.slcr);
     iounmap(my_dev.mpcore);
@@ -751,7 +771,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   printk(KERN_INFO
     "PULP: %s memory mapped. \nPhysical address = %#lx, user-space virtual address = %#lx, vsize = %#lx.\n",
     type, physical << PAGE_SHIFT, vma->vm_start, vsize);
-
+  
   if (vsize > psize)
     return -EINVAL; /*  spans too high */
   
@@ -838,7 +858,17 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
             i, (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
         }
       }
+
+      //pulp_rab_ax_log_print(1);
+
     }
+    if ( BF_GET(intr_reg_value, INTR_RAB_AR_LOG_FULL, 1)
+      || BF_GET(intr_reg_value, INTR_RAB_AW_LOG_FULL, 1) ) {
+      printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
+        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+
+      //pulp_rab_ax_log_print(1);
+    }   
   
     return IRQ_HANDLED;
   }
@@ -1273,6 +1303,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     // Free L2TLB    
     pulp_rab_l2_invalidate_all_entries(my_dev.rab_config, 1);
+
+#if PLATFORM == JUNO
+    //pulp_rab_ax_log_print(0);
+#endif
 
     break;
     
@@ -2069,10 +2103,14 @@ static void pulp_rab_handle_miss(unsigned unused)
   
   // empty miss-handling FIFOs
   for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
-    rab_mh_addr[i] = ioread32((void *)((unsigned long)my_dev.rab_config+RAB_MH_ADDR_FIFO_OFFSET_B));
-    rab_mh_id[i]   = ioread32((void *)((unsigned long)my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B));
+    rab_mh_addr[i] = IOREAD_L((void *)((unsigned long)my_dev.rab_config+RAB_MH_ADDR_FIFO_OFFSET_B));
+    rab_mh_id[i]   = IOREAD_L((void *)((unsigned long)my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B));
     // detect empty FIFOs
+#if PLATFORM != JUNO    
     if ( rab_mh_id[i] == 0x80000000 )
+#else
+    if ( rab_mh_id[i] == 0x8000000000000000 )
+#endif      
       break;
     if (DEBUG_LEVEL_RAB_MH > 0) {
       printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
@@ -2095,7 +2133,7 @@ static void pulp_rab_handle_miss(unsigned unused)
       rab_slice_req->rab_port = 1;    
     else {
       printk(KERN_WARNING "PULP: Cannot handle RAB miss on ports different from Port 1.\n");
-      printk(KERN_WARNING "PULP: RAB miss ID %#x.\n",id);
+      printk(KERN_WARNING "PULP: RAB miss - id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
       continue;
     }
 
@@ -2507,6 +2545,72 @@ void pulp_rab_switch(void)
   
   // signal ready to PULP
   iowrite32(HOST_READY,(void *)((unsigned long)my_dev.mbox+MBOX_WRDATA_OFFSET_B));
+
+  return;
+}
+
+void pulp_rab_ax_log_print(unsigned pause)
+{
+
+  unsigned i;
+  unsigned addr, ts, meta;
+  unsigned id, len;
+  unsigned type;
+
+  if (pause) {
+    // enable clock gate - for now we only execute the app on Cluster 0
+    iowrite32(0x80000001, (void *)((unsigned long)my_dev.gpio+0x8));
+  }
+
+  // read out and clear the AR log
+  type = 0;
+  for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
+    ts   = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+0)*4));
+    addr = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+1)*4));
+    meta = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+2)*4));
+
+    if ( (ts == 0) && (addr == 0) && (meta == 0) )
+      break;
+
+    len = BF_GET(meta, 24, 8);
+    id  = BF_GET(meta,  0, 8);
+
+    //printk(KERN_INFO "AR Log: %d %#x %#x %#x %d\n", ts, addr, len, id, type);
+    printk(KERN_INFO "AR Log: %d %d %d %d %d\n", ts, addr, len, id, type);
+
+    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_ar_log+(i*3+0)*4));
+    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_ar_log+(i*3+1)*4));
+    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_ar_log+(i*3+2)*4));
+  }
+
+  // read out and clear the AW log
+  type = 1;
+  for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
+    ts   = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+0)*4));
+    addr = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+1)*4));
+    meta = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+2)*4));
+
+    if ( (ts == 0) && (addr == 0) && (meta == 0) )
+      break;
+
+    len = BF_GET(meta, 24, 8);
+    id  = BF_GET(meta,  0, 8);
+
+    //printk(KERN_INFO "AW Log: %d %#x %#x %#x %d\n", ts, addr, len, id, type);
+    printk(KERN_INFO "AW Log: %d %d %d %d %d\n", ts, addr, len, id, type);
+
+    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_aw_log+(i*3+0)*4));
+    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_aw_log+(i*3+1)*4));
+    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_aw_log+(i*3+2)*4));
+  }
+
+  if (pause) {
+    // clear the AX address and timestamp counters
+    iowrite32(0xB0000001, (void *)((unsigned long)my_dev.gpio+0x8));
+
+    // continue
+    iowrite32(0xC0000001, (void *)((unsigned long)my_dev.gpio+0x8));
+  }
 
   return;
 }
