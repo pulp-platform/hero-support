@@ -235,6 +235,13 @@ static unsigned rab_mh_lvl = 0;
 static struct dma_chan * pulp_dma_chan[2];
 static DmaCleanup pulp_dma_cleanup[2];
 
+#if PLATFORM == JUNO
+  static unsigned * rab_ar_log_buf;
+  static unsigned * rab_aw_log_buf;
+  static unsigned rab_ar_log_buf_idx = 0;
+  static unsigned rab_aw_log_buf_idx = 0;
+#endif
+
 // methods definitions
 /***********************************************************************************
  *
@@ -318,6 +325,14 @@ static int __init pulp_init(void)
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4); i++) {
       iowrite32(0x0,(void *)((unsigned long)my_dev.rab_ar_log+4*i));
       iowrite32(0x0,(void *)((unsigned long)my_dev.rab_aw_log+4*i));
+    }
+
+    // allocate memory for the log buffers
+    rab_ar_log_buf = (unsigned *)vmalloc(RAB_AX_LOG_BUF_SIZE_B);
+    rab_aw_log_buf = (unsigned *)vmalloc(RAB_AX_LOG_BUF_SIZE_B);
+    if ( (rab_ar_log_buf == NULL) || (rab_aw_log_buf == NULL)) {
+      printk(KERN_WARNING "PULP: Could not allocate kernel memory for AXI log buffer.\n");
+      goto fail_ioremap;
     }
 
   #else // PLATFORM != JUNO 
@@ -521,6 +536,8 @@ static int __init pulp_init(void)
     iounmap(my_dev.rab_config);
     iounmap(my_dev.mbox);
     #if PLATFORM == JUNO
+      vfree(rab_ar_log_buf);
+      vfree(rab_aw_log_buf);
       iounmap(my_dev.intr_reg);
       iounmap(my_dev.rab_ar_log);
       iounmap(my_dev.rab_aw_log);
@@ -576,6 +593,8 @@ static void __exit pulp_exit(void)
   iounmap(my_dev.rab_config);
   iounmap(my_dev.mbox);
   #if PLATFORM == JUNO
+    vfree(rab_ar_log_buf);
+    vfree(rab_aw_log_buf);
     iounmap(my_dev.intr_reg);
     iounmap(my_dev.rab_ar_log);
     iounmap(my_dev.rab_aw_log);
@@ -859,7 +878,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
         }
       }
 
-      pulp_rab_ax_log_print(1);
+      pulp_rab_ax_log_read(1);
 
     }
     if ( BF_GET(intr_reg_value, INTR_RAB_AR_LOG_FULL, 1)
@@ -867,7 +886,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
         (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
 
-      pulp_rab_ax_log_print(1);
+      pulp_rab_ax_log_read(1);
     }   
   
     return IRQ_HANDLED;
@@ -1305,7 +1324,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     pulp_rab_l2_invalidate_all_entries(my_dev.rab_config, 1);
 
 #if PLATFORM == JUNO
-    pulp_rab_ax_log_print(0);
+    pulp_rab_ax_log_read(1);
+    pulp_rab_ax_log_print();
 #endif
 
     break;
@@ -1832,6 +1852,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     n_cleanups = 0;          
 #endif
        
+#if PLATFORM == JUNO
+    pulp_rab_ax_log_read(1);
+    pulp_rab_ax_log_print();
+#endif
+
     break;
 
   case PULP_IOCTL_DMAC_XFER: // Setup a transfer using the PL330 DMAC inside Zynq
@@ -2549,13 +2574,9 @@ void pulp_rab_switch(void)
   return;
 }
 
-void pulp_rab_ax_log_print(unsigned pause)
-{
-
+void pulp_rab_ax_log_read(unsigned pause) {
   unsigned i;
   unsigned addr, ts, meta;
-  unsigned id, len;
-  unsigned type;
 
   if (pause) {
     // enable clock gate - for now we only execute the app on Cluster 0
@@ -2563,7 +2584,6 @@ void pulp_rab_ax_log_print(unsigned pause)
   }
 
   // read out and clear the AR log
-  type = 0;
   for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
     ts   = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+0)*4));
     addr = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+1)*4));
@@ -2572,11 +2592,13 @@ void pulp_rab_ax_log_print(unsigned pause)
     if ( (ts == 0) && (addr == 0) && (meta == 0) )
       break;
 
-    len = BF_GET(meta, 24, 8);
-    id  = BF_GET(meta,  0, 8);
+    rab_ar_log_buf[rab_ar_log_buf_idx+0] = ts;
+    rab_ar_log_buf[rab_ar_log_buf_idx+1] = addr;
+    rab_ar_log_buf[rab_ar_log_buf_idx+2] = meta;
+    rab_ar_log_buf_idx += 3;
 
-    //printk(KERN_INFO "AR Log: %d %#x %#x %#x %d\n", ts, addr, len, id, type);
-    printk(KERN_INFO "AR Log: %d %d %d %d %d\n", ts, addr, len, id, type);
+    if ( rab_ar_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4) )
+      printk(KERN_WARNING "AR log buf overflow!\n");
 
     iowrite32(0x0, (void *)((unsigned long)my_dev.rab_ar_log+(i*3+0)*4));
     iowrite32(0x0, (void *)((unsigned long)my_dev.rab_ar_log+(i*3+1)*4));
@@ -2584,7 +2606,6 @@ void pulp_rab_ax_log_print(unsigned pause)
   }
 
   // read out and clear the AW log
-  type = 1;
   for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
     ts   = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+0)*4));
     addr = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+1)*4));
@@ -2593,11 +2614,13 @@ void pulp_rab_ax_log_print(unsigned pause)
     if ( (ts == 0) && (addr == 0) && (meta == 0) )
       break;
 
-    len = BF_GET(meta, 24, 8);
-    id  = BF_GET(meta,  0, 8);
+    rab_aw_log_buf[rab_aw_log_buf_idx+0] = ts;
+    rab_aw_log_buf[rab_aw_log_buf_idx+1] = addr;
+    rab_aw_log_buf[rab_aw_log_buf_idx+2] = meta;
+    rab_aw_log_buf_idx += 3;
 
-    //printk(KERN_INFO "AW Log: %d %#x %#x %#x %d\n", ts, addr, len, id, type);
-    printk(KERN_INFO "AW Log: %d %d %d %d %d\n", ts, addr, len, id, type);
+    if ( rab_aw_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4) )
+      printk(KERN_WARNING "AW log buf overflow!\n");
 
     iowrite32(0x0, (void *)((unsigned long)my_dev.rab_aw_log+(i*3+0)*4));
     iowrite32(0x0, (void *)((unsigned long)my_dev.rab_aw_log+(i*3+1)*4));
@@ -2611,6 +2634,59 @@ void pulp_rab_ax_log_print(unsigned pause)
     // continue
     iowrite32(0xC0000001, (void *)((unsigned long)my_dev.gpio+0x8));
   }
+
+  return;
+}
+
+void pulp_rab_ax_log_print(void)
+{
+
+  unsigned i;
+  unsigned addr, ts, meta;
+  unsigned id, len;
+  unsigned type;
+
+  // read out and clear the AR log
+  type = 0;
+  for (i=0; i<rab_ar_log_buf_idx; i=i+3) {
+    ts   = rab_ar_log_buf[i+0];
+    addr = rab_ar_log_buf[i+1];
+    meta = rab_ar_log_buf[i+2];
+
+    if ( (ts == 0) && (addr == 0) && (meta == 0) )
+      break;
+
+    len = BF_GET(meta, 10, 8 );
+    id  = BF_GET(meta,  0, 10);
+
+    #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
+      printk(KERN_INFO "AR Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
+    #else // 1 = MATLAB
+      printk(KERN_INFO "AR Log: %u %u %u %u %u\n", ts, addr, len, id, type);
+    #endif
+  }
+  rab_ar_log_buf_idx = 0;
+
+  // read out and clear the AW log
+  type = 1;
+  for (i=0; i<rab_aw_log_buf_idx; i=i+3) {
+    ts   = rab_aw_log_buf[i+0];
+    addr = rab_aw_log_buf[i+1];
+    meta = rab_aw_log_buf[i+2];
+
+    if ( (ts == 0) && (addr == 0) && (meta == 0) )
+      break;
+
+    len = BF_GET(meta, 10, 8 );
+    id  = BF_GET(meta,  0, 10);
+
+    #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
+      printk(KERN_INFO "AW Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
+    #else // 1 = MATLAB
+      printk(KERN_INFO "AW Log: %u %u %u %u %u\n", ts, addr, len, id, type);
+    #endif
+  }
+  rab_aw_log_buf_idx = 0;
 
   return;
 }
