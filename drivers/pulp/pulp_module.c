@@ -192,6 +192,8 @@ static PulpDev my_dev;
 
 static struct class *my_class; 
 
+static unsigned pulp_cluster_select = 0;
+
 // for RAB
 static RabStripeReq rab_stripe_req[RAB_L1_N_MAPPINGS_PORT_1];
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
@@ -256,10 +258,11 @@ static DmaCleanup pulp_dma_cleanup[2];
 static int __init pulp_init(void)
 {
   int err;
+  unsigned gpio;
   #if PLATFORM != JUNO
     unsigned mpcore_icdicfr3, mpcore_icdicfr4;
   #else
-    int i;
+    unsigned status, ready;
   #endif
 
   printk(KERN_ALERT "PULP: Loading device driver.\n");
@@ -321,12 +324,6 @@ static int __init pulp_init(void)
     printk(KERN_INFO "PULP: RAB AW log mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.rab_aw_log);
 
-    // clear the logs
-    for (i=0; i<(RAB_AX_LOG_SIZE_B/4); i++) {
-      iowrite32(0x0,(void *)((unsigned long)my_dev.rab_ar_log+4*i));
-      iowrite32(0x0,(void *)((unsigned long)my_dev.rab_aw_log+4*i));
-    }
-
     // allocate memory for the log buffers
     rab_ar_log_buf = (unsigned *)vmalloc(RAB_AX_LOG_BUF_SIZE_B);
     rab_aw_log_buf = (unsigned *)vmalloc(RAB_AX_LOG_BUF_SIZE_B);
@@ -367,9 +364,30 @@ static int __init pulp_init(void)
   printk(KERN_INFO "PULP: Host GPIO mapped to virtual kernel space @ %#lx.\n",
     (long unsigned int) my_dev.gpio); 
   
+  gpio = 0;
+  BIT_SET(gpio,BF_MASK_GEN(GPIO_RST_N,1));
+  BIT_SET(gpio,BF_MASK_GEN(GPIO_CLK_EN,1));
+  #if PLATFORM == JUNO
+    // clear AX log
+    BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+    BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+    iowrite32(gpio,(void *)((unsigned long)my_dev.gpio+0x8));
+
+    // wait for ready
+    ready = 0;
+    while ( !ready ) {
+      udelay(25);
+      status = ioread32((void *)((unsigned long)my_dev.gpio));
+      ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
+        && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1);
+    }
+
+    // remove the AX log clear
+    BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+    BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+  #endif
   // remove GPIO reset
-  // On the ZYNQ, the driver and the runtime use the SLCR resets.
-  iowrite32(0xC0000000,(void *)((unsigned long)my_dev.gpio+0x8));
+  iowrite32(gpio,(void *)((unsigned long)my_dev.gpio+0x8));
   
   my_dev.rab_config = ioremap_nocache(RAB_CONFIG_BASE_ADDR, RAB_CONFIG_SIZE_B);
   printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",
@@ -1055,7 +1073,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
    * cmds: return ENOTTY before access_ok()
    */
   if (_IOC_TYPE(cmd) != PULP_IOCTL_MAGIC) return -ENOTTY;
-  if ( (_IOC_NR(cmd) < 0xB0) | (_IOC_NR(cmd) > 0xB6) ) return -ENOTTY;
+  if ( (_IOC_NR(cmd) < 0xB0) | (_IOC_NR(cmd) > 0xB7) ) return -ENOTTY;
 
   /*
    * the direction is a bitmask, and VERIFY_WRITE catches R/W
@@ -1071,7 +1089,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   // the actual ioctls
   switch(cmd) {
 
-  case PULP_IOCTL_RAB_REQ: // Request new RAB slices
+  case PULP_IOCTL_RAB_REQ: // request new RAB slices
 
     // get slice data from user space - arg already checked above
     ret = 1;
@@ -1168,7 +1186,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       }        
     }
 
-    if (rab_use_l1 == 1) { // Use L1 TLB
+    if (rab_use_l1 == 1) { // use L1 TLB
 
       if ( !(rab_slice_req->flags_drv & 0x1) ) { // not constant remapping
         // virtual to physcial address translation + segmentation
@@ -1247,8 +1265,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         }
       } // for n_segments
     } 
-    else { // Use L2 TLB
-      // Virtual to physical page frame number translation for each page
+    else { // use L2 TLB
+      // virtual to physical page frame number translation for each page
       err = pulp_mem_l2_get_entries(&pfn_v_vec, &pfn_p_vec, &pages, len, rab_slice_req->addr_start);
       l2_entry->flags = rab_slice_req->flags_hw;
       
@@ -1257,7 +1275,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         l2_entry->pfn_p    = pfn_p_vec[i];
         l2_entry->page_ptr = pages[i];
         
-        // Setup entry
+        // setup entry
         err = pulp_rab_l2_setup_entry(my_dev.rab_config, l2_entry, rab_slice_req->rab_port, 0);
         
         // flush caches
@@ -1285,7 +1303,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     break;
 
-  case PULP_IOCTL_RAB_FREE: // Free RAB slices based on time code
+  case PULP_IOCTL_RAB_FREE: // free RAB slices based on time code
 
     // get current date    
     rab_slice_req->date_cur = BF_GET(arg,0,RAB_CONFIG_N_BITS_DATE);
@@ -1320,7 +1338,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     // for debugging
     //pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
-    // Free L2TLB    
+    // free L2TLB    
     pulp_rab_l2_invalidate_all_entries(my_dev.rab_config, 1);
 
 #if PLATFORM == JUNO
@@ -1330,7 +1348,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     break;
     
-  case PULP_IOCTL_RAB_REQ_STRIPED: // Request striped RAB slices
+  case PULP_IOCTL_RAB_REQ_STRIPED: // request striped RAB slices
 
 #ifdef PROFILE_RAB_STR 
     // reset the ARM clock counter
@@ -1772,7 +1790,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     break;
 
-  case PULP_IOCTL_RAB_FREE_STRIPED: // Free striped RAB slices
+  case PULP_IOCTL_RAB_FREE_STRIPED: // free striped RAB slices
 
 #ifdef PROFILE_RAB_STR 
     // reset the ARM clock counter
@@ -1820,7 +1838,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         kfree(rab_stripe_elem[i].stripes);
       }
 
-      //free memory
+      // free memory
       kfree(rab_stripe_req[rab_slice_req->rab_mapping].elements);
     
       // mark the stripe request as freed
@@ -1859,7 +1877,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     break;
 
-  case PULP_IOCTL_DMAC_XFER: // Setup a transfer using the PL330 DMAC inside Zynq
+  case PULP_IOCTL_DMAC_XFER: // setup a transfer using the PL330 DMAC inside Zynq
   
     // get transfer data from user space - arg already checked above
     ret = 1;
@@ -2081,6 +2099,28 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     destroy_workqueue(rab_mh_wq);
 
     printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
+
+    break;
+
+  case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space
+
+    // get gpio value from slice data from user space - arg already checked above
+    ret = 1;
+    byte = 0;
+    n_bytes_left = 1*sizeof(unsigned); 
+    
+    while (ret > 0) {
+      ret = __copy_from_user((void *)((char *)request+byte),
+                             (void __user *)((char *)arg+byte), n_bytes_left);
+      if (ret < 0) {
+        printk(KERN_WARNING "PULP: Cannot copy info from user space.\n");
+        return ret;
+      }
+      byte += (n_bytes_left - ret);
+      n_bytes_left = ret;
+    }
+
+    pulp_cluster_select = request[0];
 
     break;
 
@@ -2536,6 +2576,9 @@ void pulp_rab_update(unsigned update_req)
   return;
 }
 
+/**
+ * Switch the hardware configuration of the RAB.
+ */
 void pulp_rab_switch(void)
 {
   int i;
@@ -2574,119 +2617,155 @@ void pulp_rab_switch(void)
   return;
 }
 
-void pulp_rab_ax_log_read(unsigned pause) {
-  unsigned i;
-  unsigned addr, ts, meta;
-
-  if (pause) {
-    // enable clock gate - for now we only execute the app on Cluster 0
-    iowrite32(0x80000001, (void *)((unsigned long)my_dev.gpio+0x8));
+#if PLATFORM == JUNO
+  /**
+   * Read out the RAB AX Logger to the kernel buffers rab_ax_log_buf.
+   *
+   * @pause: specifies whether the logger should be cleared (PULP is
+   *         clock-gated during this procedure)
+   */
+  void pulp_rab_ax_log_read(unsigned pause) {
+    unsigned i;
+    unsigned addr, ts, meta;
+  
+    unsigned gpio, gpio_init;
+    unsigned status, ready;
+  
+    gpio = 0;
+    BIT_SET(gpio,BF_MASK_GEN(GPIO_RST_N,1));
+    BIT_SET(gpio,BF_MASK_GEN(GPIO_CLK_EN,1));
+    BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AX_LOG_EN,1));
+    BF_SET(gpio, pulp_cluster_select, 0, N_CLUSTERS);
+  
+    gpio_init = gpio;
+  
+    // disable clocks
+    if (pause) {
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_CLK_EN,1));
+      iowrite32(gpio, (void *)((unsigned long)my_dev.gpio+0x8));
+    }
+  
+    // read out AR log
+    for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
+      ts   = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+0)*4));
+      meta = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+1)*4));
+      addr = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+2)*4));
+  
+      if ( (ts == 0) && (meta == 0) && (addr == 0) )
+        break;
+  
+      rab_ar_log_buf[rab_ar_log_buf_idx+0] = ts;
+      rab_ar_log_buf[rab_ar_log_buf_idx+1] = meta;
+      rab_ar_log_buf[rab_ar_log_buf_idx+2] = addr;
+  
+      rab_ar_log_buf_idx += 3;
+  
+      if ( rab_ar_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4) ) {
+        rab_ar_log_buf_idx = 0;
+        printk(KERN_WARNING "AR log buf overflow!\n");
+      }
+    }
+  
+    // clear AR log
+    if (pause) {
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+      iowrite32(gpio, (void *)((unsigned long)my_dev.gpio+0x8));
+    }
+  
+    // read out AW log
+    for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
+      ts   = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+0)*4));
+      meta = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+1)*4));
+      addr = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+2)*4));
+  
+      if ( (ts == 0) && (meta == 0) && (addr == 0) )
+        break;
+  
+      rab_aw_log_buf[rab_aw_log_buf_idx+0] = ts;
+      rab_aw_log_buf[rab_aw_log_buf_idx+1] = meta;
+      rab_aw_log_buf[rab_aw_log_buf_idx+2] = addr;
+      rab_aw_log_buf_idx += 3;
+  
+      if ( rab_aw_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4) ) {
+        rab_aw_log_buf_idx = 0;
+        printk(KERN_WARNING "AW log buf overflow!\n");
+      }
+    }
+  
+    // clear AW log
+    if (pause) {
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+      iowrite32(gpio, (void *)((unsigned long)my_dev.gpio+0x8));
+  
+      // wait for ready
+      ready = 0;
+      while ( !ready ) {
+        udelay(25);
+        status = ioread32((void *)((unsigned long)my_dev.gpio));
+        ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
+          && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1);
+      }
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+      iowrite32(gpio, (void *)((unsigned long)my_dev.gpio+0x8));
+  
+      // continue
+      iowrite32(gpio_init, (void *)((unsigned long)my_dev.gpio+0x8));
+    }
+  
+    return;
   }
-
-  // read out and clear the AR log
-  for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-    ts   = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+0)*4));
-    addr = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+1)*4));
-    meta = ioread32((void *)((unsigned long)my_dev.rab_ar_log+(i*3+2)*4));
-
-    if ( (ts == 0) && (addr == 0) && (meta == 0) )
-      break;
-
-    rab_ar_log_buf[rab_ar_log_buf_idx+0] = ts;
-    rab_ar_log_buf[rab_ar_log_buf_idx+1] = addr;
-    rab_ar_log_buf[rab_ar_log_buf_idx+2] = meta;
-    rab_ar_log_buf_idx += 3;
-
-    if ( rab_ar_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4) )
-      printk(KERN_WARNING "AR log buf overflow!\n");
-
-    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_ar_log+(i*3+0)*4));
-    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_ar_log+(i*3+1)*4));
-    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_ar_log+(i*3+2)*4));
+  
+  /**
+   * Print the content of the rab_ax_log_buf buffers and reset the incdices
+   * rab_ax_log_idx.
+   *
+   */
+  void pulp_rab_ax_log_print(void)
+  {
+  
+    unsigned i;
+    unsigned addr, ts, meta;
+    unsigned id, len;
+    unsigned type;
+  
+    // read out and clear the AR log
+    type = 0;
+    for (i=0; i<rab_ar_log_buf_idx; i=i+3) {
+      ts   = rab_ar_log_buf[i+0];
+      meta = rab_ar_log_buf[i+1];
+      addr = rab_ar_log_buf[i+2];
+  
+      len = BF_GET(meta, 0, 8 );
+      id  = BF_GET(meta, 8, 10);
+  
+      #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
+        printk(KERN_INFO "AR Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
+      #else // 1 = MATLAB
+        printk(KERN_INFO "AR Log: %u %u %u %u %u\n", ts, addr, len, id, type);
+      #endif
+    }
+    rab_ar_log_buf_idx = 0;
+  
+    // read out and clear the AW log
+    type = 1;
+    for (i=0; i<rab_aw_log_buf_idx; i=i+3) {
+      ts   = rab_aw_log_buf[i+0];
+      meta = rab_aw_log_buf[i+1];
+      addr = rab_aw_log_buf[i+2];
+  
+      len = BF_GET(meta, 0, 8 );
+      id  = BF_GET(meta, 8, 10);
+  
+      #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
+        printk(KERN_INFO "AW Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
+      #else // 1 = MATLAB
+        printk(KERN_INFO "AW Log: %u %u %u %u %u\n", ts, addr, len, id, type);
+      #endif
+    }
+    rab_aw_log_buf_idx = 0;
+  
+    return;
   }
-
-  // read out and clear the AW log
-  for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-    ts   = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+0)*4));
-    addr = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+1)*4));
-    meta = ioread32((void *)((unsigned long)my_dev.rab_aw_log+(i*3+2)*4));
-
-    if ( (ts == 0) && (addr == 0) && (meta == 0) )
-      break;
-
-    rab_aw_log_buf[rab_aw_log_buf_idx+0] = ts;
-    rab_aw_log_buf[rab_aw_log_buf_idx+1] = addr;
-    rab_aw_log_buf[rab_aw_log_buf_idx+2] = meta;
-    rab_aw_log_buf_idx += 3;
-
-    if ( rab_aw_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4) )
-      printk(KERN_WARNING "AW log buf overflow!\n");
-
-    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_aw_log+(i*3+0)*4));
-    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_aw_log+(i*3+1)*4));
-    iowrite32(0x0, (void *)((unsigned long)my_dev.rab_aw_log+(i*3+2)*4));
-  }
-
-  if (pause) {
-    // clear the AX address and timestamp counters
-    iowrite32(0xB0000001, (void *)((unsigned long)my_dev.gpio+0x8));
-
-    // continue
-    iowrite32(0xC0000001, (void *)((unsigned long)my_dev.gpio+0x8));
-  }
-
-  return;
-}
-
-void pulp_rab_ax_log_print(void)
-{
-
-  unsigned i;
-  unsigned addr, ts, meta;
-  unsigned id, len;
-  unsigned type;
-
-  // read out and clear the AR log
-  type = 0;
-  for (i=0; i<rab_ar_log_buf_idx; i=i+3) {
-    ts   = rab_ar_log_buf[i+0];
-    addr = rab_ar_log_buf[i+1];
-    meta = rab_ar_log_buf[i+2];
-
-    if ( (ts == 0) && (addr == 0) && (meta == 0) )
-      break;
-
-    len = BF_GET(meta, 10, 8 );
-    id  = BF_GET(meta,  0, 10);
-
-    #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
-      printk(KERN_INFO "AR Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
-    #else // 1 = MATLAB
-      printk(KERN_INFO "AR Log: %u %u %u %u %u\n", ts, addr, len, id, type);
-    #endif
-  }
-  rab_ar_log_buf_idx = 0;
-
-  // read out and clear the AW log
-  type = 1;
-  for (i=0; i<rab_aw_log_buf_idx; i=i+3) {
-    ts   = rab_aw_log_buf[i+0];
-    addr = rab_aw_log_buf[i+1];
-    meta = rab_aw_log_buf[i+2];
-
-    if ( (ts == 0) && (addr == 0) && (meta == 0) )
-      break;
-
-    len = BF_GET(meta, 10, 8 );
-    id  = BF_GET(meta,  0, 10);
-
-    #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
-      printk(KERN_INFO "AW Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
-    #else // 1 = MATLAB
-      printk(KERN_INFO "AW Log: %u %u %u %u %u\n", ts, addr, len, id, type);
-    #endif
-  }
-  rab_aw_log_buf_idx = 0;
-
-  return;
-}
+#endif

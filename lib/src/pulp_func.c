@@ -574,6 +574,10 @@ int pulp_init(PulpDev *pulp)
   // reset the l3_offset pointer
   pulp->l3_offset = 0;
 
+  // pass information to driver
+  unsigned info = pulp->cluster_sel;
+  ioctl(pulp->fd,PULP_IOCTL_INFO_PASS,(unsigned *)&info);
+
   return 0;
 }
 
@@ -1211,6 +1215,7 @@ void pulp_exe_start(PulpDev *pulp)
 
   unsigned int value = 0xC0000000;
   value |= pulp->cluster_sel;
+  value |= pulp->rab_ax_log_en;
 
   printf("Starting program execution.\n");
   pulp_write32(pulp->gpio.v_addr,0x8,'b',value);
@@ -1278,9 +1283,8 @@ unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr)
   }
 
   if ( (pulp->l3_offset + size_b) >= L3_MEM_SIZE_B) {
-    printf("ERROR: out of contiguous L3 memory.\n");
-    *p_addr = 0;
-    return 0;
+    printf("WARNING: overflow in contiguous L3 memory.\n");
+    pulp->l3_offset = 0;
   }
   
   v_addr = (unsigned int)pulp->l3_mem.v_addr + pulp->l3_offset;

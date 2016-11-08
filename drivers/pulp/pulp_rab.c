@@ -734,10 +734,7 @@ int pulp_rab_l2_print_valid_entries(char port)
 // pulp_rab_l2_replace_entry()
 // pulp_rab_l2_find_entry_to_replace()
 
-
-
 // The user will give preference as L1 or L2. Default option is L1 . try to group all nearby L1 together and call ioctl, same as before.
 // If all slices are used up, give back error for now. Later, we will make them fill L2 in case L1 is full.
 // group all L2 together and call ioctl. There should be only one ioctl for all of L2.
 // Further enhancement would be to use some algorithm to dynamically assign the mapping to L1 or L2 based on region size and frequency of occurance.
-

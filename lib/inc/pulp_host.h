@@ -161,6 +161,8 @@
 
 #define PULP_IOCTL_DMAC_XFER _IOW(PULP_IOCTL_MAGIC,0xB6,unsigned) // ptr
 
+#define PULP_IOCTL_INFO_PASS _IOW(PULP_IOCTL_MAGIC,0xB7,unsigned) // ptr  
+
 /*
  * Platform specific settings
  */
@@ -231,8 +233,8 @@
   #define RAB_AW_LOG_BASE_ADDR 0x6E200000
 
   #define INTR_REG_SIZE_B       0x1000
-  #define RAB_AX_LOG_SIZE_B     0x24000  // size of BRAM, 144 KiB = 12k entries
-  #define RAB_AX_LOG_BUF_SIZE_B 0x600000 // size of buffer in driver, 6 MiB = 524k entries
+  #define RAB_AX_LOG_SIZE_B     0xC0000  // size of BRAM, 768 KiB = 64 Ki entries
+  #define RAB_AX_LOG_BUF_SIZE_B 0x600000 // size of buffer in driver, 6 MiB = 512 Ki entries
   #define RAB_AX_LOG_PRINT_FORMAT 0      // 0 = DEBUG, 1 = MATLAB
 
   #define INTR_EOC_0              0
@@ -246,8 +248,12 @@
   #define INTR_RAB_AR_LOG_FULL   21
   #define INTR_RAB_AW_LOG_FULL   22
 
+  #define GPIO_RAB_AR_LOG_RDY    28
+  #define GPIO_RAB_AW_LOG_RDY    29
+
   #define GPIO_RAB_AR_LOG_CLR    28
   #define GPIO_RAB_AW_LOG_CLR    29
+  #define GPIO_RAB_AX_LOG_EN     27
 
   #define PULP_DEFAULT_FREQ_MHZ 25
   #define CLKING_INPUT_FREQ_MHZ 100
@@ -328,11 +334,12 @@
 #else // !JUNO
   #define AXI_ID_WIDTH_SOC   1
 #endif
-#define AXI_ID_WIDTH         (AXI_ID_WIDTH_CORE + AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_SOC)
 
 /*
  * Dependent parameters
  */
+#define AXI_ID_WIDTH    (AXI_ID_WIDTH_CORE + AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_SOC)
+
 #define L1_MEM_SIZE_B   (L1_MEM_SIZE_KB*1024)
 #define L2_MEM_SIZE_B   (L2_MEM_SIZE_KB*1024)
 #define L3_MEM_SIZE_B   (L3_MEM_SIZE_MB*1024*1024)
@@ -342,6 +349,10 @@
 
 #define GPIO_EOC_0              0
 #define GPIO_EOC_N  (N_CLUSTERS-1) // max 15
+
+#define GPIO_RST_N              31
+#define GPIO_CLK_EN             30
+
 
 // Fulmine uses Timer v.1 which has 4 core timers only
 #if N_CORES > 4
