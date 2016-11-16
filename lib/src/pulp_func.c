@@ -781,9 +781,9 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
     band_height = TILE_HEIGHT;
     odd = h - (n_bands * band_height);
   
-    tx_band_size_in       = sizeof(unsigned char)*((band_height + (R << 1)) * w);
+    tx_band_size_in       = sizeof(unsigned char)*((band_height + (R << 1)) * w); // 0x1000
     tx_band_size_in_first = sizeof(unsigned char)*((band_height + R) * w);
-    tx_band_size_in_last  = sizeof(unsigned char)*((band_height + odd + R ) * w);
+    tx_band_size_in_last  = sizeof(unsigned char)*((band_height + odd + R ) * w); // 0x1100
     tx_band_size_out      = sizeof(unsigned char)*( band_height * w);
     tx_band_size_out_last = sizeof(unsigned char)*((band_height + odd )* w);
   
@@ -877,7 +877,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
           }
           else {
             tx_band_start = tx_band_size_in_first + tx_band_size_in * (j-1) - (overlap * (2 + (j-1)*2));
-            if (j == elements[i].n_stripes )      
+            if ( j == (elements[i].n_stripes - 1) )      
               size_b = tx_band_size_in_last;
             else
               size_b = tx_band_size_in;
@@ -885,7 +885,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
         }
         else {// 3, output elements
           tx_band_start = tx_band_size_out * j;
-          if (j == elements[i].n_stripes ) 
+          if ( j == (elements[i].n_stripes -1) ) 
             size_b = tx_band_size_out_last;
           else
             size_b = tx_band_size_out;
@@ -1028,7 +1028,7 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
   
   // RAB setup
   pulp_offload_rab_setup(pulp, task, &data_idxs, n_idxs);
-    
+
   // Pass data descriptor to PULP
   pulp_offload_pass_desc(pulp, task, &data_idxs);
 
@@ -1399,6 +1399,11 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
       printf("ERROR: Unknown task name %s\n",task->name);
   }
 
+  if (DEBUG_LEVEL > 2) {
+    for (i=0; i<task->n_data; i++) {
+      printf("(*data_idxs)[%d] = %d\n",i,(*data_idxs)[i]);
+    }
+  }
   // !!!!TO DO: check type and set protections!!!
   prot = 0x7; 
   port = 1;   // PULP -> Host
@@ -1406,82 +1411,93 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
   n_data = task->n_data;
 
   date_cur = (unsigned char)(task->task_id + 1);
-  date_exp = (unsigned char)(task->task_id + 3);
+  date_exp = (unsigned char)(task->task_id + 30);
 
-  // memory allocation
-  v_addr_int = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
-  size_int = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
-  use_acp_int = (unsigned char *)malloc((size_t)n_idxs*sizeof(unsigned char));
-  rab_lvl_int = (unsigned char *)malloc((size_t)n_idxs*sizeof(unsigned char));
-  order = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
-  if (!v_addr_int | !size_int | !order) {
-    printf("Malloc failed for RAB setup.\n");
-    return -ENOMEM;
-  }
-  j=0;
-  for (i=0;i<n_data;i++) {
-    if ( (*data_idxs)[i] == 1 ) {
-      order[j] = i;
-      j++;
+  if (n_idxs) {
+    // memory allocation
+    v_addr_int = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
+    size_int = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
+    use_acp_int = (unsigned char *)malloc((size_t)n_idxs*sizeof(unsigned char));
+    rab_lvl_int = (unsigned char *)malloc((size_t)n_idxs*sizeof(unsigned char));
+    order = (unsigned *)malloc((size_t)n_idxs*sizeof(unsigned));
+    if (!v_addr_int | !size_int | !order) {
+      printf("Malloc failed for RAB setup.\n");
+      return -ENOMEM;
     }
-  }
-
-  // order the elements - bubble sort
-  for (i=n_idxs;i>1;i--) {
-    for (j=0;j<i-1;j++) {
-      if (task->data_desc[j].ptr > task->data_desc[j+1].ptr) {
-        temp = order[j];
-        order[j] = order[j+1];
-        order[j+1] = temp;
+    j=0;
+    for (i=0;i<n_data;i++) {
+      if ( (*data_idxs)[i] == 1 ) {
+        order[j] = i;
+        j++;
       }
     }
-  }
-  if (DEBUG_LEVEL > 2) {
-    printf("Reordered %d data elements: \n",n_idxs);
-    for (i=0;i<n_idxs;i++) {
-      printf("%d \t %#x \t %#x \n", order[i],
-             (unsigned)task->data_desc[order[i]].ptr,
-             (unsigned)task->data_desc[order[i]].size);
+  
+    // order the elements - bubble sort
+    for (i=n_idxs;i>1;i--) {
+      for (j=0;j<i-1;j++) {
+        if (task->data_desc[j].ptr > task->data_desc[j+1].ptr) {
+          temp = order[j];
+          order[j] = order[j+1];
+          order[j+1] = temp;
+        }
+      }
     }
-  }
-
-  // determine the number of remappings/intervals to request
-  v_addr_int[0] = (unsigned)task->data_desc[order[0]].ptr; 
-  size_int[0] = (unsigned)task->data_desc[order[0]].size;
-  use_acp_int[0] = task->data_desc[order[0]].use_acp;
-  rab_lvl_int[0] = task->data_desc[order[0]].rab_lvl;
-  for (i=1;i<n_idxs;i++) {
-    j = order[i];
-    gap_size = (unsigned)task->data_desc[j].ptr - (v_addr_int[n_data_int-1]
-                                                   + size_int[n_data_int-1]);
-    // !!!!TO DO: check protections, check dates!!!
-    if ( gap_size > RAB_CONFIG_MAX_GAP_SIZE_B
-         || task->data_desc[j].use_acp != use_acp_int[n_data_int-1]
-         || task->data_desc[j].rab_lvl != rab_lvl_int[n_data_int-1]) { 
-      // the gap is too large or different ACP setting is used or different RAB level is requested, create a new mapping
-      n_data_int++;
-      v_addr_int[n_data_int-1] = (unsigned)task->data_desc[j].ptr;
-      size_int[n_data_int-1] = (unsigned)task->data_desc[j].size;
-      use_acp_int[n_data_int-1] = task->data_desc[j].use_acp;
-      rab_lvl_int[n_data_int-1] = task->data_desc[j].rab_lvl;
-    }
-    else {
-      // extend the previous mapping
-      size_int[n_data_int-1] += (gap_size + task->data_desc[j].size);  
-    }
-  }
-  // set up the RAB
-  if (DEBUG_LEVEL > 2) {
-    printf("Requesting %d remapping(s):\n",n_data_int);
-  }
-  for (i=0;i<n_data_int;i++) {
     if (DEBUG_LEVEL > 2) {
-      printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
-      usleep(1000000);
+      printf("Reordered %d data elements: \n",n_idxs);
+      for (i=0;i<n_idxs;i++) {
+        printf("%d \t %#x \t %#x \n", order[i],
+               (unsigned)task->data_desc[order[i]].ptr,
+               (unsigned)task->data_desc[order[i]].size);
+      }
     }
-    pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur, use_acp_int[i], rab_lvl_int[i]);
+  
+    // determine the number of remappings/intervals to request
+    v_addr_int[0] = (unsigned)task->data_desc[order[0]].ptr; 
+    size_int[0] = (unsigned)task->data_desc[order[0]].size;
+    use_acp_int[0] = task->data_desc[order[0]].use_acp;
+    rab_lvl_int[0] = task->data_desc[order[0]].rab_lvl;
+    for (i=1;i<n_idxs;i++) {
+      j = order[i];
+      gap_size = (unsigned)task->data_desc[j].ptr - (v_addr_int[n_data_int-1]
+                                                     + size_int[n_data_int-1]);
+      // !!!!TO DO: check protections, check dates!!!
+      if ( gap_size > RAB_CONFIG_MAX_GAP_SIZE_B
+           || task->data_desc[j].use_acp != use_acp_int[n_data_int-1]
+           || task->data_desc[j].rab_lvl != rab_lvl_int[n_data_int-1]) { 
+        // the gap is too large or different ACP setting is used or different RAB level is requested, create a new mapping
+        n_data_int++;
+        v_addr_int[n_data_int-1] = (unsigned)task->data_desc[j].ptr;
+        size_int[n_data_int-1] = (unsigned)task->data_desc[j].size;
+        use_acp_int[n_data_int-1] = task->data_desc[j].use_acp;
+        rab_lvl_int[n_data_int-1] = task->data_desc[j].rab_lvl;
+      }
+      else {
+        // extend the previous mapping
+        size_int[n_data_int-1] += (gap_size + task->data_desc[j].size);  
+      }
+    }
+  
+    // set up the RAB
+    if (DEBUG_LEVEL > 2) {
+      printf("Requesting %d remapping(s):\n",n_data_int);
+    }
+    for (i=0;i<n_data_int;i++) {
+      if (DEBUG_LEVEL > 2) {
+        printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
+        usleep(1000000);
+      }
+      pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot, port, date_exp, date_cur, use_acp_int[i], rab_lvl_int[i]);
+    }
+  
+    // free memory
+    free(v_addr_int);
+    free(size_int);
+    free(use_acp_int);
+    free(rab_lvl_int);
+    free(order);
   }
 
+#if (MEM_SHARING != 3) 
   // set up RAB stripes
   //pulp_rab_req_striped(pulp, task, data_idxs, n_idxs, prot, port);
   if ( !strcmp(task->name, "profile_rab_striping") ) {
@@ -1500,13 +1516,8 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
     if ( strcmp(task->name, "face_detect") )
       printf("ERROR: Unknown task name %s\n",task->name);
   }
-  // free memory
-  free(v_addr_int);
-  free(size_int);
-  free(use_acp_int);
-  free(rab_lvl_int);
-  free(order);
-  
+#endif  
+
   return 0;
 }
 
@@ -1667,17 +1678,19 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   // read back data elements with sizes up to 32 bit from mbox
   n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
  
-#if (MEM_SHARING != 3) 
-  // free RAB slices
-  date_cur = (unsigned char)(task->task_id + 4);
-  pulp_rab_free(pulp, date_cur);
-
-  if ( !strcmp(task->name, "profile_rab_striping") || !strcmp(task->name, "rod")
-       || !strcmp(task->name, "ct") || !strcmp(task->name, "jpeg") ) {
-    // free striped RAB slices
-    pulp_rab_free_striped(pulp);   
-  }
-#endif
+  #if (MEM_SHARING != 1) 
+    // free RAB slices
+    date_cur = (unsigned char)(task->task_id + 41);
+    pulp_rab_free(pulp, date_cur);
+  
+    #if (MEM_SHARING != 3)
+      if ( !strcmp(task->name, "profile_rab_striping") || !strcmp(task->name, "rod")
+           || !strcmp(task->name, "ct") || !strcmp(task->name, "jpeg") ) {
+        // free striped RAB slices
+        pulp_rab_free_striped(pulp);   
+      }
+    #endif
+  #endif
 
   // fetch values of data elements passed by value
   err = pulp_offload_get_desc(pulp, task, &data_idxs, n_idxs);
