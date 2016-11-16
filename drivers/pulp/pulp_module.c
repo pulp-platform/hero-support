@@ -1027,7 +1027,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
   if (err) return -EFAULT;
 
-  // the actual ioctls
+  // the actual ioctls {{{
   switch(cmd) {
 
   case PULP_IOCTL_RAB_REQ: // request new RAB slices
@@ -1072,6 +1072,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     break;
 
+  // DMAC_XFER {{{
   case PULP_IOCTL_DMAC_XFER: // setup a transfer using the PL330 DMAC inside Zynq
   
     // get transfer data from user space - arg already checked above
@@ -1210,7 +1211,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif
       
     break;
+  // }}}
 
+  // RAB_MH_ENA {{{
   case PULP_IOCTL_RAB_MH_ENA:
 
     // get slice data from user space - arg already checked above
@@ -1261,7 +1264,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     printk(KERN_INFO "PULP: RAB miss handling enabled.\n");
 
     break;
+  // }}}
 
+  // RAB_MH_DIS {{{
   case PULP_IOCTL_RAB_MH_DIS:
    
     // disable - protect with semaphore?
@@ -1287,6 +1292,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
 
     break;
+  // }}}
 
   case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space
 
@@ -1308,6 +1314,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   default:
     return -ENOTTY;
   }
+  // }}}
 
   return retval;
 }
