@@ -1,7 +1,7 @@
 #include "pulp_rab.h"
 #include "pulp_mem.h" /* for cache invalidation */
 
-// global variables
+// global variables {{{
 static L1Tlb l1;
 static L2Tlb l2;
 static PulpDev * pulp;
@@ -60,8 +60,11 @@ static RabStripeReq rab_stripe_req[RAB_L1_N_MAPPINGS_PORT_1];
   static unsigned n_cleanups;
 #endif
 
+// }}}
+
 // functions
 
+// init {{{
 /**
  * Initialize the RAB.
  *
@@ -96,7 +99,9 @@ int pulp_rab_init(PulpDev * pulp_ptr)
 
   return err;
 }
+// }}}
 
+// L1 Management {{{
 /***********************************************************************************
  *
  * ██╗     ██╗    ███╗   ███╗ ██████╗ ███╗   ███╗████████╗
@@ -108,6 +113,7 @@ int pulp_rab_init(PulpDev * pulp_ptr)
  * 
  ***********************************************************************************/                                                       
 
+// l1_init {{{
 /**
  * Initialize the arrays the driver uses to manage the RAB.
  */
@@ -145,7 +151,9 @@ void pulp_rab_l1_init(void)
 
   return;
 }
+// }}}
 
+// page_ptrs_get_field {{{
 /**
  * Get a free field from the page_ptrs array.
  *
@@ -172,7 +180,9 @@ int pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req)
 
   return err;
 }
+// }}}
 
+// slice_check {{{
 /**
  * Check whether a particular slice has expired. Returns 1 if slice
  * has expired, 0 otherwise.
@@ -205,7 +215,9 @@ int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
   
   return expired;
 }
+// }}}
 
+// slice_get {{{
 /**
  * Get a free RAB slice. Returns 0 on success, 1 otherwise.
  *
@@ -237,7 +249,9 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
 
   return err;
 }
+// }}}
 
+// slice_free {{{
 /**
  * Free a RAB slice and unlock any corresponding memory pages.
  *
@@ -336,7 +350,9 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 
   return;
 }
+// }}}
 
+// slice_setup {{{
 /**
  * Setup a RAB slice: 1) setup the drivers' managment arrays, 2)
  * configure the hardware using iowrite32(). Returns 0 on success,
@@ -425,7 +441,9 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
 
   return 0;  
 }
+// }}}
 
+// num_free_slices {{{
 /**
  * Get the number of free RAB slices.
  *
@@ -452,7 +470,9 @@ int pulp_rab_num_free_slices(RabSliceReq *rab_slice_req)
 
   return num_free_slice;
 }
+// }}}
 
+// mapping_get_active {{{
 /**
  * Get the index of the currently active RAB mapping on Port 1.
  */
@@ -460,7 +480,9 @@ int pulp_rab_mapping_get_active()
 {
   return (int)l1.port_1.mapping_active;
 }
+// }}}
 
+// mappping_switch {{{
 /**
  * Switch the current RAB setup with another mapping. In case a mapping 
  * contains a striped config, Stripe 0 will be set up.
@@ -520,7 +542,9 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
 
   return;
 }
+// }}}
 
+// mapping_print {{{
 /**
  * Print RAB mappings.
  *
@@ -604,7 +628,11 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
 
   return;
 }
+// }}}
 
+// }}}
+
+// L2 Management {{{
 /***********************************************************************************
  *
  * ██╗     ██████╗     ███╗   ███╗ ██████╗ ███╗   ███╗████████╗
@@ -616,6 +644,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
  * 
  ***********************************************************************************/   
 
+// l2_init {{{
 /**
  * Initialise L2 TLB HW and struct to zero.
  *
@@ -642,8 +671,9 @@ void pulp_rab_l2_init(void *rab_config)
 
   return;
 }
+// }}}
 
-
+// l2_setup_entry {{{
 /**
  * Setup an L2TLB entry: 1) Check if a free spot is avaialble in L2 TLB,
  * 2) configure the HW using iowrite32(), 3) Configure kernel struct. 
@@ -710,7 +740,9 @@ int pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, cha
 
   return err;
 }
+// }}}
 
+// l2_check_availability {{{
 /**
  * Check if a free spot is available in L2 TLB.
  * Return 0 if available. 1 if not available.
@@ -735,8 +767,9 @@ int pulp_rab_l2_check_availability(L2Entry *tlb_entry, char port)
 
   return full;
 }
+// }}}
 
-
+// l2_invalidate_all_entries {{{
 /**
  * Invalidate all valid L2 TLB entries. Keep the virtual and physical pageframe numbers intact.
  *
@@ -756,8 +789,9 @@ int pulp_rab_l2_invalidate_all_entries(void *rab_config, char port)
 
   return 0;
 }
+// }}}
 
-
+// l2_invalidate_entry {{{
 /**
  * Invalidate one L2 TLB entry. Keep the virtual and physical pageframe numbers intact.
  *
@@ -794,7 +828,9 @@ int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int e
 
   return 0;
 }
+// }}}
 
+// l2_print_all_entries {{{
 /**
  * Print all entries.
  *
@@ -816,7 +852,9 @@ int pulp_rab_l2_print_all_entries(char port)
   }
   return 0;
 }
+// }}}
 
+// l2_print_valid_entries {{{
 int pulp_rab_l2_print_valid_entries(char port)
 {
   int set_num, entry_num;
@@ -835,6 +873,7 @@ int pulp_rab_l2_print_valid_entries(char port)
   }
   return 0;
 }
+// }}}
 
 //////// Other functions
 // pulp_rab_l2_replace_entry()
@@ -845,6 +884,9 @@ int pulp_rab_l2_print_valid_entries(char port)
 // group all L2 together and call ioctl. There should be only one ioctl for all of L2.
 // Further enhancement would be to use some algorithm to dynamically assign the mapping to L1 or L2 based on region size and frequency of occurance.
 
+// }}}
+
+// IOCTL Requests {{{
 /***********************************************************************************
  *
  * ██╗ ██████╗  ██████╗████████╗██╗         ██████╗ ███████╗ ██████╗ 
@@ -856,6 +898,7 @@ int pulp_rab_l2_print_valid_entries(char port)
  *                          
  ***********************************************************************************/
 
+// req {{{
 /**
  * Request new RAB slices.
  *
@@ -1114,7 +1157,9 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
 
   return retval;
 }
+// }}}
 
+// req_striped {{{
 /**
  * Request striped RAB slices.
  *
@@ -1613,7 +1658,9 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
 
   return retval;
 }
+// }}}
 
+// free {{{
 /***********************************************************************************
  *
  * ███████╗██████╗ ███████╗███████╗
@@ -1679,7 +1726,9 @@ void pulp_rab_free(void *rab_config, unsigned long arg)
 
   return;
 }
+// }}}
 
+// free_striped {{{
 /**
  * Free striped RAB slices.
  *
@@ -1774,7 +1823,11 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
        
     return;
   }
+// }}}
 
+// }}}
+
+// Mailbox Requests {{{
 /***********************************************************************************
  *
  * ███╗   ███╗██████╗  ██████╗ ██╗  ██╗    ██████╗ ███████╗ ██████╗ 
@@ -1786,6 +1839,7 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
  *                          
  ***********************************************************************************/
 
+// update {{{
 /**
  * Update the RAB configuration of slices configured in a striped mode.
  * -> Actually, this is the bottom handler and it should go into a tasklet.
@@ -1911,7 +1965,9 @@ void pulp_rab_update(unsigned update_req)
 
   return;
 }
+// }}}
 
+// switch {{{
 /**
  * Switch the hardware configuration of the RAB.
  */
@@ -1952,7 +2008,11 @@ void pulp_rab_switch(void)
 
   return;
 }
+// }}}
 
+// }}}
+
+// AX Logger {{{
 #if PLATFORM == JUNO
   /***********************************************************************************
    *
@@ -1965,6 +2025,7 @@ void pulp_rab_switch(void)
    * 
    ***********************************************************************************/                                             
 
+  // ax_log_init {{{
   /**
    * Initialize the AX logger, i.e., allocate kernel buffer memory and clear
    * the hardware buffer. 
@@ -2009,7 +2070,9 @@ void pulp_rab_switch(void)
   
     return 0;
   }
+  // }}}
 
+  // ax_log_free {{{
   /**
    * Free the kernel buffer memory previously allocated using
    * pulp_rab_ax_log_init().
@@ -2021,7 +2084,9 @@ void pulp_rab_switch(void)
   
     return;
   }
+  // }}}
 
+  // ax_log_read {{{
   /**
    * Read out the RAB AX Logger to the kernel buffers rab_ax_log_buf.
    *
@@ -2123,7 +2188,9 @@ void pulp_rab_switch(void)
   
     return;
   }
+  // }}}
 
+  // ax_log_print {{{
   /**
    * Print the content of the rab_ax_log_buf buffers and reset the incdices
    * rab_ax_log_idx.
@@ -2174,10 +2241,14 @@ void pulp_rab_switch(void)
   
     return;
   }
+  // }}}
 #endif
+// }}}
 
+// Profiling {{{
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
 
+  // prof_init {{{
   int pulp_rab_prof_init(void)
   {
     // allocate buffer memory
@@ -2223,7 +2294,9 @@ void pulp_rab_switch(void)
 
     return 0;
   }
+  // }}}
 
+  // prof_free {{{
   void pulp_rab_prof_free(void)
   {
     vfree(n_cyc_buf_response      ); 
@@ -2236,7 +2309,9 @@ void pulp_rab_switch(void)
 
     return;
   }
+  // }}}
 
+  // prof_print {{{
   void pulp_rab_prof_print(void)
   {
     int i;
@@ -2310,4 +2385,9 @@ void pulp_rab_switch(void)
 
     return;
   }
+  // }}}
+
 #endif
+// }}}
+
+// vim: ts=2 sw=2 sts=2 et foldmethod=marker tw=100
