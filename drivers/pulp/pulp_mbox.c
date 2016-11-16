@@ -1,4 +1,5 @@
 #include "pulp_mbox.h"
+#include "pulp_rab.h"  /* for pulp_rab_update() */
 
 // global variables
 static void * pulp_mbox;
@@ -14,7 +15,7 @@ DECLARE_WAIT_QUEUE_HEAD(mbox_wq);
 // functions
 
 /**
- * Initialize the mailbox
+ * Initialize the mailbox.
  *
  * @mbox: kernel virtual address of the mailbox PULP-2-Host interface
  * (Interface 1) 

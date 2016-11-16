@@ -56,13 +56,4 @@ typedef struct {
   #endif // PLATFORM == JUNO
 } PulpDev;
 
-// NEW - move to pulp_rab.h/c when cleaning up ioctl stuff
-void pulp_rab_update(unsigned update_req);
-void pulp_rab_switch(void);
-
-#if PLATFORM == JUNO
-  void pulp_rab_ax_log_read(unsigned pause);
-  void pulp_rab_ax_log_print(void);
-#endif
-
-#endif // _PULP_MODULE_H_ 
+#endif // _PULP_MODULE_H_

@@ -23,7 +23,7 @@
 
 #include "archi/bigpulp/pulp.h"
 
-#define DEBUG_LEVEL 0
+#define DEBUG_LEVEL 2
 
 // mailbox communication
 #define PULP_READY 0x0
@@ -187,6 +187,8 @@
   #define RAB_PROT_IRQ           65
   //#define RAB_MHR_FULL_IRQ       66 // not yet used
 
+  #define RAB_MH_ID_FIFO_OFFSET_B   0x4
+
   #if PLATFORM == ZEDBOARD
 
     #define PULP_DEFAULT_FREQ_MHZ 25
@@ -268,6 +270,8 @@
   #define RAB_L1_N_SLICES_PORT_0   4
   #define RAB_L1_N_SLICES_PORT_1  32
 
+  #define RAB_MH_ID_FIFO_OFFSET_B   0x8
+
 #endif // PLATFORM
 
 //#define RAB_L1_N_SLICES_MAX MAX(RAB_L1_N_SLICES_PORT_0, RAB_L1_N_SLICES_PORT_1)
@@ -304,7 +308,6 @@
 //#define RAB_CONFIG_CHECK_PROT     1
 #define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
 #define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
-#define RAB_MH_ID_FIFO_OFFSET_B   0x8
 #define RAB_MH_FIFO_DEPTH         16
 
 #define PULP_SIZE_B     0x10000000
@@ -434,32 +437,36 @@ typedef struct {
 #define MAX_STRIPE_SIZE_B 0x2000
 
 // needed for ROD, CT, JPEG
-//#define PROFILE
-//#define MEM_SHARING 2 // 1, 2 ,3
-//#define ZYNQ_PMM
+#define PROFILE
+#define MEM_SHARING 3 // 1, 2 ,3
+#define ZYNQ_PMM
 
 // needed for profile_rab_str, dma_test
 //#define MEM_SHARING 2
 //#define PROFILE_RAB_STR
 
 // needed for profile_rab_striping & profile_rab_miss_handling
-#define CLK_CNTR_RESPONSE_OFFSET_B 0x00
-#define CLK_CNTR_UPDATE_OFFSET_B   0x04
-#define CLK_CNTR_SETUP_OFFSET_B    0x08
-#define CLK_CNTR_CLEANUP_OFFSET_B  0x0c
-#define N_UPDATES_OFFSET_B         0x10
-#define N_SLICES_UPDATED_OFFSET_B  0x14
-#define N_PAGES_SETUP_OFFSET_B     0x18
-#define N_CLEANUPS_OFFSET_B        0x1c
+#define N_CYC_TOT_RESPONSE_OFFSET_B 0x00
+#define N_CYC_TOT_UPDATE_OFFSET_B   0x04
+#define N_CYC_TOT_SETUP_OFFSET_B    0x08
+#define N_CYC_TOT_CLEANUP_OFFSET_B  0x0c
+#define N_UPDATES_OFFSET_B          0x10
+#define N_SLICES_UPDATED_OFFSET_B   0x14
+#define N_PAGES_SETUP_OFFSET_B      0x18
+#define N_CLEANUPS_OFFSET_B         0x1c
 
-#define CLK_CNTR_CACHE_FLUSH_OFFSET_B    0x20
-#define CLK_CNTR_GET_USER_PAGES_OFFSET_B 0x24
-#define CLK_CNTR_MAP_SG_OFFSET_B         0x28
+#define N_CYC_TOT_CACHE_FLUSH_OFFSET_B    0x20
+#define N_CYC_TOT_GET_USER_PAGES_OFFSET_B 0x24
+#define N_CYC_TOT_MAP_SG_OFFSET_B         0x28
 
-#define N_MISSES_OFFSET_B        0x2C
-#define N_FIRST_MISSES_OFFSET_B  0x30
-#define CLK_CNTR_REFILL_OFFSET_B 0x40
-#define CLK_CNTR_SCHED_OFFSET_B  0x50
-#define CLK_CNTR_RESP_OFFSET_B   0x60
+#define N_MISSES_OFFSET_B         0x2C
+#define N_FIRST_MISSES_OFFSET_B   0x30
+#define N_CYC_TOT_REFILL_OFFSET_B 0x40
+#define N_CYC_TOT_SCHED_OFFSET_B  0x50
+#define N_CYC_TOT_RESP_OFFSET_B   0x60
+
+#define PROFILE_RAB_N_UPDATES     100000
+#define PROFILE_RAB_N_REQUESTS    100
+#define PROFILE_RAB_N_ELEMENTS    (PROFILE_RAB_N_REQUESTS * 10)
 
 #endif // PULP_HOST_H___

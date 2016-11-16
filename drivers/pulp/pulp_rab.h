@@ -7,6 +7,8 @@
 #include <linux/pagemap.h> /* page_cache_release() */
 #include <linux/slab.h>    /* kmalloc() */
 #include <asm/io.h>        /* ioremap, iounmap, iowrite32 */
+#include <linux/delay.h>   /* udelay */
+#include <linux/vmalloc.h>
 
 #include "pulp_module.h"
 
@@ -133,30 +135,45 @@ typedef struct {
 } L2Tlb;
 
 // methods declarations
+int pulp_rab_init(PulpDev * pulp_ptr);
+
 void pulp_rab_l1_init(void);
-
 int  pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req);
-
 int  pulp_rab_slice_check(RabSliceReq *rab_slice_req);
 int  pulp_rab_slice_get(RabSliceReq *rab_slice_req);
 void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req);
 int  pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct page **pages);
-
+int  pulp_rab_num_free_slices(RabSliceReq *rab_slice_req);
 int  pulp_rab_mapping_get_active(void);
 void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping);
 void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping);
 
 void pulp_rab_l2_init(void *rab_config);
+int  pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, char enable_replace);
+int  pulp_rab_l2_check_availability(L2Entry *tlb_entry, char port);
+int  pulp_rab_l2_invalidate_all_entries(void *rab_config, char port);
+int  pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int entry_num);
+int  pulp_rab_l2_print_all_entries(char port);
+int  pulp_rab_l2_print_valid_entries(char port);
 
-int pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, char enable_replace);
-int pulp_rab_l2_check_availability(L2Entry *tlb_entry, char port);
+long pulp_rab_req(void *rab_config, unsigned long arg);
+long pulp_rab_req_striped(void *rab_config, unsigned long arg);
+void pulp_rab_free(void *rab_config, unsigned long arg);
+void pulp_rab_free_striped(void *rab_config, unsigned long arg);
+void pulp_rab_update(unsigned update_req);
+void pulp_rab_switch(void);
 
-int pulp_rab_l2_invalidate_all_entries(void *rab_config, char port);
-int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int entry_num);
-int pulp_rab_l2_print_all_entries(char port);
-int pulp_rab_l2_print_valid_entries(char port);
+#if PLATFORM == JUNO
+  int  pulp_rab_ax_log_init(void);
+  void pulp_rab_ax_log_free(void);
+  void pulp_rab_ax_log_read(unsigned pulp_cluster_select, unsigned clear);
+  void pulp_rab_ax_log_print(void);
+#endif
 
-int pulp_rab_num_free_slices(RabSliceReq *rab_slice_req);
-
+#if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
+  int pulp_rab_prof_init(void);
+  void pulp_rab_prof_free(void);
+  void pulp_rab_prof_print(void);
+#endif
 
 #endif/*_PULP_RAB_H_*/
