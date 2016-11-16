@@ -1652,4 +1652,4 @@ static void pulp_rab_handle_miss(unsigned unused)
 }
 // }}}
 
-// vim: foldmethod=marker
+// vim: ts=2 sw=2 sts=2 et foldmethod=marker tw=100
