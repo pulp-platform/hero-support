@@ -1,16 +1,24 @@
 #!/bin/bash
 
 # Name of the program
-NAME=force_cache_miss_rate
+APP=force_cache_miss_rate
 
-# Make
-${VIVADO_VERSION} make all
+if [ "${PLATFORM}" -eq "4" ]; then # JUNO
+  # Make
+  make all
+else # ZYNQ
+  # Make
+  ${VIVADO_VERSION} make all
+fi
+
+# Create folder on target
+ssh ${SCP_TARGET_MACHINE} "mkdir -p ${SCP_TARGET_PATH}/${APP}"
 
 # Copy
 # Host executable
-scp ${NAME} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/${NAME}
+scp ${APP} ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/${APP}/.
+# Test data
+scp -r test ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/${APP}/.
 # Host sources for GDB
-scp *.c ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/${NAME}
-scp *.h ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/${NAME}
-# Accelerator binary
-#scp *.bin ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/programs/.
+scp *.c ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/${APP}/.
+scp *.h ${SCP_TARGET_MACHINE}:${SCP_TARGET_PATH}/${APP}/.
