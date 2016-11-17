@@ -1294,6 +1294,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     break;
   // }}}
 
+  case PULP_IOCTL_RAB_SOC_MH_ENA:
+    retval = pulp_rab_soc_mh_ena(current, my_dev.mbox);
+    break;
+
   case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space
 
     // get gpio value from slice data from user space - arg already checked above
