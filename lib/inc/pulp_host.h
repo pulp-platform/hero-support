@@ -480,3 +480,5 @@ typedef struct {
 #define PROFILE_RAB_N_ELEMENTS    (PROFILE_RAB_N_REQUESTS * 10)
 
 #endif // PULP_HOST_H___
+
+// vim: ts=2 sw=2 sts=2 et foldmethod=marker tw=100
