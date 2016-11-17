@@ -148,8 +148,16 @@
  */
 #define PULP_N_DEV_NUMBERS 1
 
-// ioctl setup
+/**
+ * IOCTL Setup
+ *
+ * When defining a new IOCTL command, append a macro definition to the list below, using the
+ * consecutively following command number, and increase the `PULP_IOC_NR_MAX` macro.
+ */
 #define PULP_IOCTL_MAGIC 'p'
+#define PULP_IOC_NR_MIN 0xB0
+#define PULP_IOC_NR_MAX 0xB7
+
 #define PULP_IOCTL_RAB_REQ   _IOW(PULP_IOCTL_MAGIC,0xB0,unsigned) // ptr
 #define PULP_IOCTL_RAB_FREE  _IOW(PULP_IOCTL_MAGIC,0xB1,unsigned) // value
 

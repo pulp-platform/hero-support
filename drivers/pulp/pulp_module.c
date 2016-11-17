@@ -1014,7 +1014,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
    * cmds: return ENOTTY before access_ok()
    */
   if (_IOC_TYPE(cmd) != PULP_IOCTL_MAGIC) return -ENOTTY;
-  if ( (_IOC_NR(cmd) < 0xB0) | (_IOC_NR(cmd) > 0xB7) ) return -ENOTTY;
+  if ( (_IOC_NR(cmd) < PULP_IOC_NR_MIN) | (_IOC_NR(cmd) > PULP_IOC_NR_MAX) ) return -ENOTTY;
 
   /*
    * the direction is a bitmask, and VERIFY_WRITE catches R/W
