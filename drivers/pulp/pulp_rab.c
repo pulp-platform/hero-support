@@ -1124,7 +1124,10 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
     for (i=0; i<len; i++) {
       l2_entry->pfn_v    = pfn_v_vec[i];
       l2_entry->pfn_p    = pfn_p_vec[i];
-      l2_entry->page_ptr = pages[i];
+      if (pages)
+        l2_entry->page_ptr = pages[i];
+      else
+        l2_entry->page_ptr = 0;
       
       // setup entry
       err = pulp_rab_l2_setup_entry(rab_config, l2_entry, rab_slice_req->rab_port, 0);
