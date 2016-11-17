@@ -160,7 +160,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg);
 long pulp_rab_req_striped(void *rab_config, unsigned long arg);
 void pulp_rab_free(void *rab_config, unsigned long arg);
 void pulp_rab_free_striped(void *rab_config, unsigned long arg);
-int pulp_rab_soc_mh_ena(struct task_struct* task, void* mbox);
+int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox);
 void pulp_rab_update(unsigned update_req);
 void pulp_rab_switch(void);
 

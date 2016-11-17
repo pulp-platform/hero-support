@@ -1831,7 +1831,7 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
 // }}}
 
 // soc_mh_ena {{{
-int pulp_rab_soc_mh_ena(struct task_struct* task, void* mbox)
+int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
 {
   // Get physical address of page global directory (i.e., the process-specific top-level page
   // table).
@@ -1839,6 +1839,36 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* mbox)
   BUG_ON(pgd_none(*pgd_ptr));
   const unsigned long pgd_pa = (((unsigned long)(pgd_val(*pgd_ptr)) & PHYS_MASK) >> 2) << 2;
   printk(KERN_DEBUG "PULP RAB SoC MH PGD PA: 0x%010lx\n", pgd_pa);
+
+  // Set up a RAB mapping between physical address space of page tables and virtual address
+  // space of PULP core running the PTW.
+  RabSliceReq rab_slice_req;
+  rab_slice_req.date_cur        = 0;
+  rab_slice_req.date_exp        = 255;
+  rab_slice_req.page_ptr_idx    = RAB_L1_N_SLICES_PORT_1-1;
+  rab_slice_req.page_idx_start  = 0;
+  rab_slice_req.page_idx_end    = 0;
+  rab_slice_req.rab_port        = 1;
+  rab_slice_req.rab_mapping     = 0;
+  rab_slice_req.rab_slice       = 4; // TODO: generalize
+  rab_slice_req.flags_drv       = 0b001;    // not setup in every mapping, not striped, constant
+  rab_slice_req.addr_start      = PGD_BASE_ADDR;
+  rab_slice_req.addr_end        = rab_slice_req.addr_start + ((PTRS_PER_PGD-1) << 3);
+  rab_slice_req.addr_offset     = pgd_pa;
+  rab_slice_req.flags_hw        = 0b0011;  // disable ACP, disable write, enable read, enable slice
+
+  printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
+        rab_slice_req.rab_slice, rab_slice_req.addr_start, rab_slice_req.addr_end,
+        rab_slice_req.addr_offset);
+
+  // Request to setup RAB slice.  If this fails, the SoC MH cannot be enabled because the PTW would
+  // access the wrong physical address.
+  const int retval = pulp_rab_slice_setup(rab_config, &rab_slice_req, NULL);
+  if (retval != 0) {
+    printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", rab_slice_req.rab_slice);
+    return retval;
+  }
+
   return 0;
 }
 // }}}

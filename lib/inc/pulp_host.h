@@ -301,6 +301,9 @@
 
 #define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
 
+#define PGD_BASE_ADDR        0x20000000 // Address at which PULP sees the top-level page table of
+                                        // the host process
+
 #define RAB_CONFIG_SIZE_B         0x10000
 #define RAB_L1_N_MAPPINGS_PORT_1  2
 #define RAB_N_PORTS               2
