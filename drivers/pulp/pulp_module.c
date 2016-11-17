@@ -222,7 +222,7 @@ static unsigned rab_mh_lvl = 0;
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
 static DmaCleanup pulp_dma_cleanup[2];
-}}}
+// }}}
 
 // methods definitions
 
