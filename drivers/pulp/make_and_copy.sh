@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [ "${PLATFORM}" -eq "4" ]; then # JUNO
   # Make
   make
