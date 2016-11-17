@@ -1828,8 +1828,12 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
 // soc_mh_ena {{{
 int pulp_rab_soc_mh_ena(struct task_struct* task, void* mbox)
 {
-  const unsigned long pgd_pa = ((unsigned long)pgd_val(task->mm->pgd) & PHYS_MASK);
-  printk(KERN_INFO "PULP RAB SoC MH PGD: 0x%lx\n", pgd_pa);
+  // Get physical address of page global directory (i.e., the process-specific top-level page
+  // table).
+  const pgd_t* pgd_ptr = current->mm->pgd;
+  BUG_ON(pgd_none(*pgd_ptr));
+  const unsigned long pgd_pa = (unsigned long)(pgd_val(*pgd_ptr)) & PHYS_MASK;
+  printk(KERN_DEBUG "PULP RAB SoC MH PGD PA: 0x%010lx\n", pgd_pa);
   return 0;
 }
 // }}}
