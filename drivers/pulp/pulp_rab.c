@@ -1832,7 +1832,7 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* mbox)
   // table).
   const pgd_t* pgd_ptr = current->mm->pgd;
   BUG_ON(pgd_none(*pgd_ptr));
-  const unsigned long pgd_pa = (unsigned long)(pgd_val(*pgd_ptr)) & PHYS_MASK;
+  const unsigned long pgd_pa = (((unsigned long)(pgd_val(*pgd_ptr)) & PHYS_MASK) >> 2) << 2;
   printk(KERN_DEBUG "PULP RAB SoC MH PGD PA: 0x%010lx\n", pgd_pa);
   return 0;
 }
