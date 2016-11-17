@@ -93,6 +93,8 @@ void pulp_rab_free_striped(PulpDev *pulp);
 void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
 void pulp_rab_mh_disable(PulpDev *pulp);
 
+int pulp_rab_soc_mh_enable(PulpDev* pulp);
+
 int pulp_dma_xfer(PulpDev *pulp, 
                   unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
                   unsigned host_read);
