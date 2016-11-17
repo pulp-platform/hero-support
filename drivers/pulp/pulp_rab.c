@@ -1139,7 +1139,9 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
       }
     } // for (i=0; i<len; i++) {
   
-    kfree(pages); // No need of pages since we have the individual page ptr for L2 entry in page_ptr.
+    if ( !(rab_slice_req->flags_drv & 0x1) ) {
+      kfree(pages); // No need of pages since we have the individual page ptr for L2 entry in page_ptr.
+    }
   }
 
   // kfree
