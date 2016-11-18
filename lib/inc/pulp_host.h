@@ -23,7 +23,7 @@
 
 #include "archi/bigpulp/pulp.h"
 
-#define DEBUG_LEVEL 2
+#define DEBUG_LEVEL 0
 
 // mailbox communication
 #define PULP_READY 0x0
@@ -437,9 +437,9 @@ typedef struct {
 #define MAX_STRIPE_SIZE_B 0x2000
 
 // needed for ROD, CT, JPEG
-#define PROFILE
-#define MEM_SHARING 3 // 1, 2 ,3
-#define ZYNQ_PMM
+//#define PROFILE
+//#define MEM_SHARING 2 // 1, 2 ,3
+//#define ZYNQ_PMM
 
 // needed for profile_rab_str, dma_test
 //#define MEM_SHARING 2
@@ -459,11 +459,9 @@ typedef struct {
 #define N_CYC_TOT_GET_USER_PAGES_OFFSET_B 0x24
 #define N_CYC_TOT_MAP_SG_OFFSET_B         0x28
 
-#define N_MISSES_OFFSET_B         0x2C
-#define N_FIRST_MISSES_OFFSET_B   0x30
-#define N_CYC_TOT_REFILL_OFFSET_B 0x40
-#define N_CYC_TOT_SCHED_OFFSET_B  0x50
-#define N_CYC_TOT_RESP_OFFSET_B   0x60
+#define N_MISSES_OFFSET_B            0x2C
+#define N_FIRST_MISSES_OFFSET_B      0x30
+#define N_CYC_TOT_SCHEDULE_OFFSET_B  0x34
 
 #define PROFILE_RAB_N_UPDATES     100000
 #define PROFILE_RAB_N_REQUESTS    100

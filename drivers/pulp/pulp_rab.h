@@ -79,7 +79,7 @@ typedef struct {
   unsigned      addr_start;
   unsigned      addr_end;
   unsigned long addr_offset;
-  unsigned char flags;
+  unsigned char flags_hw;
 } L1EntryPort0;
 
 typedef struct {
@@ -93,11 +93,12 @@ typedef struct {
   unsigned char page_ptr_idx;
   unsigned char page_idx_start;
   unsigned char page_idx_end;
+  unsigned char flags_drv;
   // actual config
   unsigned      addr_start;
   unsigned      addr_end;
   unsigned long addr_offset;
-  unsigned char flags;
+  unsigned char flags_hw;
 } L1EntryPort1;
 
 typedef struct {
@@ -163,6 +164,11 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg);
 void pulp_rab_update(unsigned update_req);
 void pulp_rab_switch(void);
 
+long     pulp_rab_mh_ena(void *rab_config, unsigned long arg);
+void     pulp_rab_mh_dis(void);
+unsigned pulp_rab_mh_sched(void);
+void     pulp_rab_handle_miss(unsigned unused);
+
 #if PLATFORM == JUNO
   int  pulp_rab_ax_log_init(void);
   void pulp_rab_ax_log_free(void);
@@ -171,7 +177,7 @@ void pulp_rab_switch(void);
 #endif
 
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
-  int pulp_rab_prof_init(void);
+  int  pulp_rab_prof_init(void);
   void pulp_rab_prof_free(void);
   void pulp_rab_prof_print(void);
 #endif
