@@ -174,7 +174,6 @@ static long pulp_ioctl  (struct file *filp, unsigned int cmd, unsigned long arg)
   static irqreturn_t pulp_isr_rab (int irq, void *ptr);
 #endif // PLATFORM == JUNO
 
-static void pulp_rab_handle_miss(unsigned unused);
 // }}}
 
 // important structs {{{
@@ -197,27 +196,6 @@ static PulpDev my_dev;
 static struct class *my_class; 
 
 static unsigned pulp_cluster_select = 0;
-
-// for RAB miss handling
-static char rab_mh_wq_name[10] = "RAB_MH_WQ";
-static struct workqueue_struct *rab_mh_wq;
-static struct work_struct rab_mh_w;
-static struct task_struct *user_task;
-static struct mm_struct *user_mm;
-static unsigned rab_mh = 0;
-static unsigned rab_mh_addr[RAB_MH_FIFO_DEPTH];
-static unsigned rab_mh_id[RAB_MH_FIFO_DEPTH];
-static unsigned rab_mh_date;
-static unsigned rab_mh_acp = 0;
-static unsigned rab_mh_lvl = 0;
-#ifdef PROFILE_RAB_MH
-  static unsigned clk_cntr_resp_tmp[N_CORES_TIMER];
-  static unsigned clk_cntr_resp[N_CORES_TIMER];
-  static unsigned clk_cntr_sched[N_CORES_TIMER];
-  static unsigned clk_cntr_refill[N_CORES_TIMER];
-  static unsigned n_misses = 0;
-  static unsigned n_first_misses = 0;
-#endif
 
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
@@ -810,6 +788,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
     unsigned long intr_reg_value;
     struct timeval time;
     int i;
+    unsigned rab_mh;
 
     // read and clear the interrupt register
     intr_reg_value = ioread64((void *)(unsigned long)my_dev.intr_reg);
@@ -826,23 +805,15 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       pulp_mbox_intr(my_dev.mbox);
     }
     if ( BF_GET(intr_reg_value,INTR_RAB_MISS,1) ) { // RAB miss
-      if (rab_mh) { 
-#ifdef PROFILE_RAB_MH
-        // read PE timers
-        for (i=0; i<N_CORES_TIMER; i++) {
-          clk_cntr_resp_tmp[i] = ioread32((void *)((unsigned long)my_dev.clusters
-            +TIMER_GET_TIME_LO_OFFSET_B+(i+1)*PE_TIMER_OFFSET_B));
-        }
-#endif
-        schedule_work(&rab_mh_w);
-      }
+
+      rab_mh = pulp_rab_mh_sched();
 
      if ( (DEBUG_LEVEL_RAB_MH > 1) || (0 == rab_mh) ) {
       printk(KERN_INFO "PULP: RAB miss interrupt handled at %02li:%02li:%02li.\n",
         (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
   
       // for debugging
-      //pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
+      pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
       }
     }
     if ( BF_GET(intr_reg_value,INTR_RAB_MHR_FULL,1) ) { // RAB mhr full
@@ -904,6 +875,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   { 
     struct timeval time;
     char rab_interrupt_type[9];
+    unsigned rab_mh;
 
     // detect RAB interrupt type
     if (RAB_MISS_IRQ == irq)
@@ -916,18 +888,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       strcpy(rab_interrupt_type,"mhr full");
   
     if (RAB_MISS_IRQ == irq) {
-      if (rab_mh) {
-  
-  #ifdef PROFILE_RAB_MH
-        // read PE timers
-        int i;
-        for (i=0; i<N_CORES_TIMER; i++) {
-          clk_cntr_resp_tmp[i] = ioread32((void *)((unsigned long)my_dev.clusters
-            + TIMER_GET_TIME_LO_OFFSET_B + (i+1)*PE_TIMER_OFFSET_B));
-        }
-  #endif
-        schedule_work(&rab_mh_w);
-      }
+      rab_mh = pulp_rab_mh_sched();
     }
   
     if ( (DEBUG_LEVEL_RAB_MH > 1) || 
@@ -1216,52 +1177,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   // RAB_MH_ENA {{{
   case PULP_IOCTL_RAB_MH_ENA:
 
-    // get slice data from user space - arg already checked above
-    byte = 0;
-    n_bytes_left = 2*sizeof(unsigned); 
-    n_bytes_read = n_bytes_left;
-    while (n_bytes_read > 0) {
-      n_bytes_left = __copy_from_user((void *)((char *)request+byte),
-                             (void __user *)((char *)arg+byte), n_bytes_read);
-      byte += (n_bytes_read - n_bytes_left);
-      n_bytes_read = n_bytes_left;
-    }
-    rab_mh_acp = request[0];
-    rab_mh_lvl = request[1];
-
-    // create workqueue for RAB miss handling
-    //rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
-    rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 1, rab_mh_wq_name); // ST workqueue for strict ordering
-    if (rab_mh_wq == NULL) {
-      printk(KERN_WARNING "PULP: Allocation of workqueue for RAB miss handling failed.\n");
-      return -ENOMEM;
-    }
-    // initialize the workqueue
-    INIT_WORK(&rab_mh_w, (void *)pulp_rab_handle_miss);
-    
-    // register information of the calling user-space process
-    user_task = current;
-    user_mm = current->mm;
-
-#ifdef PROFILE_RAB_MH
-    for (i=0; i<N_CORES_TIMER; i++) {
-      clk_cntr_refill[i] = 0;
-      clk_cntr_sched[i] = 0;
-      clk_cntr_resp[i] = 0;
-    }
-    n_misses = 0;
-    n_first_misses = 0;
-    clk_cntr_setup = 0;
-    clk_cntr_cache_flush = 0;
-    clk_cntr_get_user_pages = 0;
-    iowrite32(0, (void *)((unsigned long)my_dev.l3_mem+N_MISSES_OFFSET_B));
-#endif
-
-    // enable - protect with semaphore?
-    rab_mh = 1;
-    rab_mh_date = 1;
-
-    printk(KERN_INFO "PULP: RAB miss handling enabled.\n");
+    retval = pulp_rab_mh_ena(my_dev.rab_config, arg);
 
     break;
   // }}}
@@ -1269,27 +1185,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   // RAB_MH_DIS {{{
   case PULP_IOCTL_RAB_MH_DIS:
    
-    // disable - protect with semaphore?
-    rab_mh = 0;
-    rab_mh_date = 0;
-
-#ifdef PROFILE_RAB_MH
-    for (i=0; i<N_CORES_TIMER; i++) {
-      printk(KERN_INFO "clk_cntr_refill[%d] = %d \n",i,clk_cntr_refill[i]);
-      printk(KERN_INFO "clk_cntr_sched[%d]  = %d \n",i,clk_cntr_sched[i]);
-      printk(KERN_INFO "clk_cntr_resp[%d]   = %d \n",i,clk_cntr_resp[i]);
-    }
-    printk(KERN_INFO "n_misses       = %d \n",n_misses);
-    printk(KERN_INFO "n_first_misses = %d \n",n_first_misses);
-    printk(KERN_INFO "clk_cntr_setup          = %d \n",ARM_PMU_CLK_DIV*clk_cntr_setup);
-    printk(KERN_INFO "clk_cntr_cache_flush    = %d \n",ARM_PMU_CLK_DIV*clk_cntr_cache_flush);
-    printk(KERN_INFO "clk_cntr_get_user_pages = %d \n",ARM_PMU_CLK_DIV*clk_cntr_get_user_pages);
-#endif
-
-    // flush and destroy the workqueue
-    destroy_workqueue(rab_mh_wq);
-
-    printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
+  pulp_rab_mh_dis();
 
     break;
   // }}}
@@ -1321,338 +1217,6 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   // }}}
 
   return retval;
-}
-// }}}
-
-// rab_handle_miss {{{
-/***********************************************************************************
- *
- * ███╗   ███╗██╗  ██╗██████╗ 
- * ████╗ ████║██║  ██║██╔══██╗
- * ██╔████╔██║███████║██████╔╝
- * ██║╚██╔╝██║██╔══██║██╔══██╗
- * ██║ ╚═╝ ██║██║  ██║██║  ██║
- * ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝
- *
- ***********************************************************************************/
-static void pulp_rab_handle_miss(unsigned unused)
-{
-  int err, i, j, handled, result;
-  unsigned id, id_pe, id_cluster;
-  unsigned addr_start;
-  unsigned long addr_phys;
-    
-  // what get_user_pages needs
-  unsigned long start;
-  struct page **pages;
-  unsigned write;
-
-  // needed for RAB management
-  RabSliceReq rab_slice_request;
-  RabSliceReq *rab_slice_req = &rab_slice_request;
-
-  // needed for L2 TLB
-  L2Entry l2_entry_request;
-  L2Entry *l2_entry = &l2_entry_request;
-  int use_l1 = 1;
-  int err_l2 = 0;
-
-  if (DEBUG_LEVEL_RAB_MH > 1)
-    printk(KERN_INFO "PULP: RAB miss handling routine started.\n");
-  
-  // empty miss-handling FIFOs
-  for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
-    rab_mh_addr[i] = IOREAD_L((void *)((unsigned long)my_dev.rab_config+RAB_MH_ADDR_FIFO_OFFSET_B));
-    rab_mh_id[i]   = IOREAD_L((void *)((unsigned long)my_dev.rab_config+RAB_MH_ID_FIFO_OFFSET_B));
-    
-    // detect empty FIFOs
-#if PLATFORM != JUNO    
-    if ( rab_mh_id[i] & 0x80000000 )
-#else
-    if ( rab_mh_id[i] & 0x8000000000000000 )
-#endif      
-      break;
-    if (DEBUG_LEVEL_RAB_MH > 0) {
-      printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
-       i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
-    }
-     
-    // handle every miss separately
-    err = 0;
-    addr_start = rab_mh_addr[i];
-    id = rab_mh_id[i];
-    
-    // check the ID
-    id_pe      = BF_GET(id, 0, AXI_ID_WIDTH_CORE);
-    id_cluster = BF_GET(id, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC);
-    // - 0x3;
-    //id_cluster = BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) - 0x2;
-
-    // identify RAB port - for now, only handle misses on Port 1: PULP -> Host
-    if ( BF_GET(id, AXI_ID_WIDTH, 1) )
-      rab_slice_req->rab_port = 1;    
-    else {
-      printk(KERN_WARNING "PULP: Cannot handle RAB miss on ports different from Port 1.\n");
-      printk(KERN_WARNING "PULP: RAB miss - id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
-      continue;
-    }
-
-    // only handle misses from PEs' data interfaces
-    if ( ( BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) != 0x2 ) ||
-         ( (id_cluster < 0) || (id_cluster > (N_CLUSTERS-1)) ) || 
-         ( (id_pe < 0) || (id_pe > N_CORES-1) ) ) {
-      printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces. id = %#x | addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
-      // for debugging
-      //      pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
-
-      continue;
-    }
-  
-#ifdef PROFILE_RAB_MH
-    err = ioread32((void *)((unsigned long)my_dev.l3_mem+N_MISSES_OFFSET_B));
-    // reset internal counters
-    if (!err) {      
-      clk_cntr_setup = 0;
-      clk_cntr_cache_flush = 0;
-      clk_cntr_get_user_pages = 0;
-      n_first_misses = 0;
-      n_misses = 0;
-      for (j=0; j<N_CORES_TIMER; j++) {
-        clk_cntr_refill[j] = 0;
-        clk_cntr_sched[j]  = 0;
-        clk_cntr_resp[j]   = 0;
-      }
-    }
-    n_misses++;
-
-    // read the PE timer
-    clk_cntr_sched[id_pe] += ioread32((void *)((unsigned long)my_dev.clusters
-                                               +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
-    // save resp_tmp
-    clk_cntr_resp[id_pe] += clk_cntr_resp_tmp[id_pe];
-#endif
-
-    // check if there has been a miss to the same page before
-    handled = 0;    
-    for (j=0; j<i; j++) {
-      if ( (addr_start & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT))
-           == (rab_mh_addr[j] & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT)) ) {
-        handled = 1;
-        if (DEBUG_LEVEL_RAB_MH > 0) {
-          printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
-          // for debugging only - deactivate fetch enable
-          // iowrite32(0xC0000000,(void *)((unsigned long)my_dev.gpio+0x8));
-        }
-        break;
-      }
-    }
-
-    // handle a miss
-    if (!handled) {
-  
-#ifdef PROFILE_RAB_MH
-      // reset the ARM clock counter
-      asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
-
-      // read the ARM clock counter
-      asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
-
-      n_first_misses++;
-#endif
-
-      if (DEBUG_LEVEL_RAB_MH > 1) {
-        printk(KERN_INFO "PULP: Trying to handle RAB miss to user-space virtual address %#x.\n",addr_start);
-      }
-
-      // what get_user_pages returns
-      pages = (struct page **)kmalloc((size_t)(sizeof(struct page *)),GFP_KERNEL);
-      if ( pages == NULL ) {
-        printk(KERN_WARNING "PULP: Memory allocation failed.\n");
-        err = 1;
-        goto miss_handling_error;
-      }
-
-      // align address to page border / 4kB
-      start = (unsigned long)(addr_start) & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned long)*8-PAGE_SHIFT);
-      
-      // get pointer to user-space buffer and lock it into memory, get a single page
-      // try read/write mode first - fall back to read only
-      write = 1;
-      down_read(&user_task->mm->mmap_sem);
-      result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
-      if ( result == -EFAULT ) {
-        write = 0;
-        result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
-      }
-      up_read(&user_task->mm->mmap_sem);
-      //current->mm = user_task->mm;
-      //result = get_user_pages_fast(start, 1, 1, pages);
-      if (result != 1) {
-        printk(KERN_WARNING "PULP: Could not get requested user-space virtual address %#x.\n", addr_start);
-        err = 1;
-        goto miss_handling_error;
-      }
-      
-      // virtual-to-physical address translation
-      addr_phys = (unsigned long)page_to_phys(pages[0]);
-      if (DEBUG_LEVEL_MEM > 1) {
-        printk(KERN_INFO "PULP: Physical address = %#lx\n",addr_phys);
-      }
-
-#ifdef PROFILE_RAB_MH
-      arm_clk_cntr_value_start = arm_clk_cntr_value;
-
-      // read the ARM clock counter
-      asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
-      clk_cntr_get_user_pages += (arm_clk_cntr_value - arm_clk_cntr_value_start);
-#endif
-      
-      // fill rab_slice_req structure
-      // allocate a fixed number of slices to each PE???
-      // works for one port only!!!
-      rab_slice_req->date_cur = (unsigned char)rab_mh_date;
-      rab_slice_req->date_exp = (unsigned char)rab_mh_date; 
-      rab_slice_req->page_idx_start = 0;
-      rab_slice_req->page_idx_end   = 0;
-      rab_slice_req->rab_mapping = (unsigned)pulp_rab_mapping_get_active();
-      rab_slice_req->flags_drv = 0;
-
-      rab_slice_req->addr_start  = (unsigned)start;
-      rab_slice_req->addr_end    = (unsigned)start + PAGE_SIZE;
-      rab_slice_req->addr_offset = addr_phys;
-      RAB_SET_PROT(rab_slice_req->flags_hw,(write << 2) | 0x2 | 0x1);
-      RAB_SET_ACP(rab_slice_req->flags_hw,rab_mh_acp);
-
-      // Check which TLB level to use.
-      // If rab_mh_lvl is 0, enter the entry in L1 if free slice is available. If not, enter in L2.
-      if (rab_mh_lvl == 2) {
-        use_l1 = 0;
-      } else {
-        // get a free slice
-        use_l1 = 1;
-        err = pulp_rab_slice_get(rab_slice_req);
-        if (err) {
-          if (rab_mh_lvl == 1) {
-            printk(KERN_WARNING "PULP: RAB miss handling error 2.\n");
-            goto miss_handling_error;
-          }
-          else
-            use_l1 = 0;
-        }
-      }
-      err = 0;
-      if (use_l1 == 0) { // Use L2
-        l2_entry->flags = rab_slice_req->flags_hw;
-        l2_entry->pfn_v = (unsigned)(start >> PAGE_SHIFT);
-        l2_entry->pfn_p = (unsigned)(addr_phys >> PAGE_SHIFT);
-        l2_entry->page_ptr = pages[0];
-        err_l2 = pulp_rab_l2_setup_entry(my_dev.rab_config, l2_entry, rab_slice_req->rab_port, 1);   
-      } else { // Use L1
-        // free memory of slices to be re-configured
-        pulp_rab_slice_free(my_dev.rab_config, rab_slice_req);
-
-        // check for free field in page_ptrs list
-        err = pulp_rab_page_ptrs_get_field(rab_slice_req);
-        if (err) {
-          printk(KERN_WARNING "PULP: RAB miss handling error 0.\n");
-          goto miss_handling_error;
-        }
-                
-        // setup slice
-        err = pulp_rab_slice_setup(my_dev.rab_config, rab_slice_req, pages);
-        if (err) {
-          printk(KERN_WARNING "PULP: RAB miss handling error 1.\n");
-          goto miss_handling_error;
-        }        
-      } // if (use_l1 == 0)
-
-#ifdef PROFILE_RAB_MH
-      arm_clk_cntr_value_start = arm_clk_cntr_value;
-
-      // read the ARM clock counter
-      asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
-      clk_cntr_setup += (arm_clk_cntr_value - arm_clk_cntr_value_start);
-#endif
-
-      // flush the entire page from the caches if ACP is not used
-      if (!rab_mh_acp)
-        pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
-
-      if (use_l1 == 0)
-        kfree(pages);
-
-      if (rab_mh_lvl == 1)
-        if (rab_slice_req->rab_slice == (RAB_L1_N_SLICES_PORT_1 - 1)) {
-          rab_mh_date++;
-          if (rab_mh_date > RAB_MAX_DATE_MH)
-            rab_mh_date = 0;
-          //printk(KERN_INFO "rab_mh_date = %d\n",rab_mh_date);
-        }
-
-#ifdef PROFILE_RAB_MH
-      arm_clk_cntr_value_start = arm_clk_cntr_value;
-
-      // read the ARM clock counter
-      asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
-      clk_cntr_cache_flush += (arm_clk_cntr_value - arm_clk_cntr_value_start);
-#endif
-    }
-    
-    // // for debugging
-    // pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
-
-    // wake up the sleeping PE
-    iowrite32(BIT_N_SET(id_pe),
-              (void *)((unsigned long)my_dev.clusters + CLUSTER_SIZE_B*id_cluster
-                       + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B));
-
-    /*
-     * printk(KERN_INFO "WAKEUP: value = %#x, address = %#x\n",BIT_N_SET(id_pe), CLUSTER_SIZE_B*id_cluster \
-     *        + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B );
-     */
-
-#ifdef PROFILE_RAB_MH
-    // read the PE timer
-    clk_cntr_refill[id_pe] += ioread32((void *)((unsigned long)my_dev.clusters
-                                                +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
-    // update counters in shared memory
-    iowrite32(n_misses, (void *)((unsigned long)my_dev.l3_mem+N_MISSES_OFFSET_B));
-#endif
-    // error handling
-  miss_handling_error:
-    if (err) {
-      printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
-
-      // for debugging
-      pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
-    }
-
-  }
-  if (DEBUG_LEVEL_RAB_MH > 1)
-    printk(KERN_INFO "PULP: RAB miss handling routine finished.\n");
-
- 
-#ifdef PROFILE_RAB_MH
-  // update counters in shared memory
-  iowrite32(n_first_misses,
-            (void *)((unsigned long)my_dev.l3_mem+N_FIRST_MISSES_OFFSET_B));
-  iowrite32(clk_cntr_setup,
-            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_SETUP_OFFSET_B));
-  iowrite32(clk_cntr_cache_flush,
-            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_CACHE_FLUSH_OFFSET_B));
-  iowrite32(clk_cntr_get_user_pages,
-            (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_GET_USER_PAGES_OFFSET_B));
-
-  for (j=0; j<N_CORES_TIMER; j++) {
-    iowrite32(clk_cntr_refill[j],
-              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_REFILL_OFFSET_B+4*j));
-    iowrite32(clk_cntr_sched[j],
-              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_SCHED_OFFSET_B+4*j));
-    iowrite32(clk_cntr_resp[j],
-              (void *)((unsigned long)my_dev.l3_mem+CLK_CNTR_RESP_OFFSET_B+4*j));
-  }
-
-#endif
 }
 // }}}
 

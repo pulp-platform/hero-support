@@ -9,6 +9,19 @@ static PulpDev * pulp;
 // striping information
 static RabStripeReq rab_stripe_req[RAB_L1_N_MAPPINGS_PORT_1];
 
+// miss handling routine
+static char rab_mh_wq_name[10] = "RAB_MH_WQ";
+static struct workqueue_struct *rab_mh_wq;
+static struct work_struct rab_mh_w;
+static struct task_struct *user_task;
+static struct mm_struct *user_mm;
+static unsigned rab_mh_addr[RAB_MH_FIFO_DEPTH];
+static unsigned rab_mh_id[RAB_MH_FIFO_DEPTH];
+static unsigned rab_mh;
+static unsigned rab_mh_date;
+static unsigned rab_mh_acp;
+static unsigned rab_mh_lvl;
+
 // AX logger 
 #if PLATFORM == JUNO
   static unsigned * rab_ar_log_buf;
@@ -25,39 +38,61 @@ static RabStripeReq rab_stripe_req[RAB_L1_N_MAPPINGS_PORT_1];
   static unsigned n_cyc_response       = 0; // per update request
   static unsigned n_cyc_update         = 0; // per update request
   static unsigned n_cyc_setup          = 0; // per stripe request (multiple elements, pages)
-  static unsigned n_cyc_cleanup        = 0; // per stripe free    (multiple elements, pages)
   static unsigned n_cyc_cache_flush    = 0; // per striped element
   static unsigned n_cyc_get_user_pages = 0; // per striped element
-  static unsigned n_cyc_map_sg         = 0; // per striped element
   
   static unsigned * n_cyc_buf_response;
   static unsigned * n_cyc_buf_update;
   static unsigned * n_cyc_buf_setup;
-  static unsigned * n_cyc_buf_cleanup;
   static unsigned * n_cyc_buf_cache_flush;
   static unsigned * n_cyc_buf_get_user_pages;
-  static unsigned * n_cyc_buf_map_sg;
 
   static unsigned idx_buf_response;
   static unsigned idx_buf_update;
   static unsigned idx_buf_setup;
-  static unsigned idx_buf_cleanup;
   static unsigned idx_buf_cache_flush;
   static unsigned idx_buf_get_user_pages;
-  static unsigned idx_buf_map_sg;
   
   static unsigned n_cyc_tot_response;
   static unsigned n_cyc_tot_update;
   static unsigned n_cyc_tot_setup;
-  static unsigned n_cyc_tot_cleanup;
   static unsigned n_cyc_tot_cache_flush;
   static unsigned n_cyc_tot_get_user_pages;
-  static unsigned n_cyc_tot_map_sg;
 
-  static unsigned n_updates;
-  static unsigned n_slices_updated;
-  static unsigned n_pages_setup;
-  static unsigned n_cleanups;
+  #ifdef PROFILE_RAB_STR
+    static unsigned n_cyc_cleanup      = 0; // per stripe free    (multiple elements, pages)
+    static unsigned n_cyc_map_sg       = 0; // per striped element
+  
+    static unsigned * n_cyc_buf_cleanup;
+    static unsigned * n_cyc_buf_map_sg;
+  
+    static unsigned idx_buf_cleanup;
+    static unsigned idx_buf_map_sg;
+  
+    static unsigned n_cyc_tot_cleanup;
+    static unsigned n_cyc_tot_map_sg;
+
+    static unsigned n_pages_setup;
+    static unsigned n_cleanups;
+    static unsigned n_slices_updated;
+    static unsigned n_updates;
+  #endif
+  
+  #ifdef PROFILE_RAB_MH
+    static unsigned n_cyc_response_tmp[N_CORES_TIMER];
+    
+    static unsigned n_cyc_schedule = 0; // per miss
+
+    static unsigned * n_cyc_buf_schedule;
+    
+    static unsigned idx_buf_schedule;
+    
+    static unsigned n_cyc_tot_schedule;
+  
+    static unsigned n_first_misses = 0;
+    static unsigned n_misses       = 0;
+  #endif
+
 #endif
 
 // }}}
@@ -82,6 +117,12 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   #if PLATFORM != ZEDBOARD
     pulp_rab_l2_init(pulp->rab_config);
   #endif
+
+  // initialize miss handling control
+  rab_mh = 0;
+  rab_mh_date = 0;
+  rab_mh_acp = 0;
+  rab_mh_lvl = 0;
 
   // initialize AX logger
   #if PLATFORM == JUNO
@@ -128,7 +169,7 @@ void pulp_rab_l1_init(void)
     l1.port_0.slices[i].addr_start     = 0;
     l1.port_0.slices[i].addr_end       = 0;
     l1.port_0.slices[i].addr_offset    = 0;
-    l1.port_0.slices[i].flags          = 0;
+    l1.port_0.slices[i].flags_hw       = 0;
   }
 
   // Port 1
@@ -139,10 +180,11 @@ void pulp_rab_l1_init(void)
       l1.port_1.mappings[i].slices[j].page_ptr_idx   = 0;
       l1.port_1.mappings[i].slices[j].page_idx_start = 0;
       l1.port_1.mappings[i].slices[j].page_idx_end   = 0;
+      l1.port_1.mappings[i].slices[j].flags_drv      = 0;
       l1.port_1.mappings[i].slices[j].addr_start     = 0;
       l1.port_1.mappings[i].slices[j].addr_end       = 0;
       l1.port_1.mappings[i].slices[j].addr_offset    = 0;
-      l1.port_1.mappings[i].slices[j].flags          = 0;
+      l1.port_1.mappings[i].slices[j].flags_hw       = 0;
       l1.port_1.mappings[i].page_ptrs[j]             = 0;
       l1.port_1.mappings[i].page_ptr_ref_cntrs[j]    = 0;
     }
@@ -261,14 +303,17 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
 void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 {
   int i;
-  unsigned page_ptr_idx_old, page_idx_start_old, page_idx_end_old, entry;
-  unsigned port, mapping, slice;
+  unsigned char page_ptr_idx_old, page_idx_start_old, page_idx_end_old;
+  unsigned char port, flags_drv;
+  unsigned mapping, slice, entry;
+
   struct page ** pages_old;
 
-  port    = rab_slice_req->rab_port;
-  mapping = rab_slice_req->rab_mapping;
-  slice   = rab_slice_req->rab_slice;
-
+  port      = rab_slice_req->rab_port;
+  mapping   = rab_slice_req->rab_mapping;
+  slice     = rab_slice_req->rab_slice;
+  flags_drv = rab_slice_req->flags_drv;
+ 
   if (DEBUG_LEVEL_RAB > 0) {
     printk(KERN_INFO "PULP - RAB L1: Port %d, Mapping %d, Slice %d: Freeing.\n",
       port, mapping, slice);
@@ -296,15 +341,15 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
     page_idx_end_old   = l1.port_1.mappings[mapping].slices[slice].page_idx_end;
 
     // unlock remapped pages and invalidate caches
-    if ( !(rab_slice_req->flags_drv & 0x2) &&   // do not unlock pages in striped mode until the last slice is freed
-         !(rab_slice_req->flags_drv & 0x4) ) {  // only unlock pages in multi-mapping rule when the last mapping is removed 
+    if ( !(flags_drv & 0x2) &&   // do not unlock pages in striped mode until the last slice is freed
+         !(flags_drv & 0x4) ) {  // only unlock pages in multi-mapping rule when the last mapping is removed 
       for (i=page_idx_start_old;i<=page_idx_end_old;i++) {
         if (DEBUG_LEVEL_RAB > 0) {
           printk(KERN_INFO "PULP - RAB L1: Port %d, Mapping %d, Slice %d: Unlocking Page %d.\n",
             port, mapping, slice, i);
         }
         //// invalidate caches --- invalidates entire pages only --- really needed?
-        //if ( !(rab_slice_req->flags_hw & 0x8) )
+        //if ( !(flags_hw & 0x8) )
         //  pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
         // unlock
         if ( !PageReserved(pages_old[i]) ) 
@@ -317,13 +362,21 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
       
     // free memory if no more references exist
     if ( !l1.port_1.mappings[mapping].page_ptr_ref_cntrs[page_ptr_idx_old] ) {
-      if  ( !(rab_slice_req->flags_drv & 0x4) ) // only free pages ptr in multi-mapping rule when the last mapping is removed 
+      if ( !(flags_drv & 0x4) ) // only free pages ptr in multi-mapping rule when the last mapping is removed 
         kfree(pages_old);
       l1.port_1.mappings[mapping].page_ptrs[page_ptr_idx_old] = 0;
     }
     if (DEBUG_LEVEL_RAB > 0) {
       printk(KERN_INFO "PULP - RAB L1: Number of references to pages pointer = %d.\n", 
         l1.port_1.mappings[mapping].page_ptr_ref_cntrs[page_ptr_idx_old]);
+    }
+  }
+  else if ( (port == 1) && (flags_drv & 0x1) ) {
+    if (l1.port_1.mappings[mapping].page_ptr_ref_cntrs[page_ptr_idx_old]) 
+      l1.port_1.mappings[mapping].page_ptr_ref_cntrs[page_ptr_idx_old]--;
+    if (mapping == l1.port_1.mapping_active) { // also free constant, active mappings on Port 1
+      entry = 0x20*(port*RAB_L1_N_SLICES_PORT_0+slice);
+      iowrite32(0, (void *)((unsigned long)rab_config+entry+0x38));
     }
   }
 
@@ -334,7 +387,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
     l1.port_0.slices[slice].addr_start     = 0;
     l1.port_0.slices[slice].addr_end       = 0;
     l1.port_0.slices[slice].addr_offset    = 0;
-    l1.port_0.slices[slice].flags          = 0;
+    l1.port_0.slices[slice].flags_hw       = 0;
   }
   else { // port 1
     l1.port_1.mappings[mapping].slices[slice].date_cur       = 0;
@@ -342,10 +395,11 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
     l1.port_1.mappings[mapping].slices[slice].page_ptr_idx   = 0;
     l1.port_1.mappings[mapping].slices[slice].page_idx_start = 0;
     l1.port_1.mappings[mapping].slices[slice].page_idx_end   = 0;
+    l1.port_1.mappings[mapping].slices[slice].flags_drv      = 0;
     l1.port_1.mappings[mapping].slices[slice].addr_start     = 0;
     l1.port_1.mappings[mapping].slices[slice].addr_end       = 0;
     l1.port_1.mappings[mapping].slices[slice].addr_offset    = 0;
-    l1.port_1.mappings[mapping].slices[slice].flags          = 0;
+    l1.port_1.mappings[mapping].slices[slice].flags_hw       = 0;
   }
 
   return;
@@ -378,7 +432,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
     l1.port_0.slices[slice].addr_start  = rab_slice_req->addr_start;
     l1.port_0.slices[slice].addr_end    = rab_slice_req->addr_end;
     l1.port_0.slices[slice].addr_offset = rab_slice_req->addr_offset;
-    l1.port_0.slices[slice].flags       = rab_slice_req->flags_hw;
+    l1.port_0.slices[slice].flags_hw    = rab_slice_req->flags_hw;
   }
   else { // Port 1
     l1.port_1.mappings[mapping].slices[slice].date_cur       = rab_slice_req->date_cur;
@@ -386,11 +440,12 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
     l1.port_1.mappings[mapping].slices[slice].page_ptr_idx   = rab_slice_req->page_ptr_idx;
     l1.port_1.mappings[mapping].slices[slice].page_idx_start = rab_slice_req->page_idx_start;
     l1.port_1.mappings[mapping].slices[slice].page_idx_end   = rab_slice_req->page_idx_end;
+    l1.port_1.mappings[mapping].slices[slice].flags_drv      = rab_slice_req->flags_drv;
 
     l1.port_1.mappings[mapping].slices[slice].addr_start  = rab_slice_req->addr_start;
     l1.port_1.mappings[mapping].slices[slice].addr_end    = rab_slice_req->addr_end;
     l1.port_1.mappings[mapping].slices[slice].addr_offset = rab_slice_req->addr_offset;
-    l1.port_1.mappings[mapping].slices[slice].flags       = rab_slice_req->flags_hw;
+    l1.port_1.mappings[mapping].slices[slice].flags_hw    = rab_slice_req->flags_hw;
   }
 
   if (port == 0) {
@@ -435,7 +490,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
       printk(KERN_INFO "PULP - RAB L1: addr_start  %#x\n",  rab_slice_req->addr_start );
       printk(KERN_INFO "PULP - RAB L1: addr_end    %#x\n",  rab_slice_req->addr_end   );
       printk(KERN_INFO "PULP - RAB L1: addr_offset %#lx\n", rab_slice_req->addr_offset);
-      printk(KERN_INFO "PULP - RAB L1: flags       %#x\n",  rab_slice_req->flags_hw   );
+      printk(KERN_INFO "PULP - RAB L1: flags_hw    %#x\n",  rab_slice_req->flags_hw   );
     }
   }  
 
@@ -505,7 +560,7 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
 
   // de-activate old mapping
   for (i=0; i<RAB_L1_N_SLICES_PORT_1; i++) {
-    RAB_GET_PROT(prot, l1.port_1.mappings[mapping_active].slices[i].flags);
+    RAB_GET_PROT(prot, l1.port_1.mappings[mapping_active].slices[i].flags_hw);
     if (prot) { // de-activate slices with old active config
 
       offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+i);
@@ -518,7 +573,7 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
 
   // set up new mapping
   for (i=0; i<RAB_L1_N_SLICES_PORT_1; i++) {
-    RAB_GET_PROT(prot, l1.port_1.mappings[rab_mapping].slices[i].flags);
+    RAB_GET_PROT(prot, l1.port_1.mappings[rab_mapping].slices[i].flags_hw);
     if (prot & 0x1) { // activate slices with new active config
 
       offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+i);
@@ -526,7 +581,7 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
       iowrite32(l1.port_1.mappings[rab_mapping].slices[i].addr_start,  (void *)((unsigned long)rab_config+offset+0x20));
       iowrite32(l1.port_1.mappings[rab_mapping].slices[i].addr_end,    (void *)((unsigned long)rab_config+offset+0x28));
       IOWRITE_L(l1.port_1.mappings[rab_mapping].slices[i].addr_offset, (void *)((unsigned long)rab_config+offset+0x30));
-      iowrite32(l1.port_1.mappings[rab_mapping].slices[i].flags,       (void *)((unsigned long)rab_config+offset+0x38));
+      iowrite32(l1.port_1.mappings[rab_mapping].slices[i].flags_hw,    (void *)((unsigned long)rab_config+offset+0x38));
 
       if (DEBUG_LEVEL_RAB > 0)
         printk(KERN_INFO "PULP - RAB L1: Port %d, Mapping %d, Slice %d: Setting up.\n",1,rab_mapping,i);
@@ -556,7 +611,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
 {
   int mapping_min, mapping_max;
   int i,j;
-  unsigned offset, prot, flags, n_slices, page_ptr_idx;
+  unsigned offset, prot, flags_hw, n_slices, page_ptr_idx;
 
   if (rab_mapping == 0xFFFF) {
     mapping_min = 0;
@@ -575,13 +630,13 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
     printk(KERN_INFO "PULP - RAB L1: Printing Mapping %d: \n",j);
 
     for (i=0; i<RAB_L1_N_SLICES_PORT_1; i++) {
-      RAB_GET_PROT(prot, l1.port_1.mappings[rab_mapping].slices[i].flags);
+      RAB_GET_PROT(prot, l1.port_1.mappings[rab_mapping].slices[i].flags_hw);
       if (prot) {
-        printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#lx , flags = %#x\n", 1, i,
+        printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#lx , flags_hw = %#x\n", 1, i,
           l1.port_1.mappings[j].slices[i].addr_start,
           l1.port_1.mappings[j].slices[i].addr_end,
           l1.port_1.mappings[j].slices[i].addr_offset,
-          l1.port_1.mappings[j].slices[i].flags);
+          l1.port_1.mappings[j].slices[i].flags_hw);
       }
     }
   } 
@@ -598,14 +653,14 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
       for (i=0; i<n_slices; i++) {
         offset = 0x20*(j*RAB_L1_N_SLICES_PORT_0+i);
 
-        flags = ioread32((void *)((unsigned long)rab_config+offset+0x38));
-        RAB_GET_PROT(prot, flags);
+        flags_hw = ioread32((void *)((unsigned long)rab_config+offset+0x38));
+        RAB_GET_PROT(prot, flags_hw);
         if (prot) {
-          printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#lx , flags = %#x\n", j, i,
+          printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#lx , flags_hw = %#x\n", j, i,
             ioread32((void *)((unsigned long)rab_config+offset+0x20)),
             ioread32((void *)((unsigned long)rab_config+offset+0x28)),
             (unsigned long)IOREAD_L((void *)((unsigned long)rab_config+offset+0x30)),
-            flags);  
+            flags_hw);  
         }
       }
     }
@@ -616,7 +671,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
     printk(KERN_INFO "PULP - RAB L1: Printing Mapping %d: \n",j);
 
     for (i=0; i<RAB_L1_N_SLICES_PORT_1; i++) {
-      RAB_GET_PROT(prot, l1.port_1.mappings[rab_mapping].slices[i].flags);
+      RAB_GET_PROT(prot, l1.port_1.mappings[rab_mapping].slices[i].flags_hw);
       if (prot) {
         page_ptr_idx = l1.port_1.mappings[j].slices[i].page_ptr_idx;
         printk(KERN_INFO "Port %d, Slice %2d: page_ptrs[%2d] = %#lx, page_ptr_ref_cntrs[%2d] = %d\n", 1, i,
@@ -950,8 +1005,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
   byte = 0;
   n_bytes_left = 3*sizeof(unsigned); 
   n_bytes_read = n_bytes_left;
-
-  while (n_bytes_left > 0) {
+  while (n_bytes_read > 0) {
     n_bytes_left = __copy_from_user((void *)((char *)request+byte),
                                     (void __user *)((char *)arg+byte), n_bytes_read);
     byte += (n_bytes_read - n_bytes_left);
@@ -1073,7 +1127,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
         if ( rab_slice_req->rab_mapping == j ) {
           
           //  check for free field in page_ptrs list
-          if ( !i ) {
+          if ( !i && (rab_slice_req->rab_port == 1) ) {
             err = pulp_rab_page_ptrs_get_field(rab_slice_req);
             if (err) {
               return (long)err;
@@ -1294,7 +1348,7 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
       printk(KERN_INFO "PULP - RAB: Element %d, n_slices = %d\n", i, n_slices);
     }
 
-    // fill RabStripeElem struct for futher use
+    // fill RabStripeElem struct for further use
     rab_stripe_elem[i].id                  = rab_stripe_elem_user[i].id;
     rab_stripe_elem[i].type                = rab_stripe_elem_user[i].type;
     rab_stripe_elem[i].n_slices_per_stripe = n_slices;
@@ -1668,12 +1722,12 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
 // free {{{
 /***********************************************************************************
  *
- * ███████╗██████╗ ███████╗███████╗
- * ██╔════╝██╔══██╗██╔════╝██╔════╝
- * █████╗  ██████╔╝█████╗  █████╗  
- * ██╔══╝  ██╔══██╗██╔══╝  ██╔══╝  
- * ██║     ██║  ██║███████╗███████╗
- * ╚═╝     ╚═╝  ╚═╝╚══════╝╚══════╝
+ * ██╗ ██████╗  ██████╗████████╗██╗         ███████╗██████╗ ███████╗███████╗
+ * ██║██╔═══██╗██╔════╝╚══██╔══╝██║         ██╔════╝██╔══██╗██╔════╝██╔════╝
+ * ██║██║   ██║██║        ██║   ██║         █████╗  ██████╔╝█████╗  █████╗  
+ * ██║██║   ██║██║        ██║   ██║         ██╔══╝  ██╔══██╗██╔══╝  ██╔══╝  
+ * ██║╚██████╔╝╚██████╗   ██║   ███████╗    ██║     ██║  ██║███████╗███████╗
+ * ╚═╝ ╚═════╝  ╚═════╝   ╚═╝   ╚══════╝    ╚═╝     ╚═╝  ╚═╝╚══════╝╚══════╝
  * 
  ***********************************************************************************/
 
@@ -1711,10 +1765,17 @@ void pulp_rab_free(void *rab_config, unsigned long arg)
   
     for (j=0; j<n_mappings; j++) {
       rab_slice_req->rab_mapping = j;
-      rab_slice_req->flags_drv = ( j < (n_mappings-1) ) ? 0x4 : 0x0; // unlock and release pages when freeing the last mapping     
       for (k=0; k<n_slices; k++) {
         rab_slice_req->rab_slice = k;
-  
+
+        if (rab_slice_req->rab_port == 1) {
+          rab_slice_req->flags_drv = l1.port_1.mappings[j].slices[k].flags_drv;
+          if ( (rab_slice_req->flags_drv & 0x4) && (j == n_mappings-1) )
+            BIT_CLEAR(rab_slice_req->flags_drv,0x4); // unlock and release pages when freeing the last mapping
+        }
+        else
+          rab_slice_req->flags_drv = 0x1; // Port 0 can only hold constant mappings
+          
         if ( !rab_slice_req->date_cur ||
              (rab_slice_req->date_cur == RAB_MAX_DATE) ||
              (pulp_rab_slice_check(rab_slice_req)) ) // free slice
@@ -1912,19 +1973,19 @@ void pulp_rab_update(unsigned update_req)
     printk(KERN_INFO "PULP - RAB: update requested, elem_mask = %#x, type = %d\n", elem_mask, type);
   }
   
-#ifdef PROFILE_RAB_STR 
-  // stop the PULP timer  
-  iowrite32(0x1,(void *)((unsigned long)(pulp->clusters)+TIMER_STOP_OFFSET_B));
-
-  // read the PULP timer
-  n_cyc_response = ioread32((void *)((unsigned long)(pulp->clusters)+TIMER_GET_TIME_LO_OFFSET_B));
-  n_cyc_tot_response += n_cyc_response;
-
-  // reset the ARM clock counter
-  asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
-#endif
+  #ifdef PROFILE_RAB_STR 
+    // stop the PULP timer  
+    iowrite32(0x1,(void *)((unsigned long)(pulp->clusters)+TIMER_STOP_OFFSET_B));
   
-#if !defined(MEM_SHARING) || (MEM_SHARING == 2)
+    // read the PULP timer
+    n_cyc_response = ioread32((void *)((unsigned long)(pulp->clusters)
+      +TIMER_GET_TIME_LO_OFFSET_B));
+    n_cyc_tot_response += n_cyc_response;
+  
+    // reset the ARM clock counter
+    asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
+  #endif
+  
   rab_mapping = (unsigned)pulp_rab_mapping_get_active();
 
   // process every data element independently
@@ -1960,52 +2021,51 @@ void pulp_rab_update(unsigned update_req)
         iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_end,    (void *)((unsigned long)(pulp->rab_config)+offset+0x28)); // end_addr
         IOWRITE_L(elem->stripes[stripe_idx].slice_configs[j].addr_offset, (void *)((unsigned long)(pulp->rab_config)+offset+0x30)); // offset  
         iowrite32(elem->flags_hw,                                         (void *)((unsigned long)(pulp->rab_config)+offset+0x38));
-#ifdef PROFILE_RAB_STR 
+      #ifdef PROFILE_RAB_STR 
         n_slices_updated++;
-#endif
+      #endif
       }
     }
     // increase stripe idx counter
     elem->stripe_idx++;
 
-#if defined(PROFILE_RAB_STR) || defined(JPEG) 
-    if (elem->stripe_idx == elem->n_stripes) {
-      elem->stripe_idx = 0;
-      if (DEBUG_LEVEL_RAB_STR > 0) {
-        printk(KERN_INFO "PULP - RAB: stripe table wrap around.\n");
+    #if defined(PROFILE_RAB_STR) || defined(JPEG) 
+      if (elem->stripe_idx == elem->n_stripes) {
+        elem->stripe_idx = 0;
+        if (DEBUG_LEVEL_RAB_STR > 0) {
+          printk(KERN_INFO "PULP - RAB: stripe table wrap around.\n");
+        }
       }
-    }
-#endif
-
+    #endif
   }
-#endif
+
   // signal ready to PULP
   iowrite32(HOST_READY,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
         
-#ifdef PROFILE_RAB_STR 
-  // read the ARM clock counter
-  asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
-  n_cyc_update = arm_clk_cntr_value;
-  n_cyc_tot_update += n_cyc_update;
+  #ifdef PROFILE_RAB_STR 
+    // read the ARM clock counter
+    asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
+    n_cyc_update = arm_clk_cntr_value;
+    n_cyc_tot_update += n_cyc_update;
+    
+    n_updates++;
+    
+    // write the counter values to the buffers
+    n_cyc_buf_response[idx_buf_response] = n_cyc_response;
+    idx_buf_response++;
+    n_cyc_buf_update[idx_buf_update] = n_cyc_update;
+    idx_buf_update++;
   
-  n_updates++;
-  
-  // write the counter values to the buffers
-  n_cyc_buf_response[idx_buf_response] = n_cyc_response;
-  idx_buf_response++;
-  n_cyc_buf_update[idx_buf_update] = n_cyc_update;
-  idx_buf_update++;
-
-  // check for buffer overflow
-  if ( idx_buf_response > PROFILE_RAB_N_UPDATES ) {
-    idx_buf_response = 0;
-    printk(KERN_WARNING "PULP - RAB: n_cyc_buf_response overflow!\n");
-  }
-  if ( idx_buf_update > PROFILE_RAB_N_UPDATES ) {
-    idx_buf_update = 0;
-    printk(KERN_WARNING "PULP - RAB: n_cyc_buf_update overflow!\n");
-  }
-#endif    
+    // check for buffer overflow
+    if ( idx_buf_response > PROFILE_RAB_N_UPDATES ) {
+      idx_buf_response = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_response overflow!\n");
+    }
+    if ( idx_buf_update > PROFILE_RAB_N_UPDATES ) {
+      idx_buf_update = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_update overflow!\n");
+    }
+  #endif    
   
   if (DEBUG_LEVEL_RAB_STR > 0) {
     printk(KERN_INFO "PULP - RAB: update completed.\n");
@@ -2060,6 +2120,448 @@ void pulp_rab_switch(void)
 
 // }}}
 
+/***********************************************************************************
+ *
+ * ███╗   ███╗██╗  ██╗██████╗ 
+ * ████╗ ████║██║  ██║██╔══██╗
+ * ██╔████╔██║███████║██████╔╝
+ * ██║╚██╔╝██║██╔══██║██╔══██╗
+ * ██║ ╚═╝ ██║██║  ██║██║  ██║
+ * ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝
+ *
+ ***********************************************************************************/
+
+/**
+ * Check whether a particular slice has expired. Returns 1 if slice
+ * has expired, 0 otherwise.
+ *
+ * @rab_config: kernel virtual address of the RAB configuration port.
+ * @arg:        ioctl() argument
+ */
+long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
+{
+
+  // to read from user space
+  unsigned request[2];
+  unsigned long n_bytes_read, n_bytes_left;
+  unsigned byte;
+
+  // get slice data from user space - arg already checked above
+  byte = 0;
+  n_bytes_left = 2*sizeof(unsigned); 
+  n_bytes_read = n_bytes_left;
+  while (n_bytes_read > 0) {
+    n_bytes_left = __copy_from_user((void *)((char *)request+byte),
+                           (void __user *)((char *)arg+byte), n_bytes_read);
+    byte += (n_bytes_read - n_bytes_left);
+    n_bytes_read = n_bytes_left;
+  }
+  rab_mh_acp = request[0];
+  rab_mh_lvl = request[1];
+
+  // create workqueue for RAB miss handling
+  //rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
+  rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 1, rab_mh_wq_name); // single-threaded workqueue for strict ordering
+  if (rab_mh_wq == NULL) {
+    printk(KERN_WARNING "PULP: Allocation of workqueue for RAB miss handling failed.\n");
+    return -ENOMEM;
+  }
+  // initialize the workqueue
+  INIT_WORK(&rab_mh_w, (void *)pulp_rab_handle_miss);
+  
+  // register information of the calling user-space process
+  user_task = current;
+  user_mm = current->mm;
+
+  // enable - protect with semaphore?
+  rab_mh = 1;
+  rab_mh_date = 1;
+
+  printk(KERN_INFO "PULP: RAB miss handling enabled.\n");
+
+  return 0;
+}
+/**
+ * Disable the worker thread and destroy the workqueue.
+ */
+void pulp_rab_mh_dis(void)
+{
+
+  // disable - protect with semaphore?
+  rab_mh = 0;
+  rab_mh_date = 0;
+
+  // flush and destroy the workqueue
+  destroy_workqueue(rab_mh_wq);
+
+  printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
+
+  return;
+}
+/**
+ * Append work to the worker thread running in process context.
+ */
+unsigned pulp_rab_mh_sched(void)
+{
+  if (rab_mh) { 
+    #ifdef PROFILE_RAB_MH
+      int i;
+      // read PE timers
+      for (i=0; i<N_CORES_TIMER; i++) {
+        n_cyc_response_tmp[i] = ioread32((void *)((unsigned long)(pulp->clusters)
+          +TIMER_GET_TIME_LO_OFFSET_B+(i+1)*PE_TIMER_OFFSET_B));
+      }
+    #endif
+    schedule_work(&rab_mh_w);
+  }
+
+  return rab_mh;
+}
+/**
+ * Handle RAB misses. This is the actual miss handling routine executed
+ * by the worker thread in process context.
+ */
+void pulp_rab_handle_miss(unsigned unused)
+{
+  int err, i, j, handled, result;
+  unsigned id, id_pe, id_cluster;
+  unsigned addr_start;
+  unsigned long addr_phys;
+    
+  // what get_user_pages needs
+  unsigned long start;
+  struct page **pages;
+  unsigned write;
+
+  // needed for RAB management
+  RabSliceReq rab_slice_request;
+  RabSliceReq *rab_slice_req = &rab_slice_request;
+
+  // needed for L2 TLB
+  L2Entry l2_entry_request;
+  L2Entry *l2_entry = &l2_entry_request;
+  int use_l1 = 1;
+  int err_l2 = 0;
+
+  if (DEBUG_LEVEL_RAB_MH > 1)
+    printk(KERN_INFO "PULP: RAB miss handling routine started.\n");
+  
+  // empty miss-handling FIFOs
+  for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
+    rab_mh_addr[i] = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ADDR_FIFO_OFFSET_B));
+    rab_mh_id[i]   = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ID_FIFO_OFFSET_B));
+    
+    // detect empty FIFOs
+    #if PLATFORM != JUNO    
+      if ( rab_mh_id[i] & 0x80000000 )
+        break;
+    #else
+      if ( rab_mh_id[i] & 0x8000000000000000 )
+        break;
+    #endif      
+
+    if (DEBUG_LEVEL_RAB_MH > 0) {
+      printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
+       i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
+    }
+     
+    // handle every miss separately
+    err = 0;
+    addr_start = rab_mh_addr[i];
+    id = rab_mh_id[i];
+    
+    // check the ID
+    id_pe      = BF_GET(id, 0, AXI_ID_WIDTH_CORE);
+    id_cluster = BF_GET(id, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC);
+    // - 0x3;
+    //id_cluster = BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) - 0x2;
+
+    // identify RAB port - for now, only handle misses on Port 1: PULP -> Host
+    if ( BF_GET(id, AXI_ID_WIDTH, 1) )
+      rab_slice_req->rab_port = 1;    
+    else {
+      printk(KERN_WARNING "PULP: Cannot handle RAB miss on ports different from Port 1.\n");
+      printk(KERN_WARNING "PULP: RAB miss - id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
+      continue;
+    }
+
+    // only handle misses from PEs' data interfaces
+    if ( ( BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) != 0x2 ) ||
+         ( (id_cluster < 0) || (id_cluster > (N_CLUSTERS-1)) ) || 
+         ( (id_pe < 0) || (id_pe > N_CORES-1) ) ) {
+      printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces. id = %#x | addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
+      // for debugging
+      //      pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
+
+      continue;
+    }
+  
+    #ifdef PROFILE_RAB_MH
+      // read the PE timer
+      n_cyc_schedule = ioread32((void *)((unsigned long)(pulp->clusters)
+        +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
+      n_cyc_tot_schedule += n_cyc_schedule;
+    
+      // save resp_tmp
+      n_cyc_response = n_cyc_response_tmp[id_pe];
+      n_cyc_tot_response += n_cyc_response;
+    
+      n_misses++;
+    #endif
+
+    // check if there has been a miss to the same page before
+    handled = 0;    
+    for (j=0; j<i; j++) {
+      if ( (addr_start & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT))
+           == (rab_mh_addr[j] & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT)) ) {
+        handled = 1;
+        if (DEBUG_LEVEL_RAB_MH > 0) {
+          printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
+          // for debugging only - deactivate fetch enable
+          // iowrite32(0xC0000000,(void *)((unsigned long)(pulp->gpio)+0x8));
+        }
+        break;
+      }
+    }
+
+    // handle a miss
+    if (!handled) {
+  
+      #ifdef PROFILE_RAB_MH
+        // reset the ARM clock counter
+        asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
+      
+        // read the ARM clock counter
+        asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
+      
+        n_first_misses++;
+      #endif
+
+      if (DEBUG_LEVEL_RAB_MH > 1) {
+        printk(KERN_INFO "PULP: Trying to handle RAB miss to user-space virtual address %#x.\n",addr_start);
+      }
+
+      // what get_user_pages returns
+      pages = (struct page **)kmalloc((size_t)(sizeof(struct page *)),GFP_KERNEL);
+      if ( pages == NULL ) {
+        printk(KERN_WARNING "PULP: Memory allocation failed.\n");
+        err = 1;
+        goto miss_handling_error;
+      }
+
+      // align address to page border / 4kB
+      start = (unsigned long)(addr_start) & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned long)*8-PAGE_SHIFT);
+      
+      // get pointer to user-space buffer and lock it into memory, get a single page
+      // try read/write mode first - fall back to read only
+      write = 1;
+      down_read(&user_task->mm->mmap_sem);
+      result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
+      if ( result == -EFAULT ) {
+        write = 0;
+        result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
+      }
+      up_read(&user_task->mm->mmap_sem);
+      //current->mm = user_task->mm;
+      //result = get_user_pages_fast(start, 1, 1, pages);
+      if (result != 1) {
+        printk(KERN_WARNING "PULP: Could not get requested user-space virtual address %#x.\n", addr_start);
+        err = 1;
+        goto miss_handling_error;
+      }
+      
+      // virtual-to-physical address translation
+      addr_phys = (unsigned long)page_to_phys(pages[0]);
+      if (DEBUG_LEVEL_MEM > 1) {
+        printk(KERN_INFO "PULP: Physical address = %#lx\n",addr_phys);
+      }
+
+      #ifdef PROFILE_RAB_MH
+        arm_clk_cntr_value_start = arm_clk_cntr_value;
+      
+        // read the ARM clock counter
+        asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
+        n_cyc_get_user_pages = arm_clk_cntr_value - arm_clk_cntr_value_start;
+        n_cyc_tot_get_user_pages += n_cyc_get_user_pages;
+      #endif
+      
+      // fill rab_slice_req structure
+      // allocate a fixed number of slices to each PE???
+      // works for one port only!!!
+      rab_slice_req->date_cur = (unsigned char)rab_mh_date;
+      rab_slice_req->date_exp = (unsigned char)rab_mh_date; 
+      rab_slice_req->page_idx_start = 0;
+      rab_slice_req->page_idx_end   = 0;
+      rab_slice_req->rab_mapping = (unsigned)pulp_rab_mapping_get_active();
+      rab_slice_req->flags_drv = 0;
+
+      rab_slice_req->addr_start  = (unsigned)start;
+      rab_slice_req->addr_end    = (unsigned)start + PAGE_SIZE;
+      rab_slice_req->addr_offset = addr_phys;
+      RAB_SET_PROT(rab_slice_req->flags_hw,(write << 2) | 0x2 | 0x1);
+      RAB_SET_ACP(rab_slice_req->flags_hw,rab_mh_acp);
+
+      // Check which TLB level to use.
+      // If rab_mh_lvl is 0, enter the entry in L1 if free slice is available. If not, enter in L2.
+      if (rab_mh_lvl == 2) {
+        use_l1 = 0;
+      } else {
+        // get a free slice
+        use_l1 = 1;
+        err = pulp_rab_slice_get(rab_slice_req);
+        if (err) {
+          if (rab_mh_lvl == 1) {
+            printk(KERN_WARNING "PULP: RAB miss handling error 2.\n");
+            goto miss_handling_error;
+          }
+          else
+            use_l1 = 0;
+        }
+      }
+      err = 0;
+      if (use_l1 == 0) { // Use L2
+        l2_entry->flags = rab_slice_req->flags_hw;
+        l2_entry->pfn_v = (unsigned)(start >> PAGE_SHIFT);
+        l2_entry->pfn_p = (unsigned)(addr_phys >> PAGE_SHIFT);
+        l2_entry->page_ptr = pages[0];
+        err_l2 = pulp_rab_l2_setup_entry(pulp->rab_config, l2_entry, rab_slice_req->rab_port, 1);   
+      } else { // Use L1
+        // free memory of slices to be re-configured
+        pulp_rab_slice_free(pulp->rab_config, rab_slice_req);
+
+        // check for free field in page_ptrs list
+        err = pulp_rab_page_ptrs_get_field(rab_slice_req);
+        if (err) {
+          printk(KERN_WARNING "PULP: RAB miss handling error 0.\n");
+          goto miss_handling_error;
+        }
+                
+        // setup slice
+        err = pulp_rab_slice_setup(pulp->rab_config, rab_slice_req, pages);
+        if (err) {
+          printk(KERN_WARNING "PULP: RAB miss handling error 1.\n");
+          goto miss_handling_error;
+        }        
+      } // if (use_l1 == 0)
+
+      #ifdef PROFILE_RAB_MH
+        arm_clk_cntr_value_start = arm_clk_cntr_value;
+      
+        // read the ARM clock counter
+        asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
+        n_cyc_setup = arm_clk_cntr_value - arm_clk_cntr_value_start;
+        n_cyc_tot_setup += n_cyc_setup;
+      #endif
+
+      // flush the entire page from the caches if ACP is not used
+      if (!rab_mh_acp)
+        pulp_mem_cache_flush(pages[0],0,PAGE_SIZE);
+
+      if (use_l1 == 0)
+        kfree(pages);
+
+      if (rab_mh_lvl == 1)
+        if (rab_slice_req->rab_slice == (RAB_L1_N_SLICES_PORT_1 - 1)) {
+          rab_mh_date++;
+          if (rab_mh_date > RAB_MAX_DATE_MH)
+            rab_mh_date = 0;
+          //printk(KERN_INFO "rab_mh_date = %d\n",rab_mh_date);
+        }
+
+      #ifdef PROFILE_RAB_MH
+        arm_clk_cntr_value_start = arm_clk_cntr_value;
+      
+        // read the ARM clock counter
+        asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
+        n_cyc_cache_flush = arm_clk_cntr_value - arm_clk_cntr_value_start;
+        n_cyc_tot_cache_flush += n_cyc_cache_flush;
+      #endif
+    }
+    
+    // // for debugging
+    // pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
+
+    // wake up the sleeping PE
+    iowrite32(BIT_N_SET(id_pe),
+              (void *)((unsigned long)(pulp->clusters) + CLUSTER_SIZE_B*id_cluster
+                       + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B));
+
+    /*
+     * printk(KERN_INFO "WAKEUP: value = %#x, address = %#x\n",BIT_N_SET(id_pe), CLUSTER_SIZE_B*id_cluster \
+     *        + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B );
+     */
+
+#ifdef PROFILE_RAB_MH
+    // read the PE timer
+    n_cyc_update = ioread32((void *)((unsigned long)(pulp->clusters)
+      +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
+    
+    // write the counter values to the buffers
+    n_cyc_buf_response[idx_buf_response] = n_cyc_response;
+    idx_buf_response++;
+    n_cyc_buf_schedule[idx_buf_schedule] = n_cyc_schedule;
+    idx_buf_schedule++;
+    n_cyc_buf_get_user_pages[idx_buf_get_user_pages] = n_cyc_get_user_pages;
+    idx_buf_get_user_pages++;
+    n_cyc_buf_setup[idx_buf_setup] = n_cyc_setup;
+    idx_buf_setup++;
+    n_cyc_buf_cache_flush[idx_buf_cache_flush] = n_cyc_cache_flush;
+    idx_buf_cache_flush++;
+    n_cyc_buf_update[idx_buf_update] = n_cyc_update;
+    idx_buf_update++;
+
+    // check for buffer overflow
+    if ( idx_buf_response > PROFILE_RAB_N_UPDATES ) {
+      idx_buf_response = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_response overflow!\n");
+    }
+    if ( idx_buf_schedule > PROFILE_RAB_N_UPDATES ) {
+      idx_buf_schedule = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_schedule overflow!\n");
+    }
+    if ( idx_buf_get_user_pages > PROFILE_RAB_N_ELEMENTS ) {
+      idx_buf_get_user_pages = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_get_user_pages overflow!\n");
+    }
+    if ( idx_buf_setup > PROFILE_RAB_N_REQUESTS ) {
+      idx_buf_setup = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_setup overflow!\n");
+    }
+    if ( idx_buf_cache_flush > PROFILE_RAB_N_ELEMENTS ) {
+      idx_buf_cache_flush = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_cache_flush overflow!\n");
+    }
+    if ( idx_buf_update > PROFILE_RAB_N_UPDATES ) {
+      idx_buf_update = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_update overflow!\n");
+    }
+
+    // update accumulators in shared memory 
+    iowrite32(n_cyc_tot_response,       (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_RESPONSE_OFFSET_B));
+    iowrite32(n_cyc_tot_update,         (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_UPDATE_OFFSET_B));
+    iowrite32(n_cyc_tot_setup,          (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_SETUP_OFFSET_B));
+    iowrite32(n_cyc_tot_cache_flush,    (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_CACHE_FLUSH_OFFSET_B));
+    iowrite32(n_cyc_tot_get_user_pages, (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_GET_USER_PAGES_OFFSET_B));
+    iowrite32(n_cyc_tot_schedule,       (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_SCHEDULE_OFFSET_B));
+    iowrite32(n_first_misses,           (void *)((unsigned long)(pulp->l3_mem)+N_FIRST_MISSES_OFFSET_B));
+    iowrite32(n_misses,                 (void *)((unsigned long)(pulp->l3_mem)+N_MISSES_OFFSET_B));
+
+#endif
+    // error handling
+  miss_handling_error:
+    if (err) {
+      printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
+
+      // for debugging
+      pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
+    }
+
+  }
+  if (DEBUG_LEVEL_RAB_MH > 1)
+    printk(KERN_INFO "PULP: RAB miss handling routine finished.\n");
+
+  return;
+}
 // AX Logger {{{
 #if PLATFORM == JUNO
   /***********************************************************************************
@@ -2290,30 +2792,40 @@ void pulp_rab_switch(void)
     return;
   }
   // }}}
+
 #endif
 // }}}
 
 // Profiling {{{
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
+  /***********************************************************************************
+   *
+   * ██████╗ ██████╗  ██████╗ ███████╗██╗██╗     ███████╗
+   * ██╔══██╗██╔══██╗██╔═══██╗██╔════╝██║██║     ██╔════╝
+   * ██████╔╝██████╔╝██║   ██║█████╗  ██║██║     █████╗  
+   * ██╔═══╝ ██╔══██╗██║   ██║██╔══╝  ██║██║     ██╔══╝  
+   * ██║     ██║  ██║╚██████╔╝██║     ██║███████╗███████╗
+   * ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝╚══════╝
+   * 
+   ***********************************************************************************/                                             
 
   // prof_init {{{
+  /**
+   * Dynamically allocate buffers used to store profiling data and initialize index counters.
+   */
   int pulp_rab_prof_init(void)
   {
     // allocate buffer memory
     n_cyc_buf_response       = (unsigned *)vmalloc(PROFILE_RAB_N_UPDATES*sizeof(unsigned));
     n_cyc_buf_update         = (unsigned *)vmalloc(PROFILE_RAB_N_UPDATES*sizeof(unsigned));
     n_cyc_buf_setup          = (unsigned *)vmalloc(PROFILE_RAB_N_REQUESTS*sizeof(unsigned));
-    n_cyc_buf_cleanup        = (unsigned *)vmalloc(PROFILE_RAB_N_REQUESTS*sizeof(unsigned));
     n_cyc_buf_cache_flush    = (unsigned *)vmalloc(PROFILE_RAB_N_ELEMENTS*sizeof(unsigned));
     n_cyc_buf_get_user_pages = (unsigned *)vmalloc(PROFILE_RAB_N_ELEMENTS*sizeof(unsigned));
-    n_cyc_buf_map_sg         = (unsigned *)vmalloc(PROFILE_RAB_N_ELEMENTS*sizeof(unsigned));
     if ( (n_cyc_buf_response       == NULL) ||
          (n_cyc_buf_update         == NULL) ||
          (n_cyc_buf_setup          == NULL) ||
-         (n_cyc_buf_cleanup        == NULL) ||
          (n_cyc_buf_cache_flush    == NULL) ||
-         (n_cyc_buf_get_user_pages == NULL) ||
-         (n_cyc_buf_map_sg         == NULL) ) {
+         (n_cyc_buf_get_user_pages == NULL) ) {
       printk(KERN_WARNING "PULP - RAB: Could not allocate kernel memory for profiling buffers.\n");
       return -ENOMEM;
     }
@@ -2322,114 +2834,194 @@ void pulp_rab_switch(void)
     idx_buf_response       = 0;
     idx_buf_update         = 0;
     idx_buf_setup          = 0;
-    idx_buf_cleanup        = 0;
     idx_buf_cache_flush    = 0;
     idx_buf_get_user_pages = 0;
-    idx_buf_map_sg         = 0;
 
     // initialize accumulators
     n_cyc_tot_response       = 0;
     n_cyc_tot_update         = 0;
     n_cyc_tot_setup          = 0;
-    n_cyc_tot_cleanup        = 0;
     n_cyc_tot_cache_flush    = 0;
     n_cyc_tot_get_user_pages = 0;
-    n_cyc_tot_map_sg         = 0;
-    n_slices_updated         = 0;
-    n_pages_setup            = 0;
-    n_updates                = 0;
-    n_cleanups               = 0;
+
+    #ifdef PROFILE_RAB_STR
+      n_cyc_buf_cleanup = (unsigned *)vmalloc(PROFILE_RAB_N_REQUESTS*sizeof(unsigned));
+      n_cyc_buf_map_sg  = (unsigned *)vmalloc(PROFILE_RAB_N_ELEMENTS*sizeof(unsigned));
+      if ( (n_cyc_buf_cleanup == NULL) ||
+           (n_cyc_buf_map_sg  == NULL) ) {
+        printk(KERN_WARNING "PULP - RAB: Could not allocate kernel memory for profiling buffers.\n");
+        return -ENOMEM;        
+      }
+
+      idx_buf_cleanup = 0;
+      idx_buf_map_sg  = 0;
+
+      n_cyc_tot_cleanup = 0;
+      n_cyc_tot_map_sg  = 0;
+      n_pages_setup     = 0;
+      n_cleanups        = 0;
+      n_slices_updated  = 0;
+      n_updates         = 0;
+    #endif
+
+    #ifdef PROFILE_RAB_MH
+      n_cyc_buf_schedule    = (unsigned *)vmalloc(PROFILE_RAB_N_UPDATES*sizeof(unsigned));
+      if ( n_cyc_buf_schedule == NULL ) {
+        printk(KERN_WARNING "PULP - RAB: Could not allocate kernel memory for profiling buffers.\n");
+        return -ENOMEM;
+      }
+
+      idx_buf_schedule = 0;
+
+      n_cyc_tot_schedule = 0;
+      n_first_misses     = 0;
+      n_misses           = 0;
+    #endif
 
     return 0;
   }
   // }}}
 
   // prof_free {{{
+  /**
+   * Free dynamically allocated buffers used for profiling.
+   */
   void pulp_rab_prof_free(void)
   {
     vfree(n_cyc_buf_response      ); 
     vfree(n_cyc_buf_update        ); 
     vfree(n_cyc_buf_setup         ); 
-    vfree(n_cyc_buf_cleanup       ); 
     vfree(n_cyc_buf_cache_flush   ); 
     vfree(n_cyc_buf_get_user_pages); 
-    vfree(n_cyc_buf_map_sg        ); 
+
+    #ifdef PROFILE_RAB_STR
+      vfree(n_cyc_buf_cleanup     ); 
+      vfree(n_cyc_buf_map_sg      ); 
+    #endif
+
+    #ifdef PROFILE_RAB_MH
+      vfree(n_cyc_buf_schedule    ); 
+    #endif
 
     return;
   }
   // }}}
 
   // prof_print {{{
+  /**
+   * Print data collected during profiling and reset index counters
+   */
   void pulp_rab_prof_print(void)
   {
     int i;
     
     // print buffers
-    printk(KERN_INFO "n_cyc_buf_response[i] = \n");
-    for (i=0; i<idx_buf_response; i++) {
-      printk(KERN_INFO "%d \n", n_cyc_buf_response[i]);
+    if ( idx_buf_response ) {
+      printk(KERN_INFO "n_cyc_buf_response[i] = \n");
+      for (i=0; i<idx_buf_response; i++) {
+        printk(KERN_INFO "%d \n", n_cyc_buf_response[i]);
+      }
     }
-    printk(KERN_INFO "n_cyc_buf_update[i] = \n");
-    for (i=0; i<idx_buf_update; i++) {
-      printk(KERN_INFO "%d \n", n_cyc_buf_update[i]);
+    #ifdef PROFILE_RAB_MH
+      if ( idx_buf_schedule ) {
+        printk(KERN_INFO "n_cyc_buf_schedule[i] = \n");
+        for (i=0; i<idx_buf_schedule; i++) {
+          printk(KERN_INFO "%d \n", n_cyc_buf_schedule[i]);
+        }
+      }
+    #endif
+    if ( idx_buf_update ) {
+      printk(KERN_INFO "n_cyc_buf_update[i] = \n");
+      for (i=0; i<idx_buf_update; i++) {
+        printk(KERN_INFO "%d \n", n_cyc_buf_update[i]);
+      }
     }
-    printk(KERN_INFO "n_cyc_buf_setup[i] = \n");
-    for (i=0; i<idx_buf_setup; i++) {
-      printk(KERN_INFO "%d \n", n_cyc_buf_setup[i]);
+    if ( idx_buf_setup ) {
+      printk(KERN_INFO "n_cyc_buf_setup[i] = \n");
+      for (i=0; i<idx_buf_setup; i++) {
+        printk(KERN_INFO "%d \n", n_cyc_buf_setup[i]);
+      }
     }
-    printk(KERN_INFO "n_cyc_buf_cleanup[i] = \n");
-    for (i=0; i<idx_buf_cleanup; i++) {
-      printk(KERN_INFO "%d \n", n_cyc_buf_cleanup[i]);
+    #ifdef PROFILE_RAB_STR
+      if ( idx_buf_cleanup ) {
+        printk(KERN_INFO "n_cyc_buf_cleanup[i] = \n");
+        for (i=0; i<idx_buf_cleanup; i++) {
+          printk(KERN_INFO "%d \n", n_cyc_buf_cleanup[i]);
+        }
+      }
+    #endif
+    if ( idx_buf_cache_flush ) {
+      printk(KERN_INFO "n_cyc_buf_cache_flush[i] = \n");
+      for (i=0; i<idx_buf_cache_flush; i++) {
+        printk(KERN_INFO "%d \n", n_cyc_buf_cache_flush[i]);
+      }
     }
-    printk(KERN_INFO "n_cyc_buf_cache_flush[i] = \n");
-    for (i=0; i<idx_buf_cache_flush; i++) {
-      printk(KERN_INFO "%d \n", n_cyc_buf_cache_flush[i]);
+    if ( idx_buf_get_user_pages ) {
+      printk(KERN_INFO "n_cyc_buf_get_user_pages[i] = \n");
+      for (i=0; i<idx_buf_get_user_pages; i++) {
+        printk(KERN_INFO "%d \n", n_cyc_buf_get_user_pages[i]);
+      }
     }
-    printk(KERN_INFO "n_cyc_buf_get_user_pages[i] = \n");
-    for (i=0; i<idx_buf_get_user_pages; i++) {
-      printk(KERN_INFO "%d \n", n_cyc_buf_get_user_pages[i]);
-    }
-    printk(KERN_INFO "n_cyc_buf_map_sg[i] = \n");
-    for (i=0; i<idx_buf_map_sg; i++) {
-      printk(KERN_INFO "%d \n", n_cyc_buf_map_sg[i]);
-    }
+    #ifdef PROFILE_RAB_STR
+      if ( idx_buf_map_sg ) {
+        printk(KERN_INFO "n_cyc_buf_map_sg[i] = \n");
+        for (i=0; i<idx_buf_map_sg; i++) {
+          printk(KERN_INFO "%d \n", n_cyc_buf_map_sg[i]);
+        }
+      }
+    #endif
 
     // update accumulators in shared memory 
+    iowrite32(n_cyc_tot_response,       (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_RESPONSE_OFFSET_B));
+    iowrite32(n_cyc_tot_update,         (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_UPDATE_OFFSET_B));
     iowrite32(n_cyc_tot_setup,          (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_SETUP_OFFSET_B));
     iowrite32(n_cyc_tot_cache_flush,    (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_CACHE_FLUSH_OFFSET_B));
     iowrite32(n_cyc_tot_get_user_pages, (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_GET_USER_PAGES_OFFSET_B));
-    iowrite32(n_cyc_tot_map_sg,         (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_MAP_SG_OFFSET_B));
-    iowrite32(n_pages_setup,            (void *)((unsigned long)(pulp->l3_mem)+N_PAGES_SETUP_OFFSET_B));
- 
-    iowrite32(n_cyc_tot_response, (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_RESPONSE_OFFSET_B));
-    iowrite32(n_cyc_tot_update,   (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_UPDATE_OFFSET_B));
-    iowrite32(n_slices_updated,   (void *)((unsigned long)(pulp->l3_mem)+N_SLICES_UPDATED_OFFSET_B));
-    iowrite32(n_updates,          (void *)((unsigned long)(pulp->l3_mem)+N_UPDATES_OFFSET_B));
-
-    iowrite32(n_cyc_tot_cleanup,(void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_CLEANUP_OFFSET_B));
-    iowrite32(n_cleanups,       (void *)((unsigned long)(pulp->l3_mem)+N_CLEANUPS_OFFSET_B));
 
     // reset indices
     idx_buf_response       = 0;
     idx_buf_update         = 0;
     idx_buf_setup          = 0;
-    idx_buf_cleanup        = 0;
     idx_buf_cache_flush    = 0;
     idx_buf_get_user_pages = 0;
-    idx_buf_map_sg         = 0;
     
     // reset accumulators
     n_cyc_tot_response       = 0;
     n_cyc_tot_update         = 0;
     n_cyc_tot_setup          = 0;
-    n_cyc_tot_cleanup        = 0;
     n_cyc_tot_cache_flush    = 0;
     n_cyc_tot_get_user_pages = 0;
-    n_cyc_tot_map_sg         = 0;
-    n_slices_updated         = 0;
-    n_pages_setup            = 0;
-    n_updates                = 0;
-    n_cleanups               = 0;
+
+    #ifdef PROFILE_RAB_STR
+      iowrite32(n_cyc_tot_map_sg,   (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_MAP_SG_OFFSET_B));
+      iowrite32(n_cyc_tot_cleanup,  (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_CLEANUP_OFFSET_B));
+      iowrite32(n_pages_setup,      (void *)((unsigned long)(pulp->l3_mem)+N_PAGES_SETUP_OFFSET_B));
+      iowrite32(n_cleanups,         (void *)((unsigned long)(pulp->l3_mem)+N_CLEANUPS_OFFSET_B));
+      iowrite32(n_slices_updated,   (void *)((unsigned long)(pulp->l3_mem)+N_SLICES_UPDATED_OFFSET_B));
+      iowrite32(n_updates,          (void *)((unsigned long)(pulp->l3_mem)+N_UPDATES_OFFSET_B));
+
+      idx_buf_map_sg    = 0;
+      idx_buf_cleanup   = 0;
+    
+      n_cyc_tot_map_sg  = 0;
+      n_cyc_tot_cleanup = 0;
+      n_pages_setup     = 0;
+      n_cleanups        = 0;
+      n_slices_updated  = 0;
+      n_updates         = 0;
+    #endif
+
+    #ifdef PROFILE_RAB_MH
+      iowrite32(n_cyc_tot_schedule, (void *)((unsigned long)(pulp->l3_mem)+N_CYC_TOT_SCHEDULE_OFFSET_B));
+      iowrite32(n_first_misses,     (void *)((unsigned long)(pulp->l3_mem)+N_FIRST_MISSES_OFFSET_B));
+      iowrite32(n_misses,           (void *)((unsigned long)(pulp->l3_mem)+N_MISSES_OFFSET_B));
+
+      idx_buf_schedule   = 0;
+
+      n_cyc_tot_schedule = 0;
+      n_first_misses     = 0;
+      n_misses           = 0;
+    #endif
 
     return;
   }
