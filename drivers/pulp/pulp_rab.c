@@ -1892,6 +1892,9 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
 // }}}
 
 // soc_mh_ena {{{
+/**
+ * TODO: documentation
+ */
 int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
 {
   // Get physical address of page global directory (i.e., the process-specific top-level page
@@ -1905,7 +1908,7 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
   // space of PULP core running the PTW.
   RabSliceReq rab_slice_req;
   rab_slice_req.date_cur        = 0;
-  rab_slice_req.date_exp        = 255;
+  rab_slice_req.date_exp        = RAB_MAX_DATE_MH;
   rab_slice_req.page_ptr_idx    = RAB_L1_N_SLICES_PORT_1-1;
   rab_slice_req.page_idx_start  = 0;
   rab_slice_req.page_idx_end    = 0;
@@ -1929,6 +1932,11 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
     printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", rab_slice_req.rab_slice);
     return retval;
   }
+
+  // Write PGD to mailbox.  TODO: This actually is unnecessary because a constant RAB slice to the
+  // physical address exists anyway.  However, we need some way to tell a *single core* that it
+  // should handle RAB misses.
+  iowrite32(pgd_pa, (void *)((unsigned long)mbox+MBOX_WRDATA_OFFSET_B));
 
   return 0;
 }
