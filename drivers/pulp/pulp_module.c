@@ -83,6 +83,7 @@ MODULE_DESCRIPTION("PULPonFPGA driver");
 
 /***************************************************************************************/
 
+// Device Tree (for Juno) {{{
 #if PLATFORM == JUNO
   /***********************************************************************************
    *
@@ -149,13 +150,14 @@ MODULE_DESCRIPTION("PULPonFPGA driver");
 
 /***************************************************************************************/
 #endif
+// }}}
 
 // VM_RESERVERD for mmap
 #ifndef VM_RESERVED
   #define VM_RESERVED (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
 
-// method declarations
+// method declarations {{{
 static int  pulp_open   (struct inode *inode, struct file *filp);
 static int  pulp_release(struct inode *p_inode, struct file *filp);
 static int  pulp_mmap   (struct file *filp, struct vm_area_struct *vma);
@@ -172,7 +174,9 @@ static long pulp_ioctl  (struct file *filp, unsigned int cmd, unsigned long arg)
   static irqreturn_t pulp_isr_rab (int irq, void *ptr);
 #endif // PLATFORM == JUNO
 
-// important structs
+// }}}
+
+// important structs {{{
 struct file_operations pulp_fops = {
   .owner          = THIS_MODULE,
   .open           = pulp_open,
@@ -184,8 +188,9 @@ struct file_operations pulp_fops = {
   .compat_ioctl = pulp_compat_ioctl,
 #endif
 };
+// }}}
 
-// static variables
+// static variables {{{
 static PulpDev my_dev;
 
 static struct class *my_class; 
@@ -195,8 +200,11 @@ static unsigned pulp_cluster_select = 0;
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
 static DmaCleanup pulp_dma_cleanup[2];
+// }}}
 
 // methods definitions
+
+// init {{{
 /***********************************************************************************
  *
  * ██╗███╗   ██╗██╗████████╗
@@ -505,7 +513,9 @@ static int __init pulp_init(void)
     return err;
 }
 module_init(pulp_init);
+// }}}
 
+// exit {{{
 /***********************************************************************************
  *
  * ███████╗██╗  ██╗██╗████████╗
@@ -560,7 +570,9 @@ static void __exit pulp_exit(void)
   unregister_chrdev_region(my_dev.dev, 1);
 }
 module_exit(pulp_exit);
+// }}}
 
+// open {{{
 /***********************************************************************************
  *
  *  ██████╗ ██████╗ ███████╗███╗   ██╗
@@ -588,7 +600,9 @@ int pulp_open(struct inode *inode, struct file *filp)
   
   return 0;
 }
+// }}}
 
+// release {{{
 /***********************************************************************************
  *
  * ██████╗ ███████╗██╗     ███████╗ █████╗ ███████╗███████╗
@@ -608,7 +622,9 @@ int pulp_release(struct inode *p_inode, struct file *filp)
  
   return 0;
 }
+// }}}
 
+// mmap {{{
 /***********************************************************************************
  *
  * ███╗   ███╗███╗   ███╗ █████╗ ██████╗ 
@@ -753,6 +769,9 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 //   return NOPAGE_SIGBUS;
 // }
 
+// }}}
+
+// isr {{{
 /***********************************************************************************
  *
  * ██╗███████╗██████╗ 
@@ -891,8 +910,9 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   }
 
 #endif // PLATFORM == JUNO
+// }}}
 
-
+// ioctl {{{
 /***********************************************************************************
  *
  * ██╗ ██████╗  ██████╗████████╗██╗     
@@ -955,7 +975,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
    * cmds: return ENOTTY before access_ok()
    */
   if (_IOC_TYPE(cmd) != PULP_IOCTL_MAGIC) return -ENOTTY;
-  if ( (_IOC_NR(cmd) < 0xB0) | (_IOC_NR(cmd) > 0xB7) ) return -ENOTTY;
+  if ( (_IOC_NR(cmd) < PULP_IOC_NR_MIN) | (_IOC_NR(cmd) > PULP_IOC_NR_MAX) ) return -ENOTTY;
 
   /*
    * the direction is a bitmask, and VERIFY_WRITE catches R/W
@@ -968,7 +988,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
   if (err) return -EFAULT;
 
-  // the actual ioctls
+  // the actual ioctls {{{
   switch(cmd) {
 
   case PULP_IOCTL_RAB_REQ: // request new RAB slices
@@ -1013,6 +1033,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     break;
 
+  // DMAC_XFER {{{
   case PULP_IOCTL_DMAC_XFER: // setup a transfer using the PL330 DMAC inside Zynq
   
     // get transfer data from user space - arg already checked above
@@ -1151,6 +1172,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif
       
     break;
+  // }}}
 
   case PULP_IOCTL_RAB_MH_ENA:
 
@@ -1162,6 +1184,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
    
   pulp_rab_mh_dis();
 
+    break;
+
+  case PULP_IOCTL_RAB_SOC_MH_ENA:
+    retval = pulp_rab_soc_mh_ena(current, my_dev.rab_config, my_dev.mbox);
     break;
 
   case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space
@@ -1184,6 +1210,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   default:
     return -ENOTTY;
   }
+  // }}}
 
   return retval;
 }
+// }}}
+
+// vim: ts=2 sw=2 sts=2 et foldmethod=marker tw=100

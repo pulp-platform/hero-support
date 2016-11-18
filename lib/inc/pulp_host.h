@@ -148,8 +148,16 @@
  */
 #define PULP_N_DEV_NUMBERS 1
 
-// ioctl setup
+/**
+ * IOCTL Setup
+ *
+ * When defining a new IOCTL command, append a macro definition to the list below, using the
+ * consecutively following command number, and increase the `PULP_IOC_NR_MAX` macro.
+ */
 #define PULP_IOCTL_MAGIC 'p'
+#define PULP_IOC_NR_MIN 0xB0
+#define PULP_IOC_NR_MAX 0xB8
+
 #define PULP_IOCTL_RAB_REQ   _IOW(PULP_IOCTL_MAGIC,0xB0,unsigned) // ptr
 #define PULP_IOCTL_RAB_FREE  _IOW(PULP_IOCTL_MAGIC,0xB1,unsigned) // value
 
@@ -162,6 +170,8 @@
 #define PULP_IOCTL_DMAC_XFER _IOW(PULP_IOCTL_MAGIC,0xB6,unsigned) // ptr
 
 #define PULP_IOCTL_INFO_PASS _IOW(PULP_IOCTL_MAGIC,0xB7,unsigned) // ptr  
+
+#define PULP_IOCTL_RAB_SOC_MH_ENA _IOW(PULP_IOCTL_MAGIC,0xB8,unsigned)
 
 /*
  * Platform specific settings
@@ -290,6 +300,9 @@
 #define CLKING_STATUS_REG_OFFSET_B    0x4 
 
 #define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
+
+#define PGD_BASE_ADDR        0x20000000 // Address at which PULP sees the top-level page table of
+                                        // the host process
 
 #define RAB_CONFIG_SIZE_B         0x10000
 #define RAB_L1_N_MAPPINGS_PORT_1  2
@@ -468,3 +481,5 @@ typedef struct {
 #define PROFILE_RAB_N_ELEMENTS    (PROFILE_RAB_N_REQUESTS * 10)
 
 #endif // PULP_HOST_H___
+
+// vim: ts=2 sw=2 sts=2 et foldmethod=marker tw=100

@@ -967,6 +967,11 @@ void pulp_rab_mh_disable(PulpDev *pulp)
   ioctl(pulp->fd,PULP_IOCTL_RAB_MH_DIS);
 }
 
+int pulp_rab_soc_mh_enable(PulpDev* pulp)
+{
+    return ioctl(pulp->fd, PULP_IOCTL_RAB_SOC_MH_ENA, 0);
+}
+
 /**
  * Setup a DMA transfer using the Zynq PS DMA engine
  *
