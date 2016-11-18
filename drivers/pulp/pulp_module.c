@@ -1174,21 +1174,17 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     break;
   // }}}
 
-  // RAB_MH_ENA {{{
   case PULP_IOCTL_RAB_MH_ENA:
 
     retval = pulp_rab_mh_ena(my_dev.rab_config, arg);
 
     break;
-  // }}}
 
-  // RAB_MH_DIS {{{
   case PULP_IOCTL_RAB_MH_DIS:
    
   pulp_rab_mh_dis();
 
     break;
-  // }}}
 
   case PULP_IOCTL_RAB_SOC_MH_ENA:
     retval = pulp_rab_soc_mh_ena(current, my_dev.rab_config, my_dev.mbox);
