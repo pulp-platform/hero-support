@@ -1897,16 +1897,20 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
  */
 int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
 {
+  pgd_t*          pgd_ptr;
+  unsigned long   pgd_pa;
+  RabSliceReq     rab_slice_req;
+  int             retval;
+
   // Get physical address of page global directory (i.e., the process-specific top-level page
   // table).
-  const pgd_t* pgd_ptr = current->mm->pgd;
+  pgd_ptr = current->mm->pgd;
   BUG_ON(pgd_none(*pgd_ptr));
-  const unsigned long pgd_pa = (((unsigned long)(pgd_val(*pgd_ptr)) & PHYS_MASK) >> 2) << 2;
+  pgd_pa = (((unsigned long)(pgd_val(*pgd_ptr)) & PHYS_MASK) >> 2) << 2;
   printk(KERN_DEBUG "PULP RAB SoC MH PGD PA: 0x%010lx\n", pgd_pa);
 
   // Set up a RAB mapping between physical address space of page tables and virtual address
   // space of PULP core running the PTW.
-  RabSliceReq rab_slice_req;
   rab_slice_req.date_cur        = 0;
   rab_slice_req.date_exp        = RAB_MAX_DATE_MH;
   rab_slice_req.page_ptr_idx    = RAB_L1_N_SLICES_PORT_1-1;
@@ -1927,7 +1931,7 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
 
   // Request to setup RAB slice.  If this fails, the SoC MH cannot be enabled because the PTW would
   // access the wrong physical address.
-  const int retval = pulp_rab_slice_setup(rab_config, &rab_slice_req, NULL);
+  retval = pulp_rab_slice_setup(rab_config, &rab_slice_req, NULL);
   if (retval != 0) {
     printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", rab_slice_req.rab_slice);
     return retval;

@@ -13,7 +13,6 @@ PULP_INC_DIR2 := ${shell echo ${PULP_INC_DIR2}}
 ccflags-y := -I${ARM_INC_DIR1}
 ccflags-y += -I${PULP_INC_DIR1} -I${PULP_INC_DIR2}
 ccflags-y += -DPLATFORM=${PLATFORM}
-ccflags-y += -Wno-declaration-after-statement
 
 ifeq ($(PLATFORM),4)
 	# JUNO requires cache.o from kernel directory
