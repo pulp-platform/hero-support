@@ -2120,6 +2120,7 @@ void pulp_rab_switch(void)
 
 // }}}
 
+// Miss Handling {{{
 /***********************************************************************************
  *
  * ███╗   ███╗██╗  ██╗██████╗ 
@@ -2131,6 +2132,7 @@ void pulp_rab_switch(void)
  *
  ***********************************************************************************/
 
+// mh_ena {{{
 /**
  * Check whether a particular slice has expired. Returns 1 if slice
  * has expired, 0 otherwise.
@@ -2181,6 +2183,9 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
 
   return 0;
 }
+// }}}
+
+// mh_dis {{{
 /**
  * Disable the worker thread and destroy the workqueue.
  */
@@ -2198,6 +2203,9 @@ void pulp_rab_mh_dis(void)
 
   return;
 }
+// }}}
+
+// mh_sched {{{
 /**
  * Append work to the worker thread running in process context.
  */
@@ -2217,6 +2225,9 @@ unsigned pulp_rab_mh_sched(void)
 
   return rab_mh;
 }
+// }}}
+
+// handle_miss {{{
 /**
  * Handle RAB misses. This is the actual miss handling routine executed
  * by the worker thread in process context.
@@ -2562,6 +2573,10 @@ void pulp_rab_handle_miss(unsigned unused)
 
   return;
 }
+// }}}
+
+// }}}
+
 // AX Logger {{{
 #if PLATFORM == JUNO
   /***********************************************************************************
