@@ -197,8 +197,6 @@
   #define RAB_PROT_IRQ           65
   //#define RAB_MHR_FULL_IRQ       66 // not yet used
 
-  #define RAB_MH_ID_FIFO_OFFSET_B   0x4
-
   #if PLATFORM == ZEDBOARD
 
     #define PULP_DEFAULT_FREQ_MHZ 25
@@ -280,8 +278,6 @@
   #define RAB_L1_N_SLICES_PORT_0   4
   #define RAB_L1_N_SLICES_PORT_1  32
 
-  #define RAB_MH_ID_FIFO_OFFSET_B   0x8
-
 #endif // PLATFORM
 
 //#define RAB_L1_N_SLICES_MAX MAX(RAB_L1_N_SLICES_PORT_0, RAB_L1_N_SLICES_PORT_1)
@@ -321,6 +317,7 @@
 //#define RAB_CONFIG_CHECK_PROT     1
 #define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
 #define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
+#define RAB_MH_ID_FIFO_OFFSET_B   0x8
 #define RAB_MH_FIFO_DEPTH         16
 
 #define PULP_SIZE_B     0x10000000
