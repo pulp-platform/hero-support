@@ -11,7 +11,7 @@ static RabStripeReq rab_stripe_req[RAB_L1_N_MAPPINGS_PORT_1];
 
 // miss handling routine
 static char rab_mh_wq_name[10] = "RAB_MH_WQ";
-static struct workqueue_struct *rab_mh_wq;
+static struct workqueue_struct *rab_mh_wq = 0;
 static struct work_struct rab_mh_w;
 static struct task_struct *user_task;
 static struct mm_struct *user_mm;
@@ -2205,10 +2205,13 @@ void pulp_rab_mh_dis(void)
   rab_mh = 0;
   rab_mh_date = 0;
 
-  // flush and destroy the workqueue
-  destroy_workqueue(rab_mh_wq);
+  if (rab_mh_wq) {
+    // Flush and destroy the workqueue, and reset workqueue pointer to default value.
+    destroy_workqueue(rab_mh_wq);
+    rab_mh_wq = 0;
 
-  printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
+    printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
+  }
 
   return;
 }
