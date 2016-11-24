@@ -1897,16 +1897,13 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
  */
 int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
 {
-  pgd_t*          pgd_ptr;
   unsigned long   pgd_pa;
   RabSliceReq     rab_slice_req;
   int             retval;
 
   // Get physical address of page global directory (i.e., the process-specific top-level page
   // table).
-  pgd_ptr = current->mm->pgd;
-  BUG_ON(pgd_none(*pgd_ptr));
-  pgd_pa = (((unsigned long)(pgd_val(*pgd_ptr)) & PHYS_MASK) >> 2) << 2;
+  pgd_pa = ((unsigned long)__pa(current->mm->pgd));
   printk(KERN_DEBUG "PULP RAB SoC MH PGD PA: 0x%010lx\n", pgd_pa);
 
   // Set up a RAB mapping between physical address space of page tables and virtual address
