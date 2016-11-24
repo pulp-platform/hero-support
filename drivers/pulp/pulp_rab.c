@@ -1918,7 +1918,7 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
   rab_slice_req.rab_slice       = 4; // TODO: generalize
   rab_slice_req.flags_drv       = 0b001;    // not setup in every mapping, not striped, constant
   rab_slice_req.addr_start      = PGD_BASE_ADDR;
-  rab_slice_req.addr_end        = rab_slice_req.addr_start + ((PTRS_PER_PGD-1) << 3);
+  rab_slice_req.addr_end        = rab_slice_req.addr_start + ((PTRS_PER_PGD << 3) - 1);
   rab_slice_req.addr_offset     = pgd_pa;
   rab_slice_req.flags_hw        = 0b0011;  // disable ACP, disable write, enable read, enable slice
 
