@@ -2157,6 +2157,10 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
   unsigned long n_bytes_read, n_bytes_left;
   unsigned byte;
 
+  // Check if miss handling is not already enabled (i.e., if workqueue already exists).
+  if (rab_mh_wq)
+    return -EALREADY;
+
   // get slice data from user space - arg already checked above
   byte = 0;
   n_bytes_left = 2*sizeof(unsigned); 
