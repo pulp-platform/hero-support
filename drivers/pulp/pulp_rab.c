@@ -708,18 +708,20 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
 void pulp_rab_l2_init(void *rab_config)
 {
   unsigned int i_port, i_set, i_entry, offset;
-  for (i_port=0; i_port<1; i_port++) {
-    for (i_set=0; i_set<RAB_L2_N_SETS; i_set++) {
-      for (i_entry=0; i_entry<RAB_L2_N_ENTRIES_PER_SET; i_entry++) {
-        // Clear VA ram. No need to clear PA ram.
-        offset = ((i_port+1)*0x4000) + (i_set*RAB_L2_N_ENTRIES_PER_SET*4) + (i_entry*4);
-        iowrite32( 0, (void *)((unsigned long)rab_config + offset)); 
-        l2.set[i_set].entry[i_entry].flags = 0;
-        l2.set[i_set].entry[i_entry].pfn_p = 0;
-        l2.set[i_set].entry[i_entry].pfn_v = 0;
+  for (i_port = 0; i_port < RAB_N_PORTS; ++i_port) {
+    if (RAB_L2_EN_ON_PORT[i_port]) {
+      for (i_set = 0; i_set < RAB_L2_N_SETS; ++i_set) {
+        for (i_entry = 0; i_entry < RAB_L2_N_ENTRIES_PER_SET; ++i_entry) {
+          // Clear VA RAM. No need to clear PA RAM.
+          offset = ((i_port+1)*0x4000) + (i_set*RAB_L2_N_ENTRIES_PER_SET*4) + (i_entry*4);
+          iowrite32(0, (void *)((unsigned long)rab_config + offset));
+          l2.set[i_set].entry[i_entry].flags = 0;
+          l2.set[i_set].entry[i_entry].pfn_p = 0;
+          l2.set[i_set].entry[i_entry].pfn_v = 0;
+        }
+        l2.set[i_set].next_entry_idx = 0;
+        l2.set[i_set].is_full = 0;
       }
-      l2.set[i_set].next_entry_idx = 0;
-      l2.set[i_set].is_full = 0;
     }
   }
   printk(KERN_INFO "PULP - RAB L2: Initialized VRAMs to 0.\n");
