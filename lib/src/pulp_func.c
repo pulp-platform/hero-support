@@ -1217,13 +1217,18 @@ int pulp_load_bin(PulpDev *pulp, char *name)
  */
 void pulp_exe_start(PulpDev *pulp)
 {
+  // Enable clock and deactivate reset.
+  unsigned gpio_val = (1 << GPIO_RST_N) | (1 << GPIO_CLK_EN);
 
-  unsigned int value = 0xC0000000;
-  value |= pulp->cluster_sel;
-  value |= pulp->rab_ax_log_en;
+  // Activate selected clusters.
+  gpio_val |= pulp->cluster_sel & CLUSTER_MASK;
+
+  // Enable RAB AX Loggers.
+  if (pulp->rab_ax_log_en == 1)
+    gpio_val |= 1 << GPIO_RAB_AX_LOG_EN;
 
   printf("Starting program execution.\n");
-  pulp_write32(pulp->gpio.v_addr,0x8,'b',value);
+  pulp_write32(pulp->gpio.v_addr,0x8,'b',gpio_val);
 }
 
 /**
