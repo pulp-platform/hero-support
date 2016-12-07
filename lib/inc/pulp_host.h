@@ -280,6 +280,8 @@
 
 #endif // PLATFORM
 
+#define CLUSTER_MASK  (unsigned)((1 << N_CLUSTERS) - 1)
+
 //#define RAB_L1_N_SLICES_MAX MAX(RAB_L1_N_SLICES_PORT_0, RAB_L1_N_SLICES_PORT_1)
 
 /*
