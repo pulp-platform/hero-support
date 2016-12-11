@@ -174,6 +174,72 @@
 #define PULP_IOCTL_RAB_SOC_MH_ENA _IOW(PULP_IOCTL_MAGIC,0xB8,unsigned)
 
 /*
+ * Independent parameters
+ */
+#define H_GPIO_SIZE_B 0x1000
+
+#define CLKING_SIZE_B                 0x1000
+#define CLKING_CONFIG_REG_0_OFFSET_B  0x200
+#define CLKING_CONFIG_REG_2_OFFSET_B  0x208
+#define CLKING_CONFIG_REG_5_OFFSET_B  0x214
+#define CLKING_CONFIG_REG_8_OFFSET_B  0x220
+#define CLKING_CONFIG_REG_23_OFFSET_B 0x25C
+#define CLKING_STATUS_REG_OFFSET_B    0x4
+
+#define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
+
+#define PGD_BASE_ADDR        0x20000000 // Address at which PULP sees the top-level page table of
+                                        // the host process
+
+#define RAB_CONFIG_SIZE_B         0x10000
+#define RAB_L1_N_MAPPINGS_PORT_1  2
+#define RAB_N_PORTS               2
+#define RAB_CONFIG_N_BITS_PORT    1
+#define RAB_CONFIG_N_BITS_ACP     1
+#define RAB_CONFIG_N_BITS_LVL     2
+#define RAB_CONFIG_N_BITS_PROT    3
+#define RAB_CONFIG_N_BITS_DATE    8
+#define RAB_CONFIG_N_BITS_PAGE    16
+
+#define RAB_CONFIG_N_BITS_OFFLOAD_ID 1
+#define RAB_CONFIG_N_BITS_N_ELEM     3
+#define RAB_CONFIG_N_BITS_N_STRIPES  22
+
+//#define RAB_CONFIG_CHECK_PROT     1
+#define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
+#define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
+#define RAB_MH_ID_FIFO_OFFSET_B   0x8
+#define RAB_MH_FIFO_DEPTH         16
+
+#define PULP_SIZE_B     0x10000000
+#define CLUSTER_SIZE_MB 4
+
+#define CLUSTER_PERIPHERALS_OFFSET_B 0x200000
+#define BBMUX_CLKGATE_OFFSET_B       0x800
+#define GP_1_OFFSET_B                0x364
+#define GP_2_OFFSET_B                0x368
+
+#define SOC_PERIPHERALS_SIZE_B 0x50000
+
+#define MBOX_SIZE_B          0x1000 // Interface 0 only
+#define MBOX_FIFO_DEPTH      16
+#define MBOX_WRDATA_OFFSET_B 0x0
+#define MBOX_RDDATA_OFFSET_B 0x8
+#define MBOX_STATUS_OFFSET_B 0x10
+#define MBOX_ERROR_OFFSET_B  0x14
+#define MBOX_IS_OFFSET_B     0x20
+#define MBOX_IE_OFFSET_B     0x24
+
+// required for RAB miss handling
+#define AXI_ID_WIDTH_CORE    4
+#define AXI_ID_WIDTH_CLUSTER 3
+#if PLATFORM == JUNO
+  #define AXI_ID_WIDTH_SOC   3
+#else // !JUNO
+  #define AXI_ID_WIDTH_SOC   1
+#endif
+
+/*
  * Platform specific settings
  */
 // PLATFORM is exported in sourceme.sh and passed by the Makefile
@@ -211,6 +277,8 @@
     #define L1_MEM_SIZE_KB  32
     #define RAB_L1_N_SLICES_PORT_0   4
     #define RAB_L1_N_SLICES_PORT_1   8
+    // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
+    static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 0};
   
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
   
@@ -226,6 +294,8 @@
     #define L1_MEM_SIZE_KB         256
     #define RAB_L1_N_SLICES_PORT_0   4
     #define RAB_L1_N_SLICES_PORT_1  32
+    // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
+    static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
   
   #endif // PLATFORM
 
@@ -277,78 +347,12 @@
   #define L1_MEM_SIZE_KB 256
   #define RAB_L1_N_SLICES_PORT_0   4
   #define RAB_L1_N_SLICES_PORT_1  32
+  // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
+  static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
 
 #endif // PLATFORM
 
 #define CLUSTER_MASK  (unsigned)((1 << N_CLUSTERS) - 1)
-
-//#define RAB_L1_N_SLICES_MAX MAX(RAB_L1_N_SLICES_PORT_0, RAB_L1_N_SLICES_PORT_1)
-
-/*
- * Independent parameters
- */
-#define H_GPIO_SIZE_B 0x1000
-
-#define CLKING_SIZE_B                 0x1000
-#define CLKING_CONFIG_REG_0_OFFSET_B  0x200 
-#define CLKING_CONFIG_REG_2_OFFSET_B  0x208
-#define CLKING_CONFIG_REG_5_OFFSET_B  0x214
-#define CLKING_CONFIG_REG_8_OFFSET_B  0x220
-#define CLKING_CONFIG_REG_23_OFFSET_B 0x25C 
-#define CLKING_STATUS_REG_OFFSET_B    0x4 
-
-#define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
-
-#define PGD_BASE_ADDR        0x20000000 // Address at which PULP sees the top-level page table of
-                                        // the host process
-
-#define RAB_CONFIG_SIZE_B         0x10000
-#define RAB_L1_N_MAPPINGS_PORT_1  2
-#define RAB_N_PORTS               2
-#define RAB_CONFIG_N_BITS_PORT    1
-#define RAB_CONFIG_N_BITS_ACP     1
-#define RAB_CONFIG_N_BITS_LVL     2 
-#define RAB_CONFIG_N_BITS_PROT    3
-#define RAB_CONFIG_N_BITS_DATE    8
-#define RAB_CONFIG_N_BITS_PAGE    16
-
-#define RAB_CONFIG_N_BITS_OFFLOAD_ID 1
-#define RAB_CONFIG_N_BITS_N_ELEM     3
-#define RAB_CONFIG_N_BITS_N_STRIPES  22
-
-//#define RAB_CONFIG_CHECK_PROT     1
-#define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
-#define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
-#define RAB_MH_ID_FIFO_OFFSET_B   0x8
-#define RAB_MH_FIFO_DEPTH         16
-
-#define PULP_SIZE_B     0x10000000
-#define CLUSTER_SIZE_MB 4
-
-#define CLUSTER_PERIPHERALS_OFFSET_B 0x200000
-#define BBMUX_CLKGATE_OFFSET_B       0x800
-#define GP_1_OFFSET_B                0x364
-#define GP_2_OFFSET_B                0x368
-
-#define SOC_PERIPHERALS_SIZE_B 0x50000
-
-#define MBOX_SIZE_B          0x1000 // Interface 0 only
-#define MBOX_FIFO_DEPTH      16
-#define MBOX_WRDATA_OFFSET_B 0x0 
-#define MBOX_RDDATA_OFFSET_B 0x8 
-#define MBOX_STATUS_OFFSET_B 0x10
-#define MBOX_ERROR_OFFSET_B  0x14
-#define MBOX_IS_OFFSET_B     0x20
-#define MBOX_IE_OFFSET_B     0x24
-
-// required for RAB miss handling
-#define AXI_ID_WIDTH_CORE    4
-#define AXI_ID_WIDTH_CLUSTER 3
-#if PLATFORM == JUNO
-  #define AXI_ID_WIDTH_SOC   3
-#else // !JUNO
-  #define AXI_ID_WIDTH_SOC   1
-#endif
 
 /*
  * Dependent parameters
