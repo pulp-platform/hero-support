@@ -252,7 +252,6 @@
   #define H_GPIO_BASE_ADDR     0x51000000
   #define CLKING_BASE_ADDR     0x51010000
   #define RAB_CONFIG_BASE_ADDR 0x51030000
-  //#define TRACE_CTRL_BASE_ADDR 0x51040000 // not yet used
   //#define INTR_REG_BASE_ADDR   0x51050000 // not yet used on ZYNQ
 
   // IRQs
@@ -307,7 +306,6 @@
   #define H_GPIO_BASE_ADDR     0x6E000000
   #define CLKING_BASE_ADDR     0x6E010000
   #define RAB_CONFIG_BASE_ADDR 0x6E030000
-  //#define TRACE_CTRL_BASE_ADDR 0x6E040000 // not yet used
   #define INTR_REG_BASE_ADDR   0x6E050000
   #define RAB_AR_LOG_BASE_ADDR 0x6E100000
   #define RAB_AW_LOG_BASE_ADDR 0x6E200000
@@ -327,13 +325,6 @@
   #define INTR_RAB_MHR_FULL      20
   #define INTR_RAB_AR_LOG_FULL   21
   #define INTR_RAB_AW_LOG_FULL   22
-
-  #define GPIO_RAB_AR_LOG_RDY    28
-  #define GPIO_RAB_AW_LOG_RDY    29
-
-  #define GPIO_RAB_AR_LOG_CLR    28
-  #define GPIO_RAB_AW_LOG_CLR    29
-  #define GPIO_RAB_AX_LOG_EN     27
 
   #define PULP_DEFAULT_FREQ_MHZ 25
   #define CLKING_INPUT_FREQ_MHZ 100
@@ -369,9 +360,13 @@
 #define GPIO_EOC_0              0
 #define GPIO_EOC_N  (N_CLUSTERS-1) // max 15
 
-#define GPIO_RST_N              31
-#define GPIO_CLK_EN             30
-
+#define GPIO_RST_N          31
+#define GPIO_CLK_EN         30
+#define GPIO_RAB_AR_LOG_RDY 28
+#define GPIO_RAB_AW_LOG_RDY 29
+#define GPIO_RAB_AR_LOG_CLR 28
+#define GPIO_RAB_AW_LOG_CLR 29
+#define GPIO_RAB_AX_LOG_EN  27
 
 // Fulmine uses Timer v.1 which has 4 core timers only
 #if N_CORES > 4
