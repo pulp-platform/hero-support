@@ -52,7 +52,7 @@ typedef struct {
 typedef struct {
   // management
   unsigned char id;
-  unsigned char type;                // in = 2, out = 3, inout = 4
+  unsigned char type;                // 0 = inout, 1 = in, 2 = out
   unsigned char page_ptr_idx;
   unsigned      n_slices;            // number of slices allocated
   unsigned      n_slices_per_stripe; // number of slices used per stripe

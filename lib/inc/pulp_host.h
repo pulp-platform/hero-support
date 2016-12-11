@@ -431,7 +431,7 @@ typedef struct {
 
 typedef struct {
   unsigned char id;
-  unsigned char type;              // in = 2, out = 3, inout = 4
+  unsigned char type;              // 0 = inout, 1 = in, 2 = out
   unsigned char flags;
   unsigned      max_stripe_size_b;
   unsigned      n_stripes;
@@ -450,10 +450,6 @@ typedef struct {
 //#define PROFILE
 //#define MEM_SHARING 2 // 1, 2 ,3
 //#define ZYNQ_PMM
-
-// needed for profile_rab_str, dma_test
-//#define MEM_SHARING 2
-//#define PROFILE_RAB_STR
 
 // needed for profile_rab_striping & profile_rab_miss_handling
 #define N_CYC_TOT_RESPONSE_OFFSET_B 0x00
