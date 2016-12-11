@@ -965,6 +965,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   unsigned addr_src, addr_dst;
 
 #ifdef PROFILE_DMA
+  unsigned long ret;
   ktime_t time_dma_start, time_dma_end;
   unsigned time_dma_acc;
   time_dma_acc = 0;
