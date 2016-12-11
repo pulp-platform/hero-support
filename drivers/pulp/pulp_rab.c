@@ -1358,13 +1358,13 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
     rab_stripe_elem[i].flags_hw            = rab_stripe_elem_user[i].flags;
 
     // compute the actual number of required slices
-    if (rab_stripe_elem[i].type == 4)
+    if (rab_stripe_elem[i].type == 0)
       rab_stripe_elem[i].n_slices = 4*n_slices; // double buffering: *2 + inout: *2
     else
       rab_stripe_elem[i].n_slices = 2*n_slices; // double buffering: *2
 
     // set stripe_idx = stripe to configure at first update request
-    if (rab_stripe_elem[i].type == 3)
+    if (rab_stripe_elem[i].type == 2)
       rab_stripe_elem[i].stripe_idx = 0;
     else
       rab_stripe_elem[i].stripe_idx = 1;
@@ -2007,7 +2007,7 @@ void pulp_rab_update(unsigned update_req)
     
     n_slices   = elem->n_slices_per_stripe;
     stripe_idx = elem->stripe_idx;
-    if ( elem->type == 4 ) // inout
+    if ( elem->type == 0 ) // inout
       idx_mask = 0x3;
     else // in, out
       idx_mask = 0x1;
@@ -2107,7 +2107,7 @@ void pulp_rab_switch(void)
   // reset stripe idxs for striped mappings 
   for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
 
-    if ( rab_stripe_req[rab_mapping].elements[i].type == 3 ) // out
+    if ( rab_stripe_req[rab_mapping].elements[i].type == 2 ) // out
       rab_stripe_req[rab_mapping].elements[i].stripe_idx = 0;
     else  // in, inout
       rab_stripe_req[rab_mapping].elements[i].stripe_idx = 1;
