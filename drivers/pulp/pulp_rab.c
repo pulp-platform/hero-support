@@ -1922,7 +1922,7 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
   rab_slice_req.addr_start      = PGD_BASE_ADDR;
   rab_slice_req.addr_end        = rab_slice_req.addr_start + ((PTRS_PER_PGD << 3) - 1);
   rab_slice_req.addr_offset     = pgd_pa;
-  rab_slice_req.flags_hw        = 0b0011;  // disable ACP, disable write, enable read, enable slice
+  rab_slice_req.flags_hw        = 0b1011; // cache-coherent, disable write, enable read, valid
 
   printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
         rab_slice_req.rab_slice, rab_slice_req.addr_start, rab_slice_req.addr_end,
