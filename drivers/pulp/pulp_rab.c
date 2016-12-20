@@ -1939,11 +1939,6 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
   // Disable handling of RAB misses by this Kernel driver.
   pulp_rab_mh_dis();
 
-  // Write PGD to mailbox.  TODO: This actually is unnecessary because a constant RAB slice to the
-  // physical address exists anyway.  However, we need some way to tell a *single core* that it
-  // should handle RAB misses.
-  iowrite32(pgd_pa, (void *)((unsigned long)mbox+MBOX_WRDATA_OFFSET_B));
-
   return 0;
 }
 // }}}
