@@ -1355,7 +1355,7 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
     rab_stripe_elem[i].type                = rab_stripe_elem_user[i].type;
     rab_stripe_elem[i].n_slices_per_stripe = n_slices;
     rab_stripe_elem[i].n_stripes           = rab_stripe_elem_user[i].n_stripes;
-    rab_stripe_elem[i].flags_hw            = rab_stripe_elem_user[i].flags;
+    rab_stripe_elem[i].flags_hw            = rab_stripe_elem_user[i].flags | 0x2; // write only does not work in the hardware!
 
     // compute the actual number of required slices
     if (rab_stripe_elem[i].type == 0)
@@ -1365,7 +1365,7 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
 
     // set stripe_idx = stripe to configure at first update request
     if (rab_stripe_elem[i].type == 2)
-      rab_stripe_elem[i].stripe_idx = 0;
+      rab_stripe_elem[i].stripe_idx = 1; //0;
     else
       rab_stripe_elem[i].stripe_idx = 1;
 
@@ -2038,18 +2038,16 @@ void pulp_rab_update(unsigned update_req)
     // increase stripe idx counter
     elem->stripe_idx++;
 
-    #if defined(PROFILE_RAB_STR) || defined(JPEG) 
-      if (elem->stripe_idx == elem->n_stripes) {
-        elem->stripe_idx = 0;
-        if (DEBUG_LEVEL_RAB_STR > 0) {
-          printk(KERN_INFO "PULP - RAB: stripe table wrap around.\n");
-        }
+    if (elem->stripe_idx == elem->n_stripes) {
+      elem->stripe_idx = 0;
+      if (DEBUG_LEVEL_RAB_STR > 0) {
+        printk(KERN_INFO "PULP - RAB: elem %d stripe table wrap around.\n", i);
       }
-    #endif
+    }
   }
 
   // signal ready to PULP
-  iowrite32(HOST_READY,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
+  iowrite32(HOST_READY | elem_mask,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
         
   #ifdef PROFILE_RAB_STR 
     // read the ARM clock counter
@@ -2279,13 +2277,8 @@ void pulp_rab_handle_miss(unsigned unused)
     rab_mh_id[i]   = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ID_FIFO_OFFSET_B));
     
     // detect empty FIFOs
-    #if PLATFORM != JUNO    
-      if ( rab_mh_id[i] & 0x80000000 )
-        break;
-    #else
-      if ( rab_mh_id[i] & 0x8000000000000000 )
-        break;
-    #endif      
+    if ( rab_mh_id[i] & 0x80000000 )
+      break;
 
     if (DEBUG_LEVEL_RAB_MH > 0) {
       printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
