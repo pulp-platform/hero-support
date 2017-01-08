@@ -26,16 +26,14 @@
 #define DEBUG_LEVEL 0
 
 // mailbox communication
-#define PULP_READY 0x0
-#define PULP_START 0x1
-#define PULP_BUSY  0x2
-#define PULP_DONE  0x3 
-#define PULP_STOP  0xF 
+#define PULP_READY 0x1
+#define PULP_START 0x2
+#define PULP_BUSY  0x3
+#define PULP_DONE  0x4
+#define PULP_STOP  0xF
 
 #define HOST_READY 0x1000
-//#define HOST_START 0x1001
-//#define HOST_BUSY  0x1002
-#define HOST_DONE  0x1003
+#define HOST_DONE  0x3000
 
 #define MBOX_N_BITS_REQ_TYPE   4  // number of MSBs to specify the type
 #define RAB_UPDATE_N_BITS_ELEM 8  // number of bits to specify the mask of elements to be updated
