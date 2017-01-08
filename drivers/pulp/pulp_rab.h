@@ -57,6 +57,7 @@ typedef struct {
   unsigned      n_slices;            // number of slices allocated
   unsigned      n_slices_per_stripe; // number of slices used per stripe
   unsigned *    slice_idxs;          // ptr to array containing idxs of allocated slices 
+  unsigned      set_offset;          // offset in mapping of stripes to sets of allocated slices, may change on wrap around
   // actual config
   unsigned      stripe_idx;          // idx next stripe to configure
   unsigned      n_stripes; 

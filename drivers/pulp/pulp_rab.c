@@ -1354,6 +1354,7 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
     rab_stripe_elem[i].id                  = rab_stripe_elem_user[i].id;
     rab_stripe_elem[i].type                = rab_stripe_elem_user[i].type;
     rab_stripe_elem[i].n_slices_per_stripe = n_slices;
+    rab_stripe_elem[i].set_offset          = 0;
     rab_stripe_elem[i].n_stripes           = rab_stripe_elem_user[i].n_stripes;
     rab_stripe_elem[i].flags_hw            = rab_stripe_elem_user[i].flags | 0x2; // write only does not work in the hardware!
 
@@ -1975,7 +1976,7 @@ void pulp_rab_update(unsigned update_req)
   int i, j;
   unsigned elem_mask, type;
   unsigned rab_mapping;
-  unsigned stripe_idx, idx_mask, n_slices, offset;
+  unsigned stripe_idx, idx_mask, set_sel, n_slices, offset;
   RabStripeElem * elem;
 
   elem_mask = 0;
@@ -2012,14 +2013,17 @@ void pulp_rab_update(unsigned update_req)
     
     n_slices   = elem->n_slices_per_stripe;
     stripe_idx = elem->stripe_idx;
-    if ( elem->type == 0 ) // inout
+    if ( elem->type == 0 ) // inout -> Stripe 0, 4, 8 to Set 0, Stripe 1, 5, 9 to Set 1, etc.
       idx_mask = 0x3;
-    else // in, out
+    else // in, out -> Alternate even and odd stripes to Set 0 and 1, respectively.
       idx_mask = 0x1;
+
+    // select set of pre-allocated slices, set_offset may change on wrap around
+    set_sel = (stripe_idx + elem->set_offset) & idx_mask;
 
     // process every slice independently
     for (j=0; j<n_slices; j++) {
-      offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+elem->slice_idxs[(stripe_idx & idx_mask)*n_slices+j]);
+      offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+elem->slice_idxs[set_sel*n_slices+j]);
 
       if (DEBUG_LEVEL_RAB_STR > 3) {
         printk("stripe_idx = %d, n_slices = %d, j = %d, offset = %#x\n",
@@ -2045,6 +2049,11 @@ void pulp_rab_update(unsigned update_req)
 
     if (elem->stripe_idx == elem->n_stripes) {
       elem->stripe_idx = 0;
+      if      ( (elem->type == 0) && (elem->n_stripes & 0x3) ) // inout + number of stripes not divisible by 4 -> shift set mapping
+        elem->set_offset = (elem->set_offset + (elem->n_stripes & 0x3) ) & 0x3;
+      else if ( (elem->type != 0) && (elem->n_stripes & 0x1) ) // in, out + odd number of stripes -> flip set mapping
+        elem->set_offset = (elem->set_offset) ? 0 : 1;
+
       if (DEBUG_LEVEL_RAB_STR > 0) {
         printk(KERN_INFO "PULP - RAB: elem %d stripe table wrap around.\n", i);
       }
