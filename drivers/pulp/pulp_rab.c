@@ -2529,6 +2529,7 @@ void pulp_rab_handle_miss(unsigned unused)
     // read the PE timer
     n_cyc_update = ioread32((void *)((unsigned long)(pulp->clusters)
       +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
+    n_cyc_tot_update += n_cyc_update;
     
     // write the counter values to the buffers
     n_cyc_buf_response[idx_buf_response] = n_cyc_response;
@@ -2581,7 +2582,7 @@ void pulp_rab_handle_miss(unsigned unused)
     iowrite32(n_misses,                 (void *)((unsigned long)(pulp->l3_mem)+N_MISSES_OFFSET_B));
 
 #endif
-    // error handling
+  // error handling
   miss_handling_error:
     if (err) {
       printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
