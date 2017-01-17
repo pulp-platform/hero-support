@@ -963,7 +963,9 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
              rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
   
       // for debugging
-      pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
+      if ( ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
+           ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) )
+        pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
       if (RAB_MULTI_IRQ == irq){
         pulp_rab_l2_print_valid_entries(1);
