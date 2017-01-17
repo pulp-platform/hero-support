@@ -19,7 +19,7 @@ int pulp_reserve_v_addr(PulpDev *pulp)
     printf("MMAP failed to reserve virtual addresses overlapping with physical address map of PULP.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("Reserved virtual addresses starting at %p and overlapping with physical address map of PULP. \n",
            pulp->pulp_res_v_addr.v_addr);
   }
@@ -31,7 +31,7 @@ int pulp_reserve_v_addr(PulpDev *pulp)
     printf("MMAP failed to reserve virtual addresses overlapping with physically contiguous L3 memory.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("Reserved virtual addresses starting at %p and overlapping with physically contiguous L3 memory.\n",
            pulp->l3_mem_res_v_addr.v_addr);
   }
@@ -49,14 +49,16 @@ int pulp_free_v_addr(PulpDev *pulp)
 {  
   int status;
 
-  printf("Freeing reserved virtual addresses overlapping with physical address map of PULP.\n");
+  if (DEBUG_LEVEL > 0)
+    printf("Freeing reserved virtual addresses overlapping with physical address map of PULP.\n");
   status = munmap(pulp->pulp_res_v_addr.v_addr,pulp->pulp_res_v_addr.size);
   if (status) {
     printf("MUNMAP failed to free reserved virtual addresses overlapping with physical address map of PULP.\n");
   }
 
 #if PLATFORM != JUNO
-  printf("Freeing reserved virtual addresses overlapping with with physically contiguous L3 memory.\n");
+  if (DEBUG_LEVEL > 0)
+    printf("Freeing reserved virtual addresses overlapping with with physically contiguous L3 memory.\n");
   status = munmap(pulp->l3_mem_res_v_addr.v_addr,pulp->l3_mem_res_v_addr.size);
   if (status) {
     printf("MUNMAP failed to free reserved virtual addresses overlapping with physically contiguous L3 memory.\n");
@@ -166,7 +168,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for clusters.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("Clusters mapped to virtual user space at %p.\n",pulp->clusters.v_addr);
   }
 
@@ -180,7 +182,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for SoC peripherals.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("SoC peripherals mapped to virtual user space at %p.\n",pulp->soc_periph.v_addr);
   }
 
@@ -194,7 +196,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for Mailbox.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("Mailbox mapped to virtual user space at %p.\n",pulp->mbox.v_addr);
   }
  
@@ -209,7 +211,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for L2 memory.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("L2 memory mapped to virtual user space at %p.\n",pulp->l2_mem.v_addr);
   }
 
@@ -224,7 +226,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("Shared L3 memory mapped to virtual user space at %p.\n",pulp->l3_mem.v_addr);
   }
  
@@ -240,7 +242,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("GPIO memory mapped to virtual user space at %p.\n",pulp->gpio.v_addr);
   }
 
@@ -255,7 +257,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("Clock Manager memory mapped to virtual user space at %p.\n",pulp->clking.v_addr);
   }
 
@@ -270,7 +272,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("RAB config memory mapped to virtual user space at %p.\n",pulp->rab_config.v_addr);
   }
 
@@ -286,7 +288,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for Zynq SLCR.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("Zynq SLCR memory mapped to virtual user space at %p.\n",pulp->slcr.v_addr);
   }
 
@@ -301,7 +303,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("MMAP failed for shared L3 memory.\n");
     return -EIO;
   }
-  else {
+  else if (DEBUG_LEVEL > 0) {
     printf("Zynq MPCore memory mapped to virtual user space at %p.\n",pulp->mpcore.v_addr);
   }
 #endif
