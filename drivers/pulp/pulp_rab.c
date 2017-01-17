@@ -2282,14 +2282,17 @@ void pulp_rab_handle_miss(unsigned unused)
   
   // empty miss-handling FIFOs
   for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
-    rab_mh_addr[i] = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ADDR_FIFO_OFFSET_B));
+    // read ID first for empty FIFO detection
     rab_mh_id[i]   = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ID_FIFO_OFFSET_B));
     
-    // detect empty FIFOs
+    // detect empty FIFOs -> end routine
     if ( rab_mh_id[i] & 0x80000000 )
       break;
 
-    if ((DEBUG_LEVEL_RAB_MH > 0) || (i > 0)) {
+    // read valid addr
+    rab_mh_addr[i] = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ADDR_FIFO_OFFSET_B));
+
+    if ((DEBUG_LEVEL_RAB_MH > 0)) { //} || (i > 0)) {
       printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
        i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
     }
@@ -2590,7 +2593,8 @@ void pulp_rab_handle_miss(unsigned unused)
       pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
     }
 
-  }
+  } // for i<RAB_MH_FIFO_DEPTH
+
   if (DEBUG_LEVEL_RAB_MH > 1)
     printk(KERN_INFO "PULP: RAB miss handling routine finished.\n");
 
@@ -2707,9 +2711,13 @@ void pulp_rab_handle_miss(unsigned unused)
   
     // read out AR log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-      ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
-      meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
-      addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
+      // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
+      //ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
+      //meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
+      //addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
+      meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
+      addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
+      ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
 
       if ( (ts == 0) && (meta == 0) && (addr == 0) )
         break;
@@ -2734,9 +2742,13 @@ void pulp_rab_handle_miss(unsigned unused)
   
     // read out AW log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-      ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
-      meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
-      addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
+      // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
+      //ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
+      //meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
+      //addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
+      meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
+      addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
+      ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
   
       if ( (ts == 0) && (meta == 0) && (addr == 0) )
         break;
@@ -2763,9 +2775,6 @@ void pulp_rab_handle_miss(unsigned unused)
       while ( !ready ) {
         udelay(25);
         status = ioread32((void *)((unsigned long)pulp->gpio));
-
-        printk("status = %x\n", status);
-
         ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
           && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1);
       }
@@ -2773,9 +2782,6 @@ void pulp_rab_handle_miss(unsigned unused)
       BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
       iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
   
-printk("gpio = %x\n", gpio);
-printk("gpio_init = %x\n", gpio_init);
-
       // continue
       iowrite32(gpio_init, (void *)((unsigned long)(pulp->gpio)+0x8));
     }
