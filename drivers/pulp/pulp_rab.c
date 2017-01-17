@@ -23,7 +23,7 @@ static unsigned rab_mh_acp;
 static unsigned rab_mh_lvl;
 
 // AX logger 
-#if PLATFORM == JUNO
+#if RAB_AX_LOG_EN == 1
   static unsigned * rab_ar_log_buf;
   static unsigned * rab_aw_log_buf;
   static unsigned rab_ar_log_buf_idx = 0;
@@ -125,7 +125,7 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   rab_mh_lvl = 0;
 
   // initialize AX logger
-  #if PLATFORM == JUNO
+  #if RAB_AX_LOG_EN == 1
     err = pulp_rab_ax_log_init();
     if (err)
       return err;
@@ -2294,7 +2294,7 @@ void pulp_rab_handle_miss(unsigned unused)
     if ( rab_mh_id[i] & 0x80000000 )
       break;
 
-    if (DEBUG_LEVEL_RAB_MH > 0) {
+    if ((DEBUG_LEVEL_RAB_MH > 0) || (i > 0)) {
       printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
        i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
     }
@@ -2325,7 +2325,7 @@ void pulp_rab_handle_miss(unsigned unused)
          ( (id_pe < 0) || (id_pe > N_CORES-1) ) ) {
       printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces. id = %#x | addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
       // for debugging
-      //      pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
+      //   pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
 
       continue;
     }
@@ -2349,11 +2349,15 @@ void pulp_rab_handle_miss(unsigned unused)
       if ( (addr_start & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT))
            == (rab_mh_addr[j] & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT)) ) {
         handled = 1;
-        if (DEBUG_LEVEL_RAB_MH > 0) {
+        //if (DEBUG_LEVEL_RAB_MH > 0) {
           printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
-          // for debugging only - deactivate fetch enable
+          printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
+            i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
+          printk(KERN_INFO "PULP: RAB miss - j = %d,        %#x, id = %#x, addr = %#x\n",
+            j, rab_mh_date, rab_mh_id[j], rab_mh_addr[j]);
+        // for debugging only - deactivate fetch enable
           // iowrite32(0xC0000000,(void *)((unsigned long)(pulp->gpio)+0x8));
-        }
+        //}
         break;
       }
     }
@@ -2602,7 +2606,7 @@ void pulp_rab_handle_miss(unsigned unused)
 // }}}
 
 // AX Logger {{{
-#if PLATFORM == JUNO
+#if RAB_AX_LOG_EN == 1
   /***********************************************************************************
    *
    *  █████╗ ██╗  ██╗    ██╗      ██████╗  ██████╗ 
@@ -2711,7 +2715,7 @@ void pulp_rab_handle_miss(unsigned unused)
       ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
       meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
       addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
-  
+
       if ( (ts == 0) && (meta == 0) && (addr == 0) )
         break;
   
@@ -2764,6 +2768,9 @@ void pulp_rab_handle_miss(unsigned unused)
       while ( !ready ) {
         udelay(25);
         status = ioread32((void *)((unsigned long)pulp->gpio));
+
+        printk("status = %x\n", status);
+
         ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
           && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1);
       }
@@ -2771,6 +2778,9 @@ void pulp_rab_handle_miss(unsigned unused)
       BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
       iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
   
+printk("gpio = %x\n", gpio);
+printk("gpio_init = %x\n", gpio_init);
+
       // continue
       iowrite32(gpio_init, (void *)((unsigned long)(pulp->gpio)+0x8));
     }
