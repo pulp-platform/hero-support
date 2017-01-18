@@ -2352,15 +2352,15 @@ void pulp_rab_handle_miss(unsigned unused)
       if ( (addr_start & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT))
            == (rab_mh_addr[j] & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned)*8-PAGE_SHIFT)) ) {
         handled = 1;
-        //if (DEBUG_LEVEL_RAB_MH > 0) {
+        if (DEBUG_LEVEL_RAB_MH > 0) {
           printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
-          printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
-            i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
           printk(KERN_INFO "PULP: RAB miss - j = %d,        %#x, id = %#x, addr = %#x\n",
             j, rab_mh_date, rab_mh_id[j], rab_mh_addr[j]);
+          printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
+            i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
         // for debugging only - deactivate fetch enable
           // iowrite32(0xC0000000,(void *)((unsigned long)(pulp->gpio)+0x8));
-        //}
+        }
         break;
       }
     }
