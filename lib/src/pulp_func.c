@@ -577,8 +577,12 @@ int pulp_init(PulpDev *pulp)
   pulp->l3_offset = 0;
 
   // pass information to driver
-  unsigned info = pulp->cluster_sel;
-  ioctl(pulp->fd,PULP_IOCTL_INFO_PASS,(unsigned *)&info);
+  unsigned gpio_val = 0;
+  gpio_val |= pulp->cluster_sel & CLUSTER_MASK;
+  if (pulp->rab_ax_log_en == 1)
+    gpio_val |= 1 << GPIO_RAB_AX_LOG_EN;
+
+  ioctl(pulp->fd,PULP_IOCTL_INFO_PASS,(unsigned *)&gpio_val);
 
   return 0;
 }
