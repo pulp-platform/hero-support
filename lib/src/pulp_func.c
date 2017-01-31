@@ -45,7 +45,7 @@ int pulp_reserve_v_addr(PulpDev *pulp)
  *
  * @pulp: pointer to the PulpDev structure
  */
-int pulp_free_v_addr(PulpDev *pulp)
+int pulp_free_v_addr(const PulpDev *pulp)
 {  
   int status;
 
@@ -96,10 +96,10 @@ void pulp_print_v_addr(PulpDev *pulp)
  * @off       : offset
  * @off_type  : type of the offset, 'b' = byte offset, else word offset
  */
-int pulp_read32(unsigned *base_addr, unsigned off, char off_type)
+int pulp_read32(const unsigned *base_addr, unsigned off, char off_type)
 {
   if (DEBUG_LEVEL > 3) {
-    unsigned *addr;
+    const unsigned *addr;
     if (off_type == 'b') 
       addr = base_addr + (off>>2);
     else
@@ -595,7 +595,7 @@ int pulp_init(PulpDev *pulp)
  * @buffer    : pointer to read buffer
  * @n_words   : number of words to read
  */
-int pulp_mbox_read(PulpDev *pulp, unsigned *buffer, unsigned n_words)
+int pulp_mbox_read(const PulpDev *pulp, unsigned *buffer, unsigned n_words)
 {
   int n_char, n_char_left, ret;
   ret = 1;
@@ -673,7 +673,7 @@ void pulp_mbox_clear_is(PulpDev *pulp)
  * @date_exp  : expiration date of the mapping
  * @date_cur  : current date, used to check for suitable slices
  */
-int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
+int pulp_rab_req(const PulpDev *pulp, unsigned addr_start, unsigned size_b,
                  unsigned char prot, unsigned char port,
                  unsigned char date_exp, unsigned char date_cur,
                  unsigned char use_acp, unsigned char rab_lvl)
@@ -707,7 +707,7 @@ int pulp_rab_req(PulpDev *pulp, unsigned addr_start, unsigned size_b,
  * @pulp      : pointer to the PulpDev structure
  * @date_cur  : current date, 0 = free all slices
  */
-void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
+void pulp_rab_free(const PulpDev *pulp, unsigned char date_cur) {
 
   // make the request
   ioctl(pulp->fd,PULP_IOCTL_RAB_FREE,(unsigned)date_cur);
@@ -721,7 +721,7 @@ void pulp_rab_free(PulpDev *pulp, unsigned char date_cur) {
  * @data_idxs:  pointer to array marking the elements to pass by reference
  * @n_elements: number of striped data elements
  */
-int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
+int pulp_rab_req_striped(const PulpDev *pulp, const TaskDesc *task,
                          unsigned **data_idxs, int n_elements)
 {
   int i,j,k, err;
@@ -887,7 +887,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
  *
  * @pulp      : pointer to the PulpDev structure
  */
-void pulp_rab_free_striped(PulpDev *pulp)
+void pulp_rab_free_striped(const PulpDev *pulp)
 {
   
   unsigned offload_id = 0;
@@ -896,7 +896,7 @@ void pulp_rab_free_striped(PulpDev *pulp)
   ioctl(pulp->fd,PULP_IOCTL_RAB_FREE_STRIPED,offload_id);
 } 
 
-void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl)
+void pulp_rab_mh_enable(const PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl)
 {
   unsigned rab_mh_cfg[2];
   rab_mh_cfg[0] = (unsigned)use_acp;
@@ -904,12 +904,12 @@ void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_
   ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,rab_mh_cfg);
 }
 
-void pulp_rab_mh_disable(PulpDev *pulp)
+void pulp_rab_mh_disable(const PulpDev *pulp)
 {
   ioctl(pulp->fd,PULP_IOCTL_RAB_MH_DIS);
 }
 
-int pulp_rab_soc_mh_enable(PulpDev* pulp)
+int pulp_rab_soc_mh_enable(const PulpDev* pulp)
 {
     return ioctl(pulp->fd, PULP_IOCTL_RAB_SOC_MH_ENA, 0);
 }
@@ -923,7 +923,7 @@ int pulp_rab_soc_mh_enable(PulpDev* pulp)
  * @size_b    : size in bytes
  * @host_read : 0: Host -> PULP, 1: PULP -> Host (not tested)
  */
-int pulp_dma_xfer(PulpDev *pulp,
+int pulp_dma_xfer(const PulpDev *pulp,
                   unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
                   unsigned host_read)
 { 
@@ -1047,7 +1047,7 @@ void pulp_reset(PulpDev *pulp, unsigned full)
  * @pulp : pointer to the PulpDev structure 
  * @task : pointer to the TaskDesc structure
  */
-int pulp_boot(PulpDev *pulp, TaskDesc *task)
+int pulp_boot(PulpDev *pulp, const TaskDesc *task)
 {
   int err;
 
@@ -1071,7 +1071,7 @@ int pulp_boot(PulpDev *pulp, TaskDesc *task)
  * @name : pointer to the string containing the name of the 
  *         application to load
  */
-int pulp_load_bin(PulpDev *pulp, char *name)
+int pulp_load_bin(PulpDev *pulp, const char *name)
 {
   int i;
   char * bin_name;
@@ -1097,7 +1097,7 @@ int pulp_load_bin(PulpDev *pulp, char *name)
     strcat(bin_name,".bin");
   }
   else
-    bin_name = name;
+    bin_name = (char*)name;
 
   printf("Loading binary file: %s\n",bin_name);
 
@@ -1168,7 +1168,7 @@ void pulp_exe_stop(PulpDev *pulp)
  * @timeout_s : maximum number of seconds to wait for end of 
  *              computation
  */
-int pulp_exe_wait(PulpDev *pulp, int timeout_s)
+int pulp_exe_wait(const PulpDev *pulp, int timeout_s)
 {
   unsigned status, gpio_eoc;
   float interval_us = 100000;
@@ -1259,7 +1259,7 @@ void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr)
  *
  * @n_idxs :   number of elements to be passed by reference
  */
-int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs) {
+int pulp_offload_get_data_idxs(const TaskDesc *task, unsigned **data_idxs) {
   
   int i, n_data, n_idxs, size_b;
 
@@ -1289,7 +1289,7 @@ int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs) {
  * @data_idxs: pointer to array marking the elements to pass by reference
  * @n_idxs:    number of shared data elements passed by reference
  */
-int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs)
+int pulp_offload_rab_setup(const PulpDev *pulp, const TaskDesc *task, unsigned **data_idxs, int n_idxs)
 {
   int i, j, err;
   unsigned      n_idxs_11, n_idxs_12;
@@ -1456,7 +1456,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
  * @data_idxs: pointer to array marking the elements to pass by reference
  * @n_idxs:    number of shared data elements passed by reference
  */
-int pulp_offload_rab_free(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs)
+int pulp_offload_rab_free(const PulpDev *pulp, const TaskDesc *task, const unsigned **data_idxs, int n_idxs)
 {
   int i;
   unsigned      n_idxs_11, n_idxs_12;
@@ -1499,7 +1499,7 @@ int pulp_offload_rab_free(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, i
  * @task:      pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
  */
-int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
+int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, const unsigned **data_idxs)
 {
   int i;
   unsigned n_idxs_10;
@@ -1561,7 +1561,7 @@ int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, unsigned **data_
  * @task:      pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
  */
-int pulp_offload_l3_copy_raw_in(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
+int pulp_offload_l3_copy_raw_in(PulpDev *pulp, const TaskDesc *task, const unsigned **data_idxs)
 {
   int i;
   unsigned n_idxs_10;
@@ -1621,7 +1621,7 @@ int pulp_offload_l3_copy_raw_in(PulpDev *pulp, TaskDesc *task, unsigned **data_i
  * @task:      pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
  */
-int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
+int pulp_offload_pass_desc(PulpDev *pulp, const TaskDesc *task, const unsigned **data_idxs)
 {
   int i;
   unsigned n_data, addr;
@@ -1667,7 +1667,7 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
  * @data_idxs: pointer to array marking the elements to pass by reference
  * @n_idxs:    number of shared data elements passed by reference
  */
-int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs)
+int pulp_offload_get_desc(const PulpDev *pulp, TaskDesc *task, const unsigned **data_idxs, int n_idxs)
 {
   int i,j, n_data;
   unsigned *buffer;
@@ -1732,14 +1732,14 @@ int pulp_offload_out(PulpDev *pulp, TaskDesc *task)
   }
 
   // copy raw data out to contiguous L3 - pointers inside the data are not modified
-  err = pulp_offload_l3_copy_raw_out(pulp, task, &data_idxs);
+  err = pulp_offload_l3_copy_raw_out(pulp, task, (const unsigned **)&data_idxs);
   if (err) {
     printf("ERROR: pulp_offload_l3_copy_raw_out failed.\n");
     return err;
   }
 
   // pass data descriptor to PULP
-  err = pulp_offload_pass_desc(pulp, task, &data_idxs);
+  err = pulp_offload_pass_desc(pulp, task, (const unsigned **)&data_idxs);
   if ( err != task->n_data ) {
     printf("ERROR: pulp_offload_pass_desc failed.\n");
     return err;
@@ -1773,21 +1773,21 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
  
   // RAB free
-  err = pulp_offload_rab_free(pulp, task, &data_idxs, n_idxs);
+  err = pulp_offload_rab_free(pulp, task, (const unsigned**)&data_idxs, n_idxs);
   if (err) {
     printf("ERROR: pulp_offload_rab_free failed.\n");
     return err;
   }
 
   // copy raw data in from contiguous L3 - pointers inside the data are not modified
-  err = pulp_offload_l3_copy_raw_in(pulp, task, &data_idxs);
+  err = pulp_offload_l3_copy_raw_in(pulp, task, (const unsigned**)&data_idxs);
   if (err) {
     printf("ERROR: pulp_offload_l3_copy_raw_in failed.\n");
     return err;
   }
 
   // fetch values of data elements passed by value
-  err = pulp_offload_get_desc(pulp, task, &data_idxs, n_idxs);
+  err = pulp_offload_get_desc(pulp, task, (const unsigned**)&data_idxs, n_idxs);
   if ( err != (task->n_data - n_idxs) ) {
     printf("ERROR: pulp_offload_get_desc failed.\n");
     return err;
@@ -1805,7 +1805,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
  * @pulp: pointer to the PulpDev structure 
  * @task: pointer to the TaskDesc structure
  */
-int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
+int pulp_offload_start(PulpDev *pulp, const TaskDesc *task)
 {
   unsigned status;
 
@@ -1832,7 +1832,7 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
  * @pulp: pointer to the PulpDev structure 
  * @task: pointer to the TaskDesc structure
  */
-int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
+int pulp_offload_wait(const PulpDev *pulp, const TaskDesc *task)
 {
   unsigned status;
 
@@ -1961,7 +1961,7 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   }
 
   // Pass data descriptor to PULP
-  err = pulp_offload_pass_desc(pulp, *ftask, &data_idxs);
+  err = pulp_offload_pass_desc(pulp, *ftask, (const unsigned**)&data_idxs);
   if ( err != task->n_data ) {
     printf("ERROR: pulp_offload_pass_desc failed.\n");
     return err;
@@ -1990,7 +1990,7 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
 
   // fetch values of data elements passed by value
-  err = pulp_offload_get_desc(pulp, task, &data_idxs, n_idxs);
+  err = pulp_offload_get_desc(pulp, task, (const unsigned**)&data_idxs, n_idxs);
   if ( err != (task->n_data - n_idxs) ) {
     printf("ERROR: pulp_offload_get_desc failed.\n");
     return err;
@@ -2040,7 +2040,7 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 
 /****************************************************************************************/
 
-int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned char port,
+int pulp_rab_req_striped_mchan_img(const PulpDev *pulp, unsigned char prot, unsigned char port,
                                    unsigned p_height, unsigned p_width, unsigned i_step,
                                    unsigned n_channels, unsigned char **channels,
                                    unsigned *s_height)
