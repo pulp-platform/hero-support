@@ -15,6 +15,18 @@ export VIVADO_VERSION="vivado-2015.1"
 export PLATFORM="4"
 
 # Platform dependent variables
+
+case ${PLATFORM} in
+    1)  export BOARD="zedboard";;
+    2)  export BOARD="zc706";;
+    3)  export BOARD="mini-itx";;
+    4)  export BOARD="juno";;
+    *)
+        echo "[EE] Failed to determine BOARD from PLATFORM!"
+        exit 1
+        ;;
+esac
+
 if [ "${PLATFORM}" -eq "4" ]; then
     echo "Configuring for JUNO platform"
 
