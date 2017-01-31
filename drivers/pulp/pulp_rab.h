@@ -52,11 +52,12 @@ typedef struct {
 typedef struct {
   // management
   unsigned char id;
-  unsigned char type;                // in = 2, out = 3, inout = 4
+  unsigned char type;                // 0 = inout, 1 = in, 2 = out
   unsigned char page_ptr_idx;
   unsigned      n_slices;            // number of slices allocated
   unsigned      n_slices_per_stripe; // number of slices used per stripe
   unsigned *    slice_idxs;          // ptr to array containing idxs of allocated slices 
+  unsigned      set_offset;          // offset in mapping of stripes to sets of allocated slices, may change on wrap around
   // actual config
   unsigned      stripe_idx;          // idx next stripe to configure
   unsigned      n_stripes; 
@@ -170,7 +171,7 @@ void     pulp_rab_mh_dis(void);
 unsigned pulp_rab_mh_sched(void);
 void     pulp_rab_handle_miss(unsigned unused);
 
-#if PLATFORM == JUNO
+#if RAB_AX_LOG_EN == 1
   int  pulp_rab_ax_log_init(void);
   void pulp_rab_ax_log_free(void);
   void pulp_rab_ax_log_read(unsigned pulp_cluster_select, unsigned clear);

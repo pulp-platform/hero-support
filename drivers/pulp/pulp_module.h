@@ -18,6 +18,7 @@
 #define DEBUG_LEVEL_RAB_MH  0
 #define DEBUG_LEVEL_DMA     0
 #define DEBUG_LEVEL_MBOX    0
+
 //#define PROFILE_DMA
 //#define PROFILE_RAB_STR
 //#define PROFILE_RAB_MH
@@ -47,13 +48,15 @@ typedef struct {
   void *l2_mem;
   #if PLATFORM == JUNO
     void *intr_reg;
-    void *rab_ar_log;
-    void *rab_aw_log;
   #else
     void *slcr;
     void *mpcore;
     void *uart0;
   #endif // PLATFORM == JUNO
+  #if RAB_AX_LOG_EN == 1
+    void *rab_ar_log;
+    void *rab_aw_log;
+  #endif // RAB_AX_LOG_EN == 1
 } PulpDev;
 
 #endif // _PULP_MODULE_H_
