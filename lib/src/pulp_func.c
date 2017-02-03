@@ -909,6 +909,24 @@ void pulp_rab_mh_disable(const PulpDev *pulp)
   ioctl(pulp->fd,PULP_IOCTL_RAB_MH_DIS);
 }
 
+/**
+ * Enable handling of RAB misses by the SoC.
+ *
+ * The PULP driver function called by this function basically does two things:  First, it sets up
+ * RAB so that the page table hierarchy can be accessed from PULP.  For this, slices either for the
+ * first-level page table or for all second-level page tables are configured in RAB (definable, see
+ * parameter below).  Second, the driver function disables handling of RAB misses in the Kernel
+ * driver itself.
+ *
+ * @param   pulp                    Pointer to the PulpDev struct.
+ * @param   static_2nd_lvl_slices   If 0, the driver sets up a single RAB slice for the first level
+ *                                  of the page table; if 1, the driver sets up RAB slices for all
+ *                                  valid second-level page tables.  The latter is not supported by
+ *                                  all architectures.  If unsupported, the driver will fall back to
+ *                                  the former behavior and emit a warning.
+ *
+ * @return  0 on success; negative value with an errno on errors.
+ */
 int pulp_rab_soc_mh_enable(const PulpDev* pulp, const unsigned static_2nd_lvl_slices)
 {
     return ioctl(pulp->fd, PULP_IOCTL_RAB_SOC_MH_ENA, static_2nd_lvl_slices & 1);
