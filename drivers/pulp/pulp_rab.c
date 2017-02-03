@@ -1895,49 +1895,151 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
 // }}}
 
 // soc_mh_ena {{{
-/**
- * TODO: documentation
- */
-int pulp_rab_soc_mh_ena(void* rab_config)
+
+static inline int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
+    const unsigned long pgd_pa)
 {
+  unsigned ret;
+
+  req->page_ptr_idx = RAB_L1_N_SLICES_PORT_1 - 1;
+  req->rab_slice    = 4;
+  req->addr_start   = PGD_BASE_ADDR;
+  req->addr_end     = req->addr_start + ((PTRS_PER_PGD << 3) - 1);
+  req->addr_offset  = pgd_pa;
+
+  printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
+        req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
+
+  ret = pulp_rab_slice_setup(rab_config, req, NULL);
+  if (ret != 0) {
+    printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", req->rab_slice);
+    return ret;
+  }
+
+  return 0;
+}
+
+static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
+    const pgd_t* const pgd)
+{
+  unsigned      i_pmd;
+  unsigned      n_slices;
+  unsigned long pmd_pa;
+  unsigned      pmd_va;
+  unsigned      ret;
+
+  n_slices = 1 << (32 - PGDIR_SHIFT);
+
+  pmd_va = PGD_BASE_ADDR;
+  for (i_pmd = 0; i_pmd < n_slices; ++i_pmd) {
+
+    req->page_ptr_idx = RAB_L1_N_SLICES_PORT_1 - 1 - i_pmd;
+    req->rab_slice    = 4 + i_pmd;
+    req->addr_start   = pmd_va;
+    req->addr_end     = req->addr_start + ((PTRS_PER_PMD << 3) - 1);
+
+    pmd_va = req->addr_end + 1;
+
+    pmd_pa = (unsigned long)(*(pgd + pgd_index(PGDIR_SIZE * i_pmd)));
+
+    if (pmd_none(pmd_pa) || pmd_bad(pmd_pa))
+      continue;
+
+    pmd_pa &= PAGE_MASK;
+
+    req->addr_offset = pmd_pa;
+
+    printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
+          req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
+
+    ret = pulp_rab_slice_setup(rab_config, req, NULL);
+    if (ret != 0) {
+      printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", req->rab_slice);
+      return ret;
+    }
+
+  }
+
+  return 0;
+}
+
+/**
+ * Delegate RAB Miss Handling to the PULP SoC.
+ *
+ * This functions configures RAB so that the page table hierarchy can be accessed from the SoC.  For
+ * this, slices either for the first-level page table or for all second-level page tables are
+ * configured in RAB (definable, see parameter below).  If RAB has been configured successfully,
+ * handling of RAB misses by this Kernel driver is disabled.  The SoC must at runtime configure the
+ * RAB slices for the subsequent levels of the page table.  Thus, the proper VMM software must be
+ * running on the SoC; otherwise, RAB misses will not be handled at all.
+ *
+ * @param   rab_config            Pointer to the RAB configuration port.
+ * @param   static_2nd_lvl_slices If 0, the driver sets up a single RAB slice for the first level of
+ *                                the page table; if 1, the driver sets up RAB slices for all valid
+ *                                second-level page tables.  The latter is not supported by all
+ *                                architectures.  If unsupported, the driver will fall back to the
+ *                                former behavior and emit a warning.
+ *
+ * @return  0 on success; a nonzero errno on errors.
+ */
+int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
+{
+  const pgd_t*    pgd;
   unsigned long   pgd_pa;
   RabSliceReq     rab_slice_req;
   int             retval;
 
-  // Get physical address of page global directory (i.e., the process-specific top-level page
-  // table).
-  pgd_pa = ((unsigned long)__pa(current->mm->pgd));
+  pgd = current->mm->pgd;
+
+  /**
+   * Determine the physical address of the Page Global Directory (i.e., the process-specific
+   * top-level page table).
+   */
+  pgd_pa = ((unsigned long)__pa(pgd));
   printk(KERN_DEBUG "PULP RAB SoC MH PGD PA: 0x%010lx\n", pgd_pa);
 
-  // Set up a RAB mapping between physical address space of page tables and virtual address
-  // space of PULP core running the PTW.
+  /**
+   * Initialize the RAB slice with basic properties that are the same for all slices.
+   */
   rab_slice_req.date_cur        = 0;
   rab_slice_req.date_exp        = RAB_MAX_DATE_MH;
-  rab_slice_req.page_ptr_idx    = RAB_L1_N_SLICES_PORT_1-1;
   rab_slice_req.page_idx_start  = 0;
   rab_slice_req.page_idx_end    = 0;
   rab_slice_req.rab_port        = 1;
   rab_slice_req.rab_mapping     = 0;
-  rab_slice_req.rab_slice       = 4; // TODO: generalize
-  rab_slice_req.flags_drv       = 0b001;    // not setup in every mapping, not striped, constant
-  rab_slice_req.addr_start      = PGD_BASE_ADDR;
-  rab_slice_req.addr_end        = rab_slice_req.addr_start + ((PTRS_PER_PGD << 3) - 1);
-  rab_slice_req.addr_offset     = pgd_pa;
+  rab_slice_req.flags_drv       = 0b001;  // not setup in every mapping, not striped, constant
   rab_slice_req.flags_hw        = 0b1011; // cache-coherent, disable write, enable read, valid
 
-  printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
-        rab_slice_req.rab_slice, rab_slice_req.addr_start, rab_slice_req.addr_end,
-        rab_slice_req.addr_offset);
+  /**
+   * Set up RAB slices either for the first-level page table or for the second-level page tables.
+   * If this fails, the SoC cannot handle RAB misses because it cannot access the page table
+   * hierarchy in memory.
+   */
+  switch (static_2nd_lvl_slices) {
+    case 1:
+      #if PLATFORM == JUNO
+        retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
+        if (retval != 0) {
+          printk(KERN_ERR "PULP RAB: Failed to configure slices for second level of page table!\n");
+          return retval;
+        }
+        break;
+      #else
+        printk(KERN_WARN "PULP RAB: Static second-level slices are unsupported on your platform!\n");
+        printk(KERN_WARN "PULP RAB: Falling back to one static first-level slice.\n");
+      #endif
+    case 0:
+      retval = soc_mh_ena_static_1st_level(rab_config, &rab_slice_req, pgd_pa);
+      if (retval != 0) {
+        printk(KERN_ERR "PULP RAB: Failed to configure slices for first level of page table!\n");
+        return retval;
+      }
+  };
 
-  // Request to setup RAB slice.  If this fails, the SoC MH cannot be enabled because the PTW would
-  // access the wrong physical address.
-  retval = pulp_rab_slice_setup(rab_config, &rab_slice_req, NULL);
-  if (retval != 0) {
-    printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", rab_slice_req.rab_slice);
-    return retval;
-  }
-
-  // Disable handling of RAB misses by this Kernel driver.
+  /**
+   * The SoC now has access to the page table hierarchy in memory and will handle all RAB misses.
+   * This Kernel driver must no longer handle these misses.
+   */
   pulp_rab_mh_dis();
 
   return 0;
