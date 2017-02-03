@@ -113,7 +113,7 @@ void pulp_rab_free_striped(const PulpDev *pulp);
 int  pulp_rab_mh_enable(const PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
 void pulp_rab_mh_disable(const PulpDev *pulp);
 
-int pulp_rab_soc_mh_enable(const PulpDev* pulp);
+int pulp_rab_soc_mh_enable(const PulpDev* pulp, const unsigned static_2nd_lvl_slices);
 
 int pulp_dma_xfer(const PulpDev *pulp,
                   unsigned addr_l3, unsigned addr_pulp, unsigned size_b,

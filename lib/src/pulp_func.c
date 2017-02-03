@@ -910,9 +910,9 @@ void pulp_rab_mh_disable(const PulpDev *pulp)
   ioctl(pulp->fd,PULP_IOCTL_RAB_MH_DIS);
 }
 
-int pulp_rab_soc_mh_enable(const PulpDev* pulp)
+int pulp_rab_soc_mh_enable(const PulpDev* pulp, const unsigned static_2nd_lvl_slices)
 {
-    return ioctl(pulp->fd, PULP_IOCTL_RAB_SOC_MH_ENA, 0);
+    return ioctl(pulp->fd, PULP_IOCTL_RAB_SOC_MH_ENA, static_2nd_lvl_slices & 1);
 }
 
 /**
