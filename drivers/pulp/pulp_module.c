@@ -1261,7 +1261,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     break;
 
   case PULP_IOCTL_RAB_SOC_MH_ENA:
-    retval = pulp_rab_soc_mh_ena(current, my_dev.rab_config, my_dev.mbox);
+    retval = pulp_rab_soc_mh_ena(my_dev.rab_config);
     break;
 
   case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space
