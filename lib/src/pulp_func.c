@@ -1824,7 +1824,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   }
 
   // fetch values of data elements passed by value
-  err = pulp_offload_get_desc(pulp, task, (const unsigned**)&data_idxs, n_idxs);
+  err = pulp_offload_get_desc(pulp, task, (const unsigned**)&data_idxs);
   if (err) {
     printf("ERROR: pulp_offload_get_desc failed.\n");
     return err;
