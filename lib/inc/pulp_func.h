@@ -43,22 +43,42 @@ typedef struct {
   unsigned int rab_ax_log_en;  // enable RAB AR/AW logger (Juno only)
 } PulpDev;
 
+// striping informationg structure
+typedef struct {
+  unsigned n_stripes;
+  unsigned first_stripe_size_b;
+  unsigned last_stripe_size_b;
+  unsigned stripe_size_b;
+} StripingDesc;
+
 // shared variable data structure
 typedef struct {
-  void *ptr;
-  size_t size;
-  int type;
-  unsigned char use_acp;
-  unsigned char rab_lvl;
+  void         * ptr;         // address in host virtual memory
+  void         * ptr_l3_v;    // host virtual address in contiguous L3 memory   - filled by runtime library based on sh_mem_ctrl
+  void         * ptr_l3_p;    // PULP physical address in contiguous L3 memory  - filled by runtime library based on sh_mem_ctrl
+  size_t         size;        // size in Bytes
+  int            type;        // 0: input and output
+                              // 1: input only
+                              // 2: output only
+  unsigned char  sh_mem_ctrl; // 0: no SVM, copy-based sharing using contiguous L3 memory
+                              // 1: SVM, set up mapping at offload time, might fail - use with caution
+                              // 2: SVM, use striping (L1 only), might fail - use with caution
+                              // 3: SVM, use miss handling
+  unsigned char  cache_ctrl;  // 0: flush caches, access through DRAM
+                              // 1: do not flush caches, access through caches
+  unsigned char  rab_lvl;     // 0: first L1, L2 when full
+                              // 1: L1 only
+                              // 2: L2 only
+  StripingDesc * stripe_desc; // only used if sh_mem_ctrl = 2
 } DataDesc;
 
 // task descriptor created by the compiler
 typedef struct {
-  int task_id; // used for RAB managment -> expiration date
-  char *name;
-  int n_clusters;
-  int n_data;
-  DataDesc *data_desc;
+  int        task_id; // used for RAB managment -> expiration date
+  char     * name;
+  int        n_clusters;
+  int        n_data;
+  DataDesc * data_desc;
 } TaskDesc;
 
 // function prototypes
@@ -90,7 +110,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
                          unsigned **data_idxs, int n_elements);
 void pulp_rab_free_striped(PulpDev *pulp);
 
-void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
+int  pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
 void pulp_rab_mh_disable(PulpDev *pulp);
 
 int pulp_rab_soc_mh_enable(PulpDev* pulp);
@@ -109,19 +129,20 @@ void pulp_exe_start(PulpDev *pulp);
 void pulp_exe_stop(PulpDev *pulp);
 int  pulp_exe_wait(PulpDev *pulp, int timeout_s);
 
-// required for ROD, CT, MJPEG
-
 unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr);
 void         pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr);
 
 int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs);
 int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs);
+int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
+int pulp_offload_l3_copy_raw_in(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
 int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
-int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs);
+int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
 
 int pulp_offload_out(PulpDev *pulp, TaskDesc *task);
 int pulp_offload_in(PulpDev *pulp, TaskDesc *task);
 
+// required for ROD, CT, MJPEG
 int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask);
 int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask);
 

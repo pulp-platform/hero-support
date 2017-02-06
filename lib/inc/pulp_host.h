@@ -26,16 +26,14 @@
 #define DEBUG_LEVEL 0
 
 // mailbox communication
-#define PULP_READY 0x0
-#define PULP_START 0x1
-#define PULP_BUSY  0x2
-#define PULP_DONE  0x3 
-#define PULP_STOP  0xF 
+#define PULP_READY 0x1
+#define PULP_START 0x2
+#define PULP_BUSY  0x3
+#define PULP_DONE  0x4
+#define PULP_STOP  0xF
 
 #define HOST_READY 0x1000
-//#define HOST_START 0x1001
-//#define HOST_BUSY  0x1002
-#define HOST_DONE  0x1003
+#define HOST_DONE  0x3000
 
 #define MBOX_N_BITS_REQ_TYPE   4  // number of MSBs to specify the type
 #define RAB_UPDATE_N_BITS_ELEM 8  // number of bits to specify the mask of elements to be updated
@@ -174,126 +172,17 @@
 #define PULP_IOCTL_RAB_SOC_MH_ENA _IOW(PULP_IOCTL_MAGIC,0xB8,unsigned)
 
 /*
- * Platform specific settings
- */
-// PLATFORM is exported in sourceme.sh and passed by the Makefile
-
-#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX 
-
-  #define N_CLUSTERS       1
-
-  // PULP address map
-  #define H_GPIO_BASE_ADDR     0x51000000
-  #define CLKING_BASE_ADDR     0x51010000
-  #define RAB_CONFIG_BASE_ADDR 0x51030000
-  //#define TRACE_CTRL_BASE_ADDR 0x51040000 // not yet used
-  //#define INTR_REG_BASE_ADDR   0x51050000 // not yet used on ZYNQ
-
-  // IRQs
-  #define END_OF_COMPUTATION_IRQ 61
-  #define MBOX_IRQ               62
-  #define RAB_MISS_IRQ           63
-  #define RAB_MULTI_IRQ          64
-  #define RAB_PROT_IRQ           65
-  //#define RAB_MHR_FULL_IRQ       66 // not yet used
-
-  #if PLATFORM == ZEDBOARD
-
-    #define PULP_DEFAULT_FREQ_MHZ 25
-    #define CLKING_INPUT_FREQ_MHZ 50
-
-    // L3
-    #define L3_MEM_SIZE_MB 8
-    
-    // Cluster + RAB config
-    #define N_CORES          2
-    #define L2_MEM_SIZE_KB  64
-    #define L1_MEM_SIZE_KB  32
-    #define RAB_L1_N_SLICES_PORT_0   4
-    #define RAB_L1_N_SLICES_PORT_1   8
-  
-  #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
-  
-    #define PULP_DEFAULT_FREQ_MHZ 50
-    #define CLKING_INPUT_FREQ_MHZ 100
-
-    // L3
-    #define L3_MEM_SIZE_MB 128
-    
-    // Cluster + RAB config
-    #define N_CORES                  8
-    #define L2_MEM_SIZE_KB         256
-    #define L1_MEM_SIZE_KB         256
-    #define RAB_L1_N_SLICES_PORT_0   4
-    #define RAB_L1_N_SLICES_PORT_1  32
-  
-  #endif // PLATFORM
-
-#else // JUNO
-
-  #define N_CLUSTERS       4
-
-  // PULP address map
-  #define H_GPIO_BASE_ADDR     0x6E000000
-  #define CLKING_BASE_ADDR     0x6E010000
-  #define RAB_CONFIG_BASE_ADDR 0x6E030000
-  //#define TRACE_CTRL_BASE_ADDR 0x6E040000 // not yet used
-  #define INTR_REG_BASE_ADDR   0x6E050000
-  #define RAB_AR_LOG_BASE_ADDR 0x6E100000
-  #define RAB_AW_LOG_BASE_ADDR 0x6E200000
-
-  #define INTR_REG_SIZE_B       0x1000
-  #define RAB_AX_LOG_SIZE_B     0xC0000  // size of BRAM, 768 KiB = 64 Ki entries
-  #define RAB_AX_LOG_BUF_SIZE_B 0x600000 // size of buffer in driver, 6 MiB = 512 Ki entries
-  #define RAB_AX_LOG_PRINT_FORMAT 0      // 0 = DEBUG, 1 = MATLAB
-
-  #define INTR_EOC_0              0
-  #define INTR_EOC_N   N_CLUSTERS-1 // max 15
-
-  #define INTR_MBOX              16
-  #define INTR_RAB_MISS          17
-  #define INTR_RAB_MULTI         18
-  #define INTR_RAB_PROT          19
-  #define INTR_RAB_MHR_FULL      20
-  #define INTR_RAB_AR_LOG_FULL   21
-  #define INTR_RAB_AW_LOG_FULL   22
-
-  #define GPIO_RAB_AR_LOG_RDY    28
-  #define GPIO_RAB_AW_LOG_RDY    29
-
-  #define GPIO_RAB_AR_LOG_CLR    28
-  #define GPIO_RAB_AW_LOG_CLR    29
-  #define GPIO_RAB_AX_LOG_EN     27
-
-  #define PULP_DEFAULT_FREQ_MHZ 25
-  #define CLKING_INPUT_FREQ_MHZ 100
-
-  // L3
-  #define L3_MEM_SIZE_MB 128
-
-  // Cluster + RAB config
-  #define N_CORES          8
-  #define L2_MEM_SIZE_KB 256
-  #define L1_MEM_SIZE_KB 256
-  #define RAB_L1_N_SLICES_PORT_0   4
-  #define RAB_L1_N_SLICES_PORT_1  32
-
-#endif // PLATFORM
-
-//#define RAB_L1_N_SLICES_MAX MAX(RAB_L1_N_SLICES_PORT_0, RAB_L1_N_SLICES_PORT_1)
-
-/*
  * Independent parameters
  */
 #define H_GPIO_SIZE_B 0x1000
 
 #define CLKING_SIZE_B                 0x1000
-#define CLKING_CONFIG_REG_0_OFFSET_B  0x200 
+#define CLKING_CONFIG_REG_0_OFFSET_B  0x200
 #define CLKING_CONFIG_REG_2_OFFSET_B  0x208
 #define CLKING_CONFIG_REG_5_OFFSET_B  0x214
 #define CLKING_CONFIG_REG_8_OFFSET_B  0x220
-#define CLKING_CONFIG_REG_23_OFFSET_B 0x25C 
-#define CLKING_STATUS_REG_OFFSET_B    0x4 
+#define CLKING_CONFIG_REG_23_OFFSET_B 0x25C
+#define CLKING_STATUS_REG_OFFSET_B    0x4
 
 #define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
 
@@ -305,7 +194,7 @@
 #define RAB_N_PORTS               2
 #define RAB_CONFIG_N_BITS_PORT    1
 #define RAB_CONFIG_N_BITS_ACP     1
-#define RAB_CONFIG_N_BITS_LVL     2 
+#define RAB_CONFIG_N_BITS_LVL     2
 #define RAB_CONFIG_N_BITS_PROT    3
 #define RAB_CONFIG_N_BITS_DATE    8
 #define RAB_CONFIG_N_BITS_PAGE    16
@@ -332,8 +221,8 @@
 
 #define MBOX_SIZE_B          0x1000 // Interface 0 only
 #define MBOX_FIFO_DEPTH      16
-#define MBOX_WRDATA_OFFSET_B 0x0 
-#define MBOX_RDDATA_OFFSET_B 0x8 
+#define MBOX_WRDATA_OFFSET_B 0x0
+#define MBOX_RDDATA_OFFSET_B 0x8
 #define MBOX_STATUS_OFFSET_B 0x10
 #define MBOX_ERROR_OFFSET_B  0x14
 #define MBOX_IS_OFFSET_B     0x20
@@ -347,6 +236,127 @@
 #else // !JUNO
   #define AXI_ID_WIDTH_SOC   1
 #endif
+
+/*
+ * Platform specific settings
+ */
+// PLATFORM is exported in sourceme.sh and passed by the Makefile
+
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX 
+
+  #define N_CLUSTERS       1
+
+  // PULP address map
+  #define H_GPIO_BASE_ADDR     0x51000000
+  #define CLKING_BASE_ADDR     0x51010000
+  #define RAB_CONFIG_BASE_ADDR 0x51030000
+  //#define INTR_REG_BASE_ADDR   0x51050000 // not yet used on ZYNQ
+
+  // IRQs
+  #define END_OF_COMPUTATION_IRQ 61
+  #define MBOX_IRQ               62
+  #define RAB_MISS_IRQ           63
+  #define RAB_MULTI_IRQ          64
+  #define RAB_PROT_IRQ           65
+  #define RAB_MHR_FULL_IRQ       66
+  #define RAB_AR_LOG_FULL_IRQ    67
+  #define RAB_AW_LOG_FULL_IRQ    68
+
+  #if PLATFORM == ZEDBOARD
+
+    #define RAB_AX_LOG_EN         0
+
+    #define PULP_DEFAULT_FREQ_MHZ 25
+    #define CLKING_INPUT_FREQ_MHZ 50
+
+    // L3
+    #define L3_MEM_SIZE_MB 8
+    
+    // Cluster + RAB config
+    #define N_CORES          2
+    #define L2_MEM_SIZE_KB  64
+    #define L1_MEM_SIZE_KB  32
+    #define RAB_L1_N_SLICES_PORT_0   4
+    #define RAB_L1_N_SLICES_PORT_1   4
+    // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
+    static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 0};
+  
+  #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  
+    #define RAB_AX_LOG_EN         1
+
+    #define RAB_AR_LOG_BASE_ADDR  0x51100000
+    #define RAB_AW_LOG_BASE_ADDR  0x51200000
+
+    #define RAB_AX_LOG_SIZE_B     0x6000   // size of BRAM, 192 KiB = 2 Ki entries
+    #define RAB_AX_LOG_BUF_SIZE_B 0x180000 // size of buffer in driver, 1.5 MiB = 128 Ki entries
+    #define RAB_AX_LOG_PRINT_FORMAT 0      // 0 = DEBUG, 1 = MATLAB
+
+    #define PULP_DEFAULT_FREQ_MHZ 50
+    #define CLKING_INPUT_FREQ_MHZ 100
+
+    // L3
+    #define L3_MEM_SIZE_MB 128
+    
+    // Cluster + RAB config
+    #define N_CORES                  8
+    #define L2_MEM_SIZE_KB         256
+    #define L1_MEM_SIZE_KB         256
+    #define RAB_L1_N_SLICES_PORT_0   4
+    #define RAB_L1_N_SLICES_PORT_1  32
+    // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
+    static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
+  
+  #endif // PLATFORM
+
+#else // JUNO
+
+  #define N_CLUSTERS       4
+
+  #define RAB_AX_LOG_EN    1
+
+  // PULP address map
+  #define H_GPIO_BASE_ADDR     0x6E000000
+  #define CLKING_BASE_ADDR     0x6E010000
+  #define RAB_CONFIG_BASE_ADDR 0x6E030000
+  #define INTR_REG_BASE_ADDR   0x6E050000
+  #define RAB_AR_LOG_BASE_ADDR 0x6E100000
+  #define RAB_AW_LOG_BASE_ADDR 0x6E200000
+
+  #define INTR_REG_SIZE_B       0x1000
+  #define RAB_AX_LOG_SIZE_B     0xC0000  // size of BRAM, 768 KiB = 64 Ki entries
+  #define RAB_AX_LOG_BUF_SIZE_B 0x600000 // size of buffer in driver, 6 MiB = 512 Ki entries
+  #define RAB_AX_LOG_PRINT_FORMAT 0      // 0 = DEBUG, 1 = MATLAB
+
+  #define INTR_EOC_0              0
+  #define INTR_EOC_N   N_CLUSTERS-1 // max 15
+
+  #define INTR_MBOX              16
+  #define INTR_RAB_MISS          17
+  #define INTR_RAB_MULTI         18
+  #define INTR_RAB_PROT          19
+  #define INTR_RAB_MHR_FULL      20
+  #define INTR_RAB_AR_LOG_FULL   21
+  #define INTR_RAB_AW_LOG_FULL   22
+
+  #define PULP_DEFAULT_FREQ_MHZ 25
+  #define CLKING_INPUT_FREQ_MHZ 100
+
+  // L3
+  #define L3_MEM_SIZE_MB 128
+
+  // Cluster + RAB config
+  #define N_CORES          8
+  #define L2_MEM_SIZE_KB 256
+  #define L1_MEM_SIZE_KB 256
+  #define RAB_L1_N_SLICES_PORT_0   4
+  #define RAB_L1_N_SLICES_PORT_1  32
+  // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
+  static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
+
+#endif // PLATFORM
+
+#define CLUSTER_MASK  (unsigned)((1 << N_CLUSTERS) - 1)
 
 /*
  * Dependent parameters
@@ -363,9 +373,13 @@
 #define GPIO_EOC_0              0
 #define GPIO_EOC_N  (N_CLUSTERS-1) // max 15
 
-#define GPIO_RST_N              31
-#define GPIO_CLK_EN             30
-
+#define GPIO_RST_N          31
+#define GPIO_CLK_EN         30
+#define GPIO_RAB_AR_LOG_RDY 28
+#define GPIO_RAB_AW_LOG_RDY 29
+#define GPIO_RAB_AR_LOG_CLR 28
+#define GPIO_RAB_AW_LOG_CLR 29
+#define GPIO_RAB_AX_LOG_EN  27
 
 // Fulmine uses Timer v.1 which has 4 core timers only
 #if N_CORES > 4
@@ -431,7 +445,7 @@ typedef struct {
 
 typedef struct {
   unsigned char id;
-  unsigned char type;              // in = 2, out = 3, inout = 4
+  unsigned char type;              // 0 = inout, 1 = in, 2 = out
   unsigned char flags;
   unsigned      max_stripe_size_b;
   unsigned      n_stripes;
@@ -450,10 +464,6 @@ typedef struct {
 //#define PROFILE
 //#define MEM_SHARING 2 // 1, 2 ,3
 //#define ZYNQ_PMM
-
-// needed for profile_rab_str, dma_test
-//#define MEM_SHARING 2
-//#define PROFILE_RAB_STR
 
 // needed for profile_rab_striping & profile_rab_miss_handling
 #define N_CYC_TOT_RESPONSE_OFFSET_B 0x00

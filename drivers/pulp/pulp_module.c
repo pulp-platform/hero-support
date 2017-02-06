@@ -196,6 +196,7 @@ static PulpDev my_dev;
 static struct class *my_class; 
 
 static unsigned pulp_cluster_select = 0;
+static unsigned pulp_rab_ax_log_en  = 0;
 
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
@@ -274,14 +275,6 @@ static int __init pulp_init(void)
     printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.intr_reg);
 
-    my_dev.rab_ar_log = ioremap_nocache(RAB_AR_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
-    printk(KERN_INFO "PULP: RAB AR log mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.rab_ar_log);
-
-    my_dev.rab_aw_log = ioremap_nocache(RAB_AW_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
-    printk(KERN_INFO "PULP: RAB AW log mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.rab_aw_log);
-
   #else // PLATFORM != JUNO 
     my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
     printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
@@ -309,6 +302,16 @@ static int __init pulp_init(void)
     iowrite32(0x20,(void *)((unsigned long)my_dev.uart0+MODEM_CTRL_REG0_OFFSET_B));
 
   #endif // PLATFORM == JUNO
+
+  #if RAB_AX_LOG_EN == 1
+    my_dev.rab_ar_log = ioremap_nocache(RAB_AR_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
+    printk(KERN_INFO "PULP: RAB AR log mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.rab_ar_log);
+
+    my_dev.rab_aw_log = ioremap_nocache(RAB_AW_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
+    printk(KERN_INFO "PULP: RAB AW log mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.rab_aw_log);
+  #endif // RAB_AX_LOG_EN == 1
 
   my_dev.gpio = ioremap_nocache(H_GPIO_BASE_ADDR, H_GPIO_SIZE_B);
   printk(KERN_INFO "PULP: Host GPIO mapped to virtual kernel space @ %#lx.\n",
@@ -383,12 +386,17 @@ static int __init pulp_init(void)
     mpcore_icdicfr3=ioread32((void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
     mpcore_icdicfr4=ioread32((void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B));
      
-    // configure rising-edge active for 61-65
+    // configure rising-edge active for 61-66 (-68 if RAB_AX_LOG_EN == 1)
     mpcore_icdicfr3 &= 0x03FFFFFF; // delete bits 31 - 26
     mpcore_icdicfr3 |= 0xFC000000; // set bits 31 - 26: 11 11 11
-      
-    mpcore_icdicfr4 &= 0xFFFFFFF0; // delete bits 3 - 0
-    mpcore_icdicfr4 |= 0x0000000F; // set bits 3 - 0: 11 11
+    
+    #if RAB_AX_LOG_EN == 1
+      mpcore_icdicfr4 &= 0xFFFFFC00; // delete bits 9 - 0
+      mpcore_icdicfr4 |= 0x000003FF; // set bits 9 - 0: 11 11 11 11 11
+    #else
+      mpcore_icdicfr4 &= 0xFFFFFFC0; // delete bits 5 - 0
+      mpcore_icdicfr4 |= 0x0000003F; // set bits 5 - 0: 11 11 11
+    #endif
        
     // write configuration
     iowrite32(mpcore_icdicfr3,(void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
@@ -429,6 +437,30 @@ static int __init pulp_init(void)
       printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
       goto fail_request_irq;
     }
+
+    // RAB mhr full
+    err = request_irq(RAB_MHR_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
+    if (err) {
+      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+      goto fail_request_irq;
+    }
+
+    #if RAB_AX_LOG_EN == 1
+      // RAB AR Log full
+      err = request_irq(RAB_AR_LOG_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
+      if (err) {
+        printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+        goto fail_request_irq;
+      }
+
+      // RAB AW Log full
+      err = request_irq(RAB_AW_LOG_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
+      if (err) {
+        printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+        goto fail_request_irq;
+      }
+    #endif // RAB_AX_LOG_EN == 1
+
   #endif // PLATFORM != JUNO
 
   /************************************
@@ -481,6 +513,11 @@ static int __init pulp_init(void)
       free_irq(RAB_MISS_IRQ,NULL);
       free_irq(RAB_MULTI_IRQ,NULL);
       free_irq(RAB_PROT_IRQ,NULL);
+      free_irq(RAB_MHR_FULL_IRQ,NULL);
+      #if RAB_AX_LOG_EN == 1
+        free_irq(RAB_AR_LOG_FULL_IRQ,NULL);
+        free_irq(RAB_AW_LOG_FULL_IRQ,NULL);
+      #endif
     #endif // PLATFORM == JUNO
   fail_request_irq:
     #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
@@ -488,11 +525,13 @@ static int __init pulp_init(void)
     #endif
     iounmap(my_dev.rab_config);
     iounmap(my_dev.mbox);
-    #if PLATFORM == JUNO
+    #if RAB_AX_LOG_EN == 1
       pulp_rab_ax_log_free();
-      iounmap(my_dev.intr_reg);
       iounmap(my_dev.rab_ar_log);
       iounmap(my_dev.rab_aw_log);
+    #endif // RAB_AX_LOG_EN == 1
+    #if PLATFORM == JUNO
+      iounmap(my_dev.intr_reg);
     #else // PLATFORM != JUNO
       iounmap(my_dev.slcr);
       iounmap(my_dev.mpcore);
@@ -543,17 +582,24 @@ static void __exit pulp_exit(void)
     free_irq(RAB_MISS_IRQ,NULL);
     free_irq(RAB_MULTI_IRQ,NULL);
     free_irq(RAB_PROT_IRQ,NULL);
+    free_irq(RAB_MHR_FULL_IRQ,NULL);
+    #if RAB_AX_LOG_EN == 1
+      free_irq(RAB_AR_LOG_FULL_IRQ,NULL);
+      free_irq(RAB_AW_LOG_FULL_IRQ,NULL);
+    #endif 
   #endif // PLATFORM == JUNO
   #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
     pulp_rab_prof_free();
   #endif
   iounmap(my_dev.rab_config);
   iounmap(my_dev.mbox);
-  #if PLATFORM == JUNO
+  #if RAB_AX_LOG_EN == 1
     pulp_rab_ax_log_free();
-    iounmap(my_dev.intr_reg);
     iounmap(my_dev.rab_ar_log);
     iounmap(my_dev.rab_aw_log);
+  #endif // RAB_AX_LOG_EN == 1
+  #if PLATFORM == JUNO
+    iounmap(my_dev.intr_reg);
   #else // PLATFORM != JUNO
     iounmap(my_dev.slcr);
     iounmap(my_dev.mpcore);
@@ -836,16 +882,21 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
         }
       }
 
-      pulp_rab_ax_log_read(pulp_cluster_select, 1);
+      #if RAB_AX_LOG_EN == 1
+        if (pulp_rab_ax_log_en)
+          pulp_rab_ax_log_read(pulp_cluster_select, 1);
+      #endif
 
     }
-    if ( BF_GET(intr_reg_value, INTR_RAB_AR_LOG_FULL, 1)
-      || BF_GET(intr_reg_value, INTR_RAB_AW_LOG_FULL, 1) ) {
-      printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
-        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-
-      pulp_rab_ax_log_read(pulp_cluster_select, 1);
-    }   
+    #if RAB_AX_LOG_EN == 1
+      if ( BF_GET(intr_reg_value, INTR_RAB_AR_LOG_FULL, 1)
+        || BF_GET(intr_reg_value, INTR_RAB_AW_LOG_FULL, 1) ) {
+        printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
+          (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+        
+        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+      }
+    #endif   
   
     return IRQ_HANDLED;
   }
@@ -859,6 +910,11 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
     do_gettimeofday(&time);
     printk(KERN_INFO "PULP: End of Computation: %02li:%02li:%02li.\n",
            (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+
+    #if RAB_AX_LOG_EN == 1
+      if (pulp_rab_ax_log_en)
+        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+    #endif
    
     // interrupt is just a pulse, no need to clear it
     return IRQ_HANDLED;
@@ -874,7 +930,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   irqreturn_t pulp_isr_rab(int irq, void *ptr)
   { 
     struct timeval time;
-    char rab_interrupt_type[9];
+    char rab_interrupt_type[12];
     unsigned rab_mh;
 
     // detect RAB interrupt type
@@ -891,15 +947,28 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       rab_mh = pulp_rab_mh_sched();
     }
   
+    #if RAB_AX_LOG_EN == 1
+      if ( ( RAB_AR_LOG_FULL_IRQ == irq ) || 
+           ( RAB_AW_LOG_FULL_IRQ == irq ) ) {
+        strcpy(rab_interrupt_type,"AX log full");
+          
+        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+      }
+    #endif 
+
     if ( (DEBUG_LEVEL_RAB_MH > 1) || 
-         ((RAB_MISS_IRQ == irq) && (0 == rab_mh)) ||
-         ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) ) {
+         ( (RAB_MISS_IRQ == irq) && (0 == rab_mh) ) ||
+         ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) || 
+         ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
+         ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {
       do_gettimeofday(&time);
       printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
              rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
   
       // for debugging
-      pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
+      if ( ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
+           ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) )
+        pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
       if (RAB_MULTI_IRQ == irq){
         pulp_rab_l2_print_valid_entries(1);
@@ -965,6 +1034,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   unsigned addr_src, addr_dst;
 
 #ifdef PROFILE_DMA
+  unsigned long ret;
   ktime_t time_dma_start, time_dma_end;
   unsigned time_dma_acc;
   time_dma_acc = 0;
@@ -1001,9 +1071,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     pulp_rab_free(my_dev.rab_config, arg);
 
-    #if PLATFORM == JUNO
-      pulp_rab_ax_log_read(pulp_cluster_select, 1);
-      pulp_rab_ax_log_print();
+    #if RAB_AX_LOG_EN == 1
+      if (pulp_rab_ax_log_en) {
+        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+        pulp_rab_ax_log_print();
+      }
     #endif
 
     #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
@@ -1022,9 +1094,11 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     pulp_rab_free_striped(my_dev.rab_config, arg);
 
-    #if PLATFORM == JUNO
-      pulp_rab_ax_log_read(pulp_cluster_select, 1);
-      pulp_rab_ax_log_print();
+    #if RAB_AX_LOG_EN == 1
+      if (pulp_rab_ax_log_en) {
+        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+        pulp_rab_ax_log_print();
+      }
     #endif
 
     #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
@@ -1182,7 +1256,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   case PULP_IOCTL_RAB_MH_DIS:
    
-  pulp_rab_mh_dis();
+    pulp_rab_mh_dis();
 
     break;
 
@@ -1203,7 +1277,8 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       n_bytes_read = n_bytes_left;
     }
 
-    pulp_cluster_select = request[0];
+    pulp_cluster_select = request[0] & CLUSTER_MASK;
+    pulp_rab_ax_log_en = (request[0] >> GPIO_RAB_AX_LOG_EN) & 0x1;
 
     break;
 

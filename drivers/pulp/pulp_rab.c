@@ -11,7 +11,7 @@ static RabStripeReq rab_stripe_req[RAB_L1_N_MAPPINGS_PORT_1];
 
 // miss handling routine
 static char rab_mh_wq_name[10] = "RAB_MH_WQ";
-static struct workqueue_struct *rab_mh_wq;
+static struct workqueue_struct *rab_mh_wq = 0;
 static struct work_struct rab_mh_w;
 static struct task_struct *user_task;
 static struct mm_struct *user_mm;
@@ -23,7 +23,7 @@ static unsigned rab_mh_acp;
 static unsigned rab_mh_lvl;
 
 // AX logger 
-#if PLATFORM == JUNO
+#if RAB_AX_LOG_EN == 1
   static unsigned * rab_ar_log_buf;
   static unsigned * rab_aw_log_buf;
   static unsigned rab_ar_log_buf_idx = 0;
@@ -125,7 +125,7 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   rab_mh_lvl = 0;
 
   // initialize AX logger
-  #if PLATFORM == JUNO
+  #if RAB_AX_LOG_EN == 1
     err = pulp_rab_ax_log_init();
     if (err)
       return err;
@@ -708,18 +708,20 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
 void pulp_rab_l2_init(void *rab_config)
 {
   unsigned int i_port, i_set, i_entry, offset;
-  for (i_port=0; i_port<1; i_port++) {
-    for (i_set=0; i_set<RAB_L2_N_SETS; i_set++) {
-      for (i_entry=0; i_entry<RAB_L2_N_ENTRIES_PER_SET; i_entry++) {
-        // Clear VA ram. No need to clear PA ram.
-        offset = ((i_port+1)*0x4000) + (i_set*RAB_L2_N_ENTRIES_PER_SET*4) + (i_entry*4);
-        iowrite32( 0, (void *)((unsigned long)rab_config + offset)); 
-        l2.set[i_set].entry[i_entry].flags = 0;
-        l2.set[i_set].entry[i_entry].pfn_p = 0;
-        l2.set[i_set].entry[i_entry].pfn_v = 0;
+  for (i_port = 0; i_port < RAB_N_PORTS; ++i_port) {
+    if (RAB_L2_EN_ON_PORT[i_port]) {
+      for (i_set = 0; i_set < RAB_L2_N_SETS; ++i_set) {
+        for (i_entry = 0; i_entry < RAB_L2_N_ENTRIES_PER_SET; ++i_entry) {
+          // Clear VA RAM. No need to clear PA RAM.
+          offset = ((i_port+1)*0x4000) + (i_set*RAB_L2_N_ENTRIES_PER_SET*4) + (i_entry*4);
+          iowrite32(0, (void *)((unsigned long)rab_config + offset));
+          l2.set[i_set].entry[i_entry].flags = 0;
+          l2.set[i_set].entry[i_entry].pfn_p = 0;
+          l2.set[i_set].entry[i_entry].pfn_v = 0;
+        }
+        l2.set[i_set].next_entry_idx = 0;
+        l2.set[i_set].is_full = 0;
       }
-      l2.set[i_set].next_entry_idx = 0;
-      l2.set[i_set].is_full = 0;
     }
   }
   printk(KERN_INFO "PULP - RAB L2: Initialized VRAMs to 0.\n");
@@ -1352,18 +1354,19 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
     rab_stripe_elem[i].id                  = rab_stripe_elem_user[i].id;
     rab_stripe_elem[i].type                = rab_stripe_elem_user[i].type;
     rab_stripe_elem[i].n_slices_per_stripe = n_slices;
+    rab_stripe_elem[i].set_offset          = 0;
     rab_stripe_elem[i].n_stripes           = rab_stripe_elem_user[i].n_stripes;
-    rab_stripe_elem[i].flags_hw            = rab_stripe_elem_user[i].flags;
+    rab_stripe_elem[i].flags_hw            = rab_stripe_elem_user[i].flags | 0x2; // write only does not work in the hardware!
 
     // compute the actual number of required slices
-    if (rab_stripe_elem[i].type == 4)
+    if (rab_stripe_elem[i].type == 0)
       rab_stripe_elem[i].n_slices = 4*n_slices; // double buffering: *2 + inout: *2
     else
       rab_stripe_elem[i].n_slices = 2*n_slices; // double buffering: *2
 
     // set stripe_idx = stripe to configure at first update request
-    if (rab_stripe_elem[i].type == 3)
-      rab_stripe_elem[i].stripe_idx = 0;
+    if (rab_stripe_elem[i].type == 2)
+      rab_stripe_elem[i].stripe_idx = 1; //0;
     else
       rab_stripe_elem[i].stripe_idx = 1;
 
@@ -1897,16 +1900,17 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
  */
 int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
 {
+  unsigned long   pgd_pa;
+  RabSliceReq     rab_slice_req;
+  int             retval;
+
   // Get physical address of page global directory (i.e., the process-specific top-level page
   // table).
-  const pgd_t* pgd_ptr = current->mm->pgd;
-  BUG_ON(pgd_none(*pgd_ptr));
-  const unsigned long pgd_pa = (((unsigned long)(pgd_val(*pgd_ptr)) & PHYS_MASK) >> 2) << 2;
+  pgd_pa = ((unsigned long)__pa(current->mm->pgd));
   printk(KERN_DEBUG "PULP RAB SoC MH PGD PA: 0x%010lx\n", pgd_pa);
 
   // Set up a RAB mapping between physical address space of page tables and virtual address
   // space of PULP core running the PTW.
-  RabSliceReq rab_slice_req;
   rab_slice_req.date_cur        = 0;
   rab_slice_req.date_exp        = RAB_MAX_DATE_MH;
   rab_slice_req.page_ptr_idx    = RAB_L1_N_SLICES_PORT_1-1;
@@ -1917,7 +1921,7 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
   rab_slice_req.rab_slice       = 4; // TODO: generalize
   rab_slice_req.flags_drv       = 0b001;    // not setup in every mapping, not striped, constant
   rab_slice_req.addr_start      = PGD_BASE_ADDR;
-  rab_slice_req.addr_end        = rab_slice_req.addr_start + ((PTRS_PER_PGD-1) << 3);
+  rab_slice_req.addr_end        = rab_slice_req.addr_start + ((PTRS_PER_PGD << 3) - 1);
   rab_slice_req.addr_offset     = pgd_pa;
   rab_slice_req.flags_hw        = 0b0011;  // disable ACP, disable write, enable read, enable slice
 
@@ -1927,11 +1931,14 @@ int pulp_rab_soc_mh_ena(struct task_struct* task, void* rab_config, void* mbox)
 
   // Request to setup RAB slice.  If this fails, the SoC MH cannot be enabled because the PTW would
   // access the wrong physical address.
-  const int retval = pulp_rab_slice_setup(rab_config, &rab_slice_req, NULL);
+  retval = pulp_rab_slice_setup(rab_config, &rab_slice_req, NULL);
   if (retval != 0) {
     printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", rab_slice_req.rab_slice);
     return retval;
   }
+
+  // Disable handling of RAB misses by this Kernel driver.
+  pulp_rab_mh_dis();
 
   // Write PGD to mailbox.  TODO: This actually is unnecessary because a constant RAB slice to the
   // physical address exists anyway.  However, we need some way to tell a *single core* that it
@@ -1969,7 +1976,7 @@ void pulp_rab_update(unsigned update_req)
   int i, j;
   unsigned elem_mask, type;
   unsigned rab_mapping;
-  unsigned stripe_idx, idx_mask, n_slices, offset;
+  unsigned stripe_idx, idx_mask, set_sel, n_slices, offset;
   RabStripeElem * elem;
 
   elem_mask = 0;
@@ -2006,14 +2013,17 @@ void pulp_rab_update(unsigned update_req)
     
     n_slices   = elem->n_slices_per_stripe;
     stripe_idx = elem->stripe_idx;
-    if ( elem->type == 4 ) // inout
+    if ( elem->type == 0 ) // inout -> Stripe 0, 4, 8 to Set 0, Stripe 1, 5, 9 to Set 1, etc.
       idx_mask = 0x3;
-    else // in, out
+    else // in, out -> Alternate even and odd stripes to Set 0 and 1, respectively.
       idx_mask = 0x1;
+
+    // select set of pre-allocated slices, set_offset may change on wrap around
+    set_sel = (stripe_idx + elem->set_offset) & idx_mask;
 
     // process every slice independently
     for (j=0; j<n_slices; j++) {
-      offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+elem->slice_idxs[(stripe_idx & idx_mask)*n_slices+j]);
+      offset = 0x20*(1*RAB_L1_N_SLICES_PORT_0+elem->slice_idxs[set_sel*n_slices+j]);
 
       if (DEBUG_LEVEL_RAB_STR > 3) {
         printk("stripe_idx = %d, n_slices = %d, j = %d, offset = %#x\n",
@@ -2037,18 +2047,21 @@ void pulp_rab_update(unsigned update_req)
     // increase stripe idx counter
     elem->stripe_idx++;
 
-    #if defined(PROFILE_RAB_STR) || defined(JPEG) 
-      if (elem->stripe_idx == elem->n_stripes) {
-        elem->stripe_idx = 0;
-        if (DEBUG_LEVEL_RAB_STR > 0) {
-          printk(KERN_INFO "PULP - RAB: stripe table wrap around.\n");
-        }
+    if (elem->stripe_idx == elem->n_stripes) {
+      elem->stripe_idx = 0;
+      if      ( (elem->type == 0) && (elem->n_stripes & 0x3) ) // inout + number of stripes not divisible by 4 -> shift set mapping
+        elem->set_offset = (elem->set_offset + (elem->n_stripes & 0x3) ) & 0x3;
+      else if ( (elem->type != 0) && (elem->n_stripes & 0x1) ) // in, out + odd number of stripes -> flip set mapping
+        elem->set_offset = (elem->set_offset) ? 0 : 1;
+
+      if (DEBUG_LEVEL_RAB_STR > 0) {
+        printk(KERN_INFO "PULP - RAB: elem %d stripe table wrap around.\n", i);
       }
-    #endif
+    }
   }
 
   // signal ready to PULP
-  iowrite32(HOST_READY,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
+  iowrite32(HOST_READY | elem_mask,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
         
   #ifdef PROFILE_RAB_STR 
     // read the ARM clock counter
@@ -2106,7 +2119,7 @@ void pulp_rab_switch(void)
   // reset stripe idxs for striped mappings 
   for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
 
-    if ( rab_stripe_req[rab_mapping].elements[i].type == 3 ) // out
+    if ( rab_stripe_req[rab_mapping].elements[i].type == 2 ) // out
       rab_stripe_req[rab_mapping].elements[i].stripe_idx = 0;
     else  // in, inout
       rab_stripe_req[rab_mapping].elements[i].stripe_idx = 1;
@@ -2156,6 +2169,11 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
   unsigned long n_bytes_read, n_bytes_left;
   unsigned byte;
 
+  // check if miss handling is not already enabled, i.e., if workqueue already exists
+  // for example because the clean up failed
+  if (rab_mh_wq)
+    pulp_rab_mh_dis();
+
   // get slice data from user space - arg already checked above
   byte = 0;
   n_bytes_left = 2*sizeof(unsigned); 
@@ -2169,9 +2187,8 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
   rab_mh_acp = request[0];
   rab_mh_lvl = request[1];
 
-  // create workqueue for RAB miss handling
-  //rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
-  rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 1, rab_mh_wq_name); // single-threaded workqueue for strict ordering
+  // create workqueue for RAB miss handling - single-threaded workqueue for strict ordering
+  rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 1, rab_mh_wq_name);
   if (rab_mh_wq == NULL) {
     printk(KERN_WARNING "PULP: Allocation of workqueue for RAB miss handling failed.\n");
     return -ENOMEM;
@@ -2204,10 +2221,13 @@ void pulp_rab_mh_dis(void)
   rab_mh = 0;
   rab_mh_date = 0;
 
-  // flush and destroy the workqueue
-  destroy_workqueue(rab_mh_wq);
+  if (rab_mh_wq) {
+    // Flush and destroy the workqueue, and reset workqueue pointer to default value.
+    destroy_workqueue(rab_mh_wq);
+    rab_mh_wq = 0;
 
-  printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
+    printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
+  }
 
   return;
 }
@@ -2267,19 +2287,17 @@ void pulp_rab_handle_miss(unsigned unused)
   
   // empty miss-handling FIFOs
   for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
-    rab_mh_addr[i] = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ADDR_FIFO_OFFSET_B));
+    // read ID first for empty FIFO detection
     rab_mh_id[i]   = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ID_FIFO_OFFSET_B));
     
-    // detect empty FIFOs
-    #if PLATFORM != JUNO    
-      if ( rab_mh_id[i] & 0x80000000 )
-        break;
-    #else
-      if ( rab_mh_id[i] & 0x8000000000000000 )
-        break;
-    #endif      
+    // detect empty FIFOs -> end routine
+    if ( rab_mh_id[i] & 0x80000000 )
+      break;
 
-    if (DEBUG_LEVEL_RAB_MH > 0) {
+    // read valid addr
+    rab_mh_addr[i] = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ADDR_FIFO_OFFSET_B));
+
+    if ((DEBUG_LEVEL_RAB_MH > 0)) { //} || (i > 0)) {
       printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
        i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
     }
@@ -2310,7 +2328,7 @@ void pulp_rab_handle_miss(unsigned unused)
          ( (id_pe < 0) || (id_pe > N_CORES-1) ) ) {
       printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces. id = %#x | addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
       // for debugging
-      //      pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
+      //   pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
 
       continue;
     }
@@ -2336,7 +2354,11 @@ void pulp_rab_handle_miss(unsigned unused)
         handled = 1;
         if (DEBUG_LEVEL_RAB_MH > 0) {
           printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
-          // for debugging only - deactivate fetch enable
+          printk(KERN_INFO "PULP: RAB miss - j = %d,        %#x, id = %#x, addr = %#x\n",
+            j, rab_mh_date, rab_mh_id[j], rab_mh_addr[j]);
+          printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
+            i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
+        // for debugging only - deactivate fetch enable
           // iowrite32(0xC0000000,(void *)((unsigned long)(pulp->gpio)+0x8));
         }
         break;
@@ -2514,6 +2536,7 @@ void pulp_rab_handle_miss(unsigned unused)
     // read the PE timer
     n_cyc_update = ioread32((void *)((unsigned long)(pulp->clusters)
       +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
+    n_cyc_tot_update += n_cyc_update;
     
     // write the counter values to the buffers
     n_cyc_buf_response[idx_buf_response] = n_cyc_response;
@@ -2566,7 +2589,7 @@ void pulp_rab_handle_miss(unsigned unused)
     iowrite32(n_misses,                 (void *)((unsigned long)(pulp->l3_mem)+N_MISSES_OFFSET_B));
 
 #endif
-    // error handling
+  // error handling
   miss_handling_error:
     if (err) {
       printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
@@ -2575,7 +2598,8 @@ void pulp_rab_handle_miss(unsigned unused)
       pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
     }
 
-  }
+  } // for i<RAB_MH_FIFO_DEPTH
+
   if (DEBUG_LEVEL_RAB_MH > 1)
     printk(KERN_INFO "PULP: RAB miss handling routine finished.\n");
 
@@ -2586,7 +2610,7 @@ void pulp_rab_handle_miss(unsigned unused)
 // }}}
 
 // AX Logger {{{
-#if PLATFORM == JUNO
+#if RAB_AX_LOG_EN == 1
   /***********************************************************************************
    *
    *  █████╗ ██╗  ██╗    ██╗      ██████╗  ██████╗ 
@@ -2692,10 +2716,14 @@ void pulp_rab_handle_miss(unsigned unused)
   
     // read out AR log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-      ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
-      meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
-      addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
-  
+      // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
+      //ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
+      //meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
+      //addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
+      meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
+      addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
+      ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
+
       if ( (ts == 0) && (meta == 0) && (addr == 0) )
         break;
   
@@ -2719,9 +2747,13 @@ void pulp_rab_handle_miss(unsigned unused)
   
     // read out AW log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-      ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
-      meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
-      addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
+      // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
+      //ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
+      //meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
+      //addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
+      meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
+      addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
+      ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
   
       if ( (ts == 0) && (meta == 0) && (addr == 0) )
         break;
@@ -2787,7 +2819,7 @@ void pulp_rab_handle_miss(unsigned unused)
       id  = BF_GET(meta, 8, 10);
   
       #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
-        printk(KERN_INFO "AR Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
+        printk(KERN_INFO "AR Log: %u %#x %3u %#x %u\n", ts, addr, len, id, type);
       #else // 1 = MATLAB
         printk(KERN_INFO "AR Log: %u %u %u %u %u\n", ts, addr, len, id, type);
       #endif
@@ -2805,7 +2837,7 @@ void pulp_rab_handle_miss(unsigned unused)
       id  = BF_GET(meta, 8, 10);
   
       #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
-        printk(KERN_INFO "AW Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
+        printk(KERN_INFO "AW Log: %u %#x %3u %#x %u\n", ts, addr, len, id, type);
       #else // 1 = MATLAB
         printk(KERN_INFO "AW Log: %u %u %u %u %u\n", ts, addr, len, id, type);
       #endif
