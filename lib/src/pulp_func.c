@@ -46,7 +46,7 @@ int pulp_reserve_v_addr(PulpDev *pulp)
  * @pulp: pointer to the PulpDev structure
  */
 int pulp_free_v_addr(PulpDev *pulp)
-{  
+{
   int status;
 
   if (DEBUG_LEVEL > 0)
@@ -76,11 +76,11 @@ void pulp_print_v_addr(PulpDev *pulp)
   // check the reservation
   printf("\nMemory map of the process:\n");
   printf("# cat /proc/getpid()/maps\n");
-  
+
   char cmd[20];
   sprintf(cmd,"cat /proc/%i/maps",getpid());
   system(cmd);
-  
+
   // check wether the reservation contributes to the kernels overcommit accounting -> Committed_AS
   printf("\nInformation about the system's memory:\n");
   printf("# cat /proc/meminfo\n");
@@ -92,7 +92,7 @@ void pulp_print_v_addr(PulpDev *pulp)
 /**
  * Read 32 bits
  *
- * @base_addr : virtual address pointer to base address 
+ * @base_addr : virtual address pointer to base address
  * @off       : offset
  * @off_type  : type of the offset, 'b' = byte offset, else word offset
  */
@@ -100,7 +100,7 @@ int pulp_read32(unsigned *base_addr, unsigned off, char off_type)
 {
   if (DEBUG_LEVEL > 3) {
     unsigned *addr;
-    if (off_type == 'b') 
+    if (off_type == 'b')
       addr = base_addr + (off>>2);
     else
       addr = base_addr + off;
@@ -115,7 +115,7 @@ int pulp_read32(unsigned *base_addr, unsigned off, char off_type)
 /**
  * Write 32 bits
  *
- * @base_addr : virtual address pointer to base address 
+ * @base_addr : virtual address pointer to base address
  * @off       : offset
  * @off_type  : type of the offset, 'b' = byte offset, else word offset
  */
@@ -123,7 +123,7 @@ void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned val
 {
   if (DEBUG_LEVEL > 3) {
     unsigned *addr;
-    if (off_type == 'b') 
+    if (off_type == 'b')
       addr = base_addr + (off>>2);
     else
       addr = base_addr + off;
@@ -161,7 +161,7 @@ int pulp_mmap(PulpDev *pulp)
   // Clusters
   offset = 0; // start of clusters
   pulp->clusters.size = CLUSTERS_SIZE_B;
-  
+
   pulp->clusters.v_addr = mmap(NULL,pulp->clusters.size,
                                PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->clusters.v_addr == MAP_FAILED) {
@@ -175,9 +175,9 @@ int pulp_mmap(PulpDev *pulp)
   // SOC_PERIPHERALS
   offset = CLUSTERS_SIZE_B; // start of peripherals
   pulp->soc_periph.size = SOC_PERIPHERALS_SIZE_B;
- 
+
   pulp->soc_periph.v_addr = mmap(NULL,pulp->soc_periph.size,
-                                 PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
+                                 PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->soc_periph.v_addr == MAP_FAILED) {
     printf("MMAP failed for SoC peripherals.\n");
     return -EIO;
@@ -189,9 +189,9 @@ int pulp_mmap(PulpDev *pulp)
   // Mailbox
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B; // start of mailbox
   pulp->mbox.size = MBOX_SIZE_B;
- 
+
   pulp->mbox.v_addr = mmap(NULL,pulp->mbox.size,
-                              PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset); 
+                              PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->mbox.v_addr == MAP_FAILED) {
     printf("MMAP failed for Mailbox.\n");
     return -EIO;
@@ -199,14 +199,14 @@ int pulp_mmap(PulpDev *pulp)
   else if (DEBUG_LEVEL > 0) {
     printf("Mailbox mapped to virtual user space at %p.\n",pulp->mbox.v_addr);
   }
- 
+
   // L2
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B; // start of L2
   pulp->l2_mem.size = L2_MEM_SIZE_B;
- 
+
   pulp->l2_mem.v_addr = mmap(NULL,pulp->l2_mem.size,
                              PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
- 
+
   if (pulp->l2_mem.v_addr == MAP_FAILED) {
     printf("MMAP failed for L2 memory.\n");
     return -EIO;
@@ -219,7 +219,7 @@ int pulp_mmap(PulpDev *pulp)
   // L3
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B; // start of L3
   pulp->l3_mem.size = L3_MEM_SIZE_B;
-    
+
   pulp->l3_mem.v_addr = mmap(NULL,pulp->l3_mem.size,
                              PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->l3_mem.v_addr == MAP_FAILED) {
@@ -229,13 +229,13 @@ int pulp_mmap(PulpDev *pulp)
   else if (DEBUG_LEVEL > 0) {
     printf("Shared L3 memory mapped to virtual user space at %p.\n",pulp->l3_mem.v_addr);
   }
- 
+
   // PULP external
   // GPIO
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
     + L3_MEM_SIZE_B; // start of GPIO
   pulp->gpio.size = H_GPIO_SIZE_B;
-    
+
   pulp->gpio.v_addr = mmap(NULL,pulp->gpio.size,
                            PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->gpio.v_addr == MAP_FAILED) {
@@ -250,7 +250,7 @@ int pulp_mmap(PulpDev *pulp)
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
     + L3_MEM_SIZE_B + H_GPIO_SIZE_B; // start of Clking
   pulp->clking.size = CLKING_SIZE_B;
-    
+
   pulp->clking.v_addr = mmap(NULL,pulp->clking.size,
                              PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->clking.v_addr == MAP_FAILED) {
@@ -265,7 +265,7 @@ int pulp_mmap(PulpDev *pulp)
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
     + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B; // start of RAB config
   pulp->rab_config.size = RAB_CONFIG_SIZE_B;
-    
+
   pulp->rab_config.v_addr = mmap(NULL,pulp->rab_config.size,
                                  PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->rab_config.v_addr == MAP_FAILED) {
@@ -281,7 +281,7 @@ int pulp_mmap(PulpDev *pulp)
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
     + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B; // start of SLCR
   pulp->slcr.size = SLCR_SIZE_B;
-    
+
   pulp->slcr.v_addr = mmap(NULL,pulp->slcr.size,
                            PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->slcr.v_addr == MAP_FAILED) {
@@ -296,7 +296,7 @@ int pulp_mmap(PulpDev *pulp)
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
     + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B; // start of MPCore
   pulp->mpcore.size = MPCORE_SIZE_B;
-    
+
   pulp->mpcore.v_addr = mmap(NULL,pulp->mpcore.size,
                              PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
   if (pulp->mpcore.v_addr == MAP_FAILED) {
@@ -336,15 +336,15 @@ int pulp_munmap(PulpDev *pulp)
   status = munmap(pulp->gpio.v_addr,pulp->gpio.size);
   if (status) {
     printf("MUNMAP failed for GPIO.\n");
-  } 
+  }
   status = munmap(pulp->rab_config.v_addr,pulp->rab_config.size);
   if (status) {
     printf("MUNMAP failed for RAB config.\n");
-  } 
+  }
   status = munmap(pulp->l2_mem.v_addr,pulp->l2_mem.size);
   if (status) {
     printf("MUNMAP failed for L2 memory.\n");
-  } 
+  }
   status = munmap(pulp->soc_periph.v_addr,pulp->soc_periph.size);
   if (status) {
     printf("MUNMAP failed for SoC peripherals\n.");
@@ -357,7 +357,7 @@ int pulp_munmap(PulpDev *pulp)
   if (status) {
     printf("MUNMAP failed for shared L3 memory\n.");
   }
-   
+
   // close the file descriptor
   printf("Close the file descriptor. \n");
   close(pulp->fd);
@@ -426,7 +426,7 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
     if ( status ) {
       printf("ERROR: Clock manager not locked, cannot start reconfiguration.\n");
       return -EBUSY;
-    } 
+    }
   }
 
   // start reconfiguration
@@ -446,7 +446,7 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
     if ( status ) {
       printf("ERROR: Clock manager not locked, clock reconfiguration failed.\n");
       return -EBUSY;
-    } 
+    }
   }
 
 #if PLATFORM != JUNO
@@ -466,7 +466,7 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
 
   // prepare command
   //strcpy(cmd,"stty -F /dev/ttyPS1 ");  // only supports standard baudrates
-  strcpy(cmd,"/media/nfs/apps/uart "); // supports non-standard baudrates 
+  strcpy(cmd,"/media/nfs/apps/uart "); // supports non-standard baudrates
   strcat(cmd,baudrate_s);
   strcat(cmd," 0");
 
@@ -503,7 +503,7 @@ int pulp_clking_measure_freq(PulpDev *pulp)
 
   volatile unsigned k;
   int mes_freq_mhz;
-  
+
   if( access("/dev/ZYNQ_PMM", F_OK ) != -1 )
     zynq_pmm = 1;
   else
@@ -511,7 +511,7 @@ int pulp_clking_measure_freq(PulpDev *pulp)
 
   // start clock counters
   if (zynq_pmm) {
-    // enable clock counter divider (by 64), reset & enable clock counter, PMCR register 
+    // enable clock counter divider (by 64), reset & enable clock counter, PMCR register
     asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
   }
 
@@ -540,7 +540,7 @@ int pulp_clking_measure_freq(PulpDev *pulp)
     asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_counter) : );
   }
   pulp_clk_counter = pulp_read32(pulp->clusters.v_addr,TIMER_GET_TIME_LO_OFFSET_B,'b');
- 
+
   if (zynq_pmm) {
     mes_freq_mhz = (int)((float)pulp_clk_counter/((float)(arm_clk_counter*ARM_PMU_CLK_DIV)/ARM_CLK_FREQ_MHZ));
   }
@@ -552,7 +552,7 @@ int pulp_clking_measure_freq(PulpDev *pulp)
 }
 
 /**
- * Initialize the memory mapped device 
+ * Initialize the memory mapped device
  *
  * @pulp: pointer to the PulpDev structure
  */
@@ -572,7 +572,7 @@ int pulp_init(PulpDev *pulp)
 
   // enable mbox interrupts
   pulp_write32(pulp->mbox.v_addr,MBOX_IE_OFFSET_B,'b',0x6);
- 
+
   // reset the l3_offset pointer
   pulp->l3_offset = 0;
 
@@ -641,14 +641,14 @@ int pulp_mbox_write(PulpDev *pulp, unsigned word)
       printf("ERROR: mbox timeout.\n");
       return -ETIME;
     }
-  } 
- 
+  }
+
   // mbox is ready to receive
   pulp_write32(pulp->mbox.v_addr,MBOX_WRDATA_OFFSET_B,'b', word);
   if (DEBUG_LEVEL > 2)
     printf("Wrote %#x to mbox.\n",word);
 
-  return 0;  
+  return 0;
 }
 
 /**
@@ -801,7 +801,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
         prot = 0x4 | 0x2 | 0x1;
       RAB_SET_PROT(flags, prot);
       RAB_SET_ACP(flags, task->data_desc[k].cache_ctrl);
-     
+
       elements[i].id    = (unsigned char)i; // not used right now
       elements[i].type  = (unsigned char)(task->data_desc[k].type);
       elements[i].flags = (unsigned char)flags;
@@ -880,7 +880,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
   free(elements);
 
   return err;
-} 
+}
 
 /**
  * Free striped remappings
@@ -889,19 +889,20 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
  */
 void pulp_rab_free_striped(PulpDev *pulp)
 {
-  
+
   unsigned offload_id = 0;
 
   // make the request
   ioctl(pulp->fd,PULP_IOCTL_RAB_FREE_STRIPED,offload_id);
-} 
+}
 
-void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl)
+int pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl)
 {
   unsigned rab_mh_cfg[2];
   rab_mh_cfg[0] = (unsigned)use_acp;
   rab_mh_cfg[1] = (unsigned)rab_mh_lvl;
-  ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,rab_mh_cfg);
+
+  return ioctl(pulp->fd,PULP_IOCTL_RAB_MH_ENA,rab_mh_cfg);
 }
 
 void pulp_rab_mh_disable(PulpDev *pulp)
@@ -926,9 +927,9 @@ int pulp_rab_soc_mh_enable(PulpDev* pulp)
 int pulp_dma_xfer(PulpDev *pulp,
                   unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
                   unsigned host_read)
-{ 
+{
   unsigned request[3];
-  
+
   // check & process arguments
   if (size_b >> 31) {
     printf("ERROR: Requested transfer size too large - cannot encode DMA transfer direction.\n ");
@@ -937,7 +938,7 @@ int pulp_dma_xfer(PulpDev *pulp,
   else if (host_read) {
     BF_SET(size_b,1,31,1);
   }
-  
+
   // setup the request
   request[0] = addr_l3;
   request[1] = addr_pulp;
@@ -994,7 +995,7 @@ void pulp_reset(PulpDev *pulp, unsigned full)
 
   // FPGA reset control register
   slcr_value = pulp_read32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b');
- 
+
   // extract the FPGA_OUT_RST bits
   slcr_value = slcr_value & 0xF;
 
@@ -1002,26 +1003,22 @@ void pulp_reset(PulpDev *pulp, unsigned full)
     // enable reset
     pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 0xF);
 
-    printf("%s %d\n",__FILE__,__LINE__);
-
     // wait
     usleep(100000);
 
     // disable reset
     pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', slcr_value);
-
-    printf("%s %d\n",__FILE__,__LINE__);
   }
   else {
     // enable reset
     pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b',
                  slcr_value | (0x1 << SLCR_FPGA_OUT_RST));
-    
+
     // wait
     usleep(100000);
-    
+
     // disable reset
-    pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b', 
+    pulp_write32(pulp->slcr.v_addr, SLCR_FPGA_RST_CTRL_OFFSET_B, 'b',
                  slcr_value );
 #endif
 
@@ -1042,9 +1039,9 @@ void pulp_reset(PulpDev *pulp, unsigned full)
 }
 
 /**
- * Boot PULP.  
+ * Boot PULP.
  *
- * @pulp : pointer to the PulpDev structure 
+ * @pulp : pointer to the PulpDev structure
  * @task : pointer to the TaskDesc structure
  */
 int pulp_boot(PulpDev *pulp, TaskDesc *task)
@@ -1054,10 +1051,10 @@ int pulp_boot(PulpDev *pulp, TaskDesc *task)
   // load the binary
   err = pulp_load_bin(pulp, task->name);
   if (err) {
-    printf("ERROR: Load of PULP binary failed.\n");
+    printf("ERROR: Loading PULP binary failed.\n");
     return err;
   }
-  
+
   // start execution
   pulp_exe_start(pulp);
 
@@ -1067,15 +1064,15 @@ int pulp_boot(PulpDev *pulp, TaskDesc *task)
 /**
  * Load binary to PULP. Not yet uses the Zynq PS DMA engine.
  *
- * @pulp : pointer to the PulpDev structure 
- * @name : pointer to the string containing the name of the 
+ * @pulp : pointer to the PulpDev structure
+ * @name : pointer to the string containing the name of the
  *         application to load
  */
 int pulp_load_bin(PulpDev *pulp, char *name)
 {
   int i;
   char * bin_name;
-  int append = 0;  
+  int append = 0;
 
   // prepare binary name
   if ( strlen(name) < 5)
@@ -1086,7 +1083,7 @@ int pulp_load_bin(PulpDev *pulp, char *name)
     if ( (NULL == last_dot) || (strncmp(last_dot,".bin",4)) )
       append = 1;
   }
-  
+
   if (append) {
     bin_name = (char *)malloc((strlen(name)+4+1)*sizeof(char));
     if (!bin_name) {
@@ -1116,7 +1113,7 @@ int pulp_load_bin(PulpDev *pulp, char *name)
   if((nsz = fread(bin, sizeof(char), sz, fp)) != sz)
     printf("ERROR: Red only %d bytes in binary.\n", nsz);
   fclose(fp);
-  
+
   // write binary to L2
   for (i=0; i<nsz/4; i++)
     pulp->l2_mem.v_addr[i] = bin[i];
@@ -1131,7 +1128,7 @@ int pulp_load_bin(PulpDev *pulp, char *name)
 /**
  * Starts programm execution on PULP.
  *
- * @pulp : pointer to the PulpDev structure 
+ * @pulp : pointer to the PulpDev structure
  */
 void pulp_exe_start(PulpDev *pulp)
 {
@@ -1152,12 +1149,21 @@ void pulp_exe_start(PulpDev *pulp)
 /**
  * Stops programm execution on PULP.
  *
- * @pulp : pointer to the PulpDev structure 
+ * @pulp : pointer to the PulpDev structure
  */
 void pulp_exe_stop(PulpDev *pulp)
 {
+  // Enable clock and deactivate reset.
+  unsigned gpio_val = (1 << GPIO_RST_N) | (1 << GPIO_CLK_EN);
+
+  // Enable RAB AX Loggers.
+  if (pulp->rab_ax_log_en == 1)
+    gpio_val |= 1 << GPIO_RAB_AX_LOG_EN;
+
   printf("Stopping program execution.\n");
-  pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);
+  pulp_write32(pulp->gpio.v_addr,0x8,'b',gpio_val);
+
+  sleep(1);
 }
 
 /**
@@ -1165,7 +1171,7 @@ void pulp_exe_stop(PulpDev *pulp)
  * most timeout_s seconds.
  *
  * @pulp      : pointer to the PulpDev structure
- * @timeout_s : maximum number of seconds to wait for end of 
+ * @timeout_s : maximum number of seconds to wait for end of
  *              computation
  */
 int pulp_exe_wait(PulpDev *pulp, int timeout_s)
@@ -1187,7 +1193,7 @@ int pulp_exe_wait(PulpDev *pulp, int timeout_s)
     printf("ERROR: PULP execution timeout.\n");
     return -ETIME;
   }
-   
+
   return 0;
 }
 
@@ -1214,17 +1220,17 @@ unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr)
     printf("WARNING: overflow in contiguous L3 memory.\n");
     pulp->l3_offset = 0;
   }
-  
+
   v_addr = (unsigned int)pulp->l3_mem.v_addr + pulp->l3_offset;
   *p_addr = L3_MEM_BASE_ADDR + pulp->l3_offset;
- 
+
   pulp->l3_offset += size_b;
 
   if (DEBUG_LEVEL > 2) {
     printf("Host virtual address = %#x \n",v_addr);
     printf("PMCA physical address = %#x \n",*p_addr);
   }
-  
+
   return v_addr;
 }
 
@@ -1260,7 +1266,7 @@ void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr)
  * @n_idxs :   number of elements to be passed by reference
  */
 int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs) {
-  
+
   int i, n_data, n_idxs, size_b;
 
   n_data = task->n_data;
@@ -1350,7 +1356,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
         j++;
       }
     }
-  
+
     // order the elements - bubble sort
     for (i=n_idxs_11; i>1; i--) {
       for (j=0; j<i-1; j++) {
@@ -1369,7 +1375,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
           (unsigned)task->data_desc[order[i]].size);
       }
     }
-  
+
     // determine the number of remappings/intervals to request
     v_addr_int[0]     = (unsigned)task->data_desc[order[0]].ptr;
     size_int[0]       = (unsigned)task->data_desc[order[0]].size;
@@ -1409,10 +1415,10 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
       }
       else {
         // extend the previous mapping
-        size_int[n_data_int-1] += (gap_size + task->data_desc[j].size);  
+        size_int[n_data_int-1] += (gap_size + task->data_desc[j].size);
       }
     }
-  
+
     // set up the RAB
     if (DEBUG_LEVEL > 2) {
       printf("Requesting %d remapping(s):\n",n_data_int);
@@ -1422,10 +1428,10 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
         printf("%d \t %#x \t %#x \n",i,v_addr_int[i],size_int[i]);
         usleep(1000000);
       }
-      pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot_int[i], 
+      pulp_rab_req(pulp, v_addr_int[i], size_int[i], prot_int[i],
         port, date_exp, date_cur, cache_ctrl_int[i], rab_lvl_int[i]);
     }
-  
+
     // free memory
     free(v_addr_int);
     free(size_int);
@@ -1636,7 +1642,7 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
 
     if ( (*data_idxs)[i] ) {
       // pass data element by reference
-      if ( (*data_idxs)[i] == 0x10 )
+      if ( ((*data_idxs)[i] == 0x10) || ((*data_idxs)[i] == 0x1F) )
         addr = (unsigned)(task->data_desc[i].ptr_l3_p); // pass phys addr in contiguous L3
       else
         addr = (unsigned)(task->data_desc[i].ptr); // pass virt addr
@@ -1646,17 +1652,20 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
         printf("Element %d: wrote %#x to mbox.\n", i, addr);
     }
     else {
-      // pass data element by value
-      pulp_mbox_write(pulp, *(unsigned *)(task->data_desc[i].ptr));
-      if (DEBUG_LEVEL > 2)
-        printf("Element %d: wrote %#x to mbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
-    }    
+      // pass data element by value and of type input/output or input
+      if ( (task->data_desc[i].type == 0) || (task->data_desc[i].type == 1) ) {
+        pulp_mbox_write(pulp, *(unsigned *)(task->data_desc[i].ptr));
+        if (DEBUG_LEVEL > 2)
+          printf("Element %d: wrote %#x to mbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
+      }
+      else {// pass by value, but type is output only
+        if (DEBUG_LEVEL > 2)
+          printf("Element %d: not passed to mbox.\n",i);
+      }
+    }
   }
-  
-  if (i != n_data)
-    printf("ERROR: Passed only %d of %d data elements to PULP.\n", i, n_data);
 
-  return i;
+  return 0;
 }
 
 /**
@@ -1665,49 +1674,61 @@ int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
  * @pulp:      pointer to the PulpDev structure
  * @task:      pointer to the TaskDesc structure
  * @data_idxs: pointer to array marking the elements to pass by reference
- * @n_idxs:    number of shared data elements passed by reference
  */
-int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs)
+int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs)
 {
-  int i,j, n_data;
+  int i,j, n_data, n_values, ret;
   unsigned *buffer;
 
   j = 0;
   n_data = task->n_data;
+  n_values = 0;
+  ret = 0;
 
-  buffer = (unsigned *)malloc((n_data-n_idxs)*sizeof(unsigned));
+  for (i=0; i<n_data; i++) {
+    // check if argument has been passed by value and is of type output or input and output
+    if ( ((*data_idxs)[i] == 0)
+          && ((task->data_desc[i].type == 0) || (task->data_desc[i].type == 2)) ) {
+      n_values++;
+    }
+  }
+
+  buffer = (unsigned *)malloc(n_values*sizeof(unsigned));
   if ( buffer == NULL ) {
     printf("ERROR: Malloc failed for buffer.\n");
     return -ENOMEM;
   }
-  
+
   // read from mbox
-  pulp_mbox_read(pulp, &buffer[0], n_data-n_idxs);
-  
+  pulp_mbox_read(pulp, &buffer[0], n_values);
+
   for (i=0; i<n_data; i++) {
-    // check if argument has been passed by value
-    if ( (*data_idxs)[i] == 0 ) {
+    // check if argument has been passed by value and is of type input/output or output
+    if ( ((*data_idxs)[i] == 0)
+          && ((task->data_desc[i].type == 0) || (task->data_desc[i].type == 2)) ) {
       // read from buffer
       *(unsigned *)(task->data_desc[i].ptr) = buffer[j];
       j++;
     }
   }
-  
-  if (j != (n_data-n_idxs) )
-    printf("ERROR: Got back only %d of %d data elements from PULP.\n",j,n_data-n_idxs);
+
+  if (j != n_values ) {
+    printf("ERROR: Got back only %d of %d data elements from PULP.\n",j,n_values);
+    ret = -EIO;
+  }
 
   //#ifndef JPEG // generates error
   free(buffer);
   //#endif
 
-  return j;
+  return ret;
 }
 
 /**
  * Offload a new task to PULP, set up RAB slices and pass descriptors
- * to PULP. 
+ * to PULP.
  *
- * @pulp: pointer to the PulpDev structure 
+ * @pulp: pointer to the PulpDev structure
  * @task: pointer to the TaskDesc structure
  */
 int pulp_offload_out(PulpDev *pulp, TaskDesc *task)
@@ -1740,7 +1761,7 @@ int pulp_offload_out(PulpDev *pulp, TaskDesc *task)
 
   // pass data descriptor to PULP
   err = pulp_offload_pass_desc(pulp, task, &data_idxs);
-  if ( err != task->n_data ) {
+  if (err) {
     printf("ERROR: pulp_offload_pass_desc failed.\n");
     return err;
   }
@@ -1755,7 +1776,7 @@ int pulp_offload_out(PulpDev *pulp, TaskDesc *task)
  * Finish a task offload, clear RAB slices and get back descriptors
  * passed by value.
  *
- * @pulp: pointer to the PulpDev structure 
+ * @pulp: pointer to the PulpDev structure
  * @task: pointer to the TaskDesc structure
  */
 int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
@@ -1771,7 +1792,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
 
   // read back data elements with sizes up to 32 bit from mbox
   n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
- 
+
   // RAB free
   err = pulp_offload_rab_free(pulp, task, &data_idxs, n_idxs);
   if (err) {
@@ -1787,8 +1808,8 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   }
 
   // fetch values of data elements passed by value
-  err = pulp_offload_get_desc(pulp, task, &data_idxs, n_idxs);
-  if ( err != (task->n_data - n_idxs) ) {
+  err = pulp_offload_get_desc(pulp, task, &data_idxs);
+  if (err) {
     printf("ERROR: pulp_offload_get_desc failed.\n");
     return err;
   }
@@ -1802,7 +1823,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
 /**
  * Start offload execution on PULP.
  *
- * @pulp: pointer to the PulpDev structure 
+ * @pulp: pointer to the PulpDev structure
  * @task: pointer to the TaskDesc structure
  */
 int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
@@ -1812,7 +1833,7 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
   if (DEBUG_LEVEL > 2) {
     printf("Mailbox status = %#x.\n",pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b'));
   }
-  
+
   // read status
   pulp_mbox_read(pulp, &status, 1);
   if ( status != PULP_READY ) {
@@ -1829,7 +1850,7 @@ int pulp_offload_start(PulpDev *pulp, TaskDesc *task)
 /**
  * Wait for an offloaded task to finish on PULP.
  *
- * @pulp: pointer to the PulpDev structure 
+ * @pulp: pointer to the PulpDev structure
  * @task: pointer to the TaskDesc structure
  */
 int pulp_offload_wait(PulpDev *pulp, TaskDesc *task)
@@ -1864,7 +1885,7 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
     return -ENOMEM;
   }
 
-  // only remap addresses belonging to data elements larger than 32 bit  
+  // only remap addresses belonging to data elements larger than 32 bit
   pulp_offload_get_data_idxs(task, &data_idxs);
 
   int i;
@@ -1882,25 +1903,25 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   (*ftask)->n_data = task->n_data;
 
   if ( !strcmp(task->name, "rod") ) {
-#ifdef PROFILE   
+#ifdef PROFILE
     (*ftask)->data_desc  = (DataDesc *)malloc(9*sizeof(DataDesc));
 #else
     (*ftask)->data_desc  = (DataDesc *)malloc(6*sizeof(DataDesc));
-#endif // PROFILE    
+#endif // PROFILE
   }
   else if ( !strcmp(task->name, "ct") ) {
-#ifdef PROFILE   
+#ifdef PROFILE
     (*ftask)->data_desc  = (DataDesc *)malloc(8*sizeof(DataDesc));
 #else
     (*ftask)->data_desc  = (DataDesc *)malloc(6*sizeof(DataDesc));
-#endif // PROFILE    
+#endif // PROFILE
   }
   else if ( !strcmp(task->name, "jpeg") ) {
-#ifdef PROFILE   
+#ifdef PROFILE
     (*ftask)->data_desc  = (DataDesc *)malloc(10*sizeof(DataDesc));
 #else
     (*ftask)->data_desc  = (DataDesc *)malloc(7*sizeof(DataDesc));
-#endif // PROFILE    
+#endif // PROFILE
   }
   else {
     printf("ERROR: Unknown task name %s\n",task->name);
@@ -1910,19 +1931,19 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
     printf("ERROR: Malloc failed for data_desc.\n");
     return -ENOMEM;
   }
- 
+
   // memory allocation in contiguous L3 memory for IN and OUT
-  // copy to contiguous L3 memory for IN 
+  // copy to contiguous L3 memory for IN
   for (i = 0; i < (*ftask)->n_data; i++) {
-    
+
     data_size = task->data_desc[i].size;
     data_ptr  = (int)task->data_desc[i].ptr;
 
     // data element to pass by reference, allocate contiguous L3 memory
     if (data_idxs[i] > 0) {
-                  
+
       data_type = task->data_desc[i].type;
-     
+
       // we are going to abuse type to store the virtual host address and
       // ptr to store the physical address in contiguous L3 used by PULP
 
@@ -1933,26 +1954,26 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
                                                           (unsigned *)&((*ftask)->data_desc[i].ptr));
         memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
         break;
-                    
+
       case 1:
         //IN
         (*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
                                                           (unsigned *)&((*ftask)->data_desc[i].ptr));
         memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
         break;
-                    
+
       case 2:
         //OUT
         (*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
                                                           (unsigned *)&((*ftask)->data_desc[i].ptr));
         break;
-                    
+
       default:
         //NONE
         break;
       }
     }
-    
+
     // data element to pass by value (just copy descriptor)
     else  {
       (*ftask)->data_desc[i].ptr = (void *)data_ptr;
@@ -1962,14 +1983,14 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 
   // Pass data descriptor to PULP
   err = pulp_offload_pass_desc(pulp, *ftask, &data_idxs);
-  if ( err != task->n_data ) {
+  if (err) {
     printf("ERROR: pulp_offload_pass_desc failed.\n");
     return err;
   }
 
   // free memory
   free(data_idxs);
-  
+
   return 0;
 }
 
@@ -1977,8 +1998,8 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 {
   int i;
 
-  // similar to pulp_offload_in() but without RAB stuff 
-  int err, n_idxs;
+  // similar to pulp_offload_in() but without RAB stuff
+  int err;
   unsigned *data_idxs;
   data_idxs = (unsigned *)malloc(task->n_data*sizeof(unsigned));
   if ( data_idxs == NULL ) {
@@ -1987,11 +2008,11 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   }
 
   // read back data elements with sizes up to 32 bit from mbox
-  n_idxs = pulp_offload_get_data_idxs(task, &data_idxs);
+  pulp_offload_get_data_idxs(task, &data_idxs);
 
   // fetch values of data elements passed by value
-  err = pulp_offload_get_desc(pulp, task, &data_idxs, n_idxs);
-  if ( err != (task->n_data - n_idxs) ) {
+  err = pulp_offload_get_desc(pulp, task, &data_idxs);
+  if (err) {
     printf("ERROR: pulp_offload_get_desc failed.\n");
     return err;
   }
@@ -1999,9 +2020,9 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   // copy back result to virtual paged memory
   for (i = 0; i < (*ftask)->n_data; i++) {
 
-    //if not passed by value 
+    //if not passed by value
     if (data_idxs[i] > 0) {
-  
+
       // we are abusing type of ftask->dta_desc  to store the virtual host address and
       // ptr to store the physical address in contiguous L3 used by PULP
 
@@ -2011,9 +2032,9 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
         memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
         pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
         break;
-                    
+
       case 1:
-        //IN                    
+        //IN
         pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
         break;
 
@@ -2022,7 +2043,7 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
         memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
         pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
         break;
-                    
+
       default:
         //NONE
         break;
@@ -2073,8 +2094,8 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
 
   // compute max stripe height
   stripe_size_b = (RAB_L1_N_SLICES_PORT_1/2-1)*page_size_b;
-  stripe_height = stripe_size_b / i_step;    
-  
+  stripe_height = stripe_size_b / i_step;
+
   n_stripes_per_channel = p_height / stripe_height;
   if (p_height % stripe_height)
     n_stripes_per_channel++;
@@ -2083,7 +2104,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   stripe_height = p_height / n_stripes_per_channel;
   *s_height = stripe_height;
   stripe_size_b = stripe_height * i_step;
-     
+
   if (DEBUG_LEVEL > 2) {
     printf("n_stripes_per_channel = %d\n", n_stripes_per_channel);
     printf("stripe_size_b = %#x\n", stripe_size_b);
@@ -2140,11 +2161,11 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   // write the img to a file
   //#define PATCH2FILE
   //#define IMG2FILE
-#if defined(IMG2FILE) || defined(PATCH2FILE) 
-  
+#if defined(IMG2FILE) || defined(PATCH2FILE)
+
   FILE *fp;
-  
-  // open the file  
+
+  // open the file
   if((fp = fopen("img.h", "a")) == NULL) {
     printf("ERROR: Could not open img.h.\n");
     return -ENOENT;
@@ -2153,7 +2174,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
   printf("p_width  = %d\n",p_width);
   printf("p_height = %d\n",p_height);
   printf("i_step   = %d\n",i_step);
- 
+
 #if defined(PATCH2FILE)
 
   //write start
@@ -2192,7 +2213,7 @@ int pulp_rab_req_striped_mchan_img(PulpDev *pulp, unsigned char prot, unsigned c
 
   // write end
   fprintf(fp, "};\n\n");
-#endif  
+#endif
 
   fclose(fp);
 #endif

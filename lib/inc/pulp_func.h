@@ -110,7 +110,7 @@ int pulp_rab_req_striped(PulpDev *pulp, TaskDesc *task,
                          unsigned **data_idxs, int n_elements);
 void pulp_rab_free_striped(PulpDev *pulp);
 
-void pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
+int  pulp_rab_mh_enable(PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
 void pulp_rab_mh_disable(PulpDev *pulp);
 
 int pulp_rab_soc_mh_enable(PulpDev* pulp);
@@ -137,7 +137,7 @@ int pulp_offload_rab_setup(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, 
 int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
 int pulp_offload_l3_copy_raw_in(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
 int pulp_offload_pass_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
-int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs, int n_idxs);
+int pulp_offload_get_desc(PulpDev *pulp, TaskDesc *task, unsigned **data_idxs);
 
 int pulp_offload_out(PulpDev *pulp, TaskDesc *task);
 int pulp_offload_in(PulpDev *pulp, TaskDesc *task);
