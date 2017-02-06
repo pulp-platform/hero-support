@@ -1256,7 +1256,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   case PULP_IOCTL_RAB_MH_DIS:
    
-  pulp_rab_mh_dis();
+    pulp_rab_mh_dis();
 
     break;
 
