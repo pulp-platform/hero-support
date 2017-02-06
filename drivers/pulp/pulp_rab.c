@@ -2169,9 +2169,10 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
   unsigned long n_bytes_read, n_bytes_left;
   unsigned byte;
 
-  // Check if miss handling is not already enabled (i.e., if workqueue already exists).
+  // check if miss handling is not already enabled, i.e., if workqueue already exists
+  // for example because the clean up failed
   if (rab_mh_wq)
-    return -EALREADY;
+    pulp_rab_mh_dis();
 
   // get slice data from user space - arg already checked above
   byte = 0;
@@ -2186,9 +2187,8 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
   rab_mh_acp = request[0];
   rab_mh_lvl = request[1];
 
-  // create workqueue for RAB miss handling
-  //rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 0, rab_mh_wq_name);
-  rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 1, rab_mh_wq_name); // single-threaded workqueue for strict ordering
+  // create workqueue for RAB miss handling - single-threaded workqueue for strict ordering
+  rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 1, rab_mh_wq_name);
   if (rab_mh_wq == NULL) {
     printk(KERN_WARNING "PULP: Allocation of workqueue for RAB miss handling failed.\n");
     return -ENOMEM;
@@ -2819,7 +2819,7 @@ void pulp_rab_handle_miss(unsigned unused)
       id  = BF_GET(meta, 8, 10);
   
       #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
-        printk(KERN_INFO "AR Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
+        printk(KERN_INFO "AR Log: %u %#x %3u %#x %u\n", ts, addr, len, id, type);
       #else // 1 = MATLAB
         printk(KERN_INFO "AR Log: %u %u %u %u %u\n", ts, addr, len, id, type);
       #endif
@@ -2837,7 +2837,7 @@ void pulp_rab_handle_miss(unsigned unused)
       id  = BF_GET(meta, 8, 10);
   
       #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
-        printk(KERN_INFO "AW Log: %u %#x %u %#x %u\n", ts, addr, len, id, type);
+        printk(KERN_INFO "AW Log: %u %#x %3u %#x %u\n", ts, addr, len, id, type);
       #else // 1 = MATLAB
         printk(KERN_INFO "AW Log: %u %u %u %u %u\n", ts, addr, len, id, type);
       #endif
