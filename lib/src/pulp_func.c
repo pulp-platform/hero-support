@@ -1262,8 +1262,6 @@ void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr)
  *             0x13: pass by reference, SVM, do not set up mapping, use miss handling
  *
  *             0x1F: pass by reference, do not touch (custom marshalling)
- *
- * @n_idxs :   number of elements to be passed by reference
  */
 int pulp_offload_get_data_idxs(TaskDesc *task, unsigned **data_idxs) {
 
