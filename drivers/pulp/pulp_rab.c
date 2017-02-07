@@ -2025,8 +2025,8 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
         }
         break;
       #else
-        printk(KERN_WARN "PULP RAB: Static second-level slices are unsupported on your platform!\n");
-        printk(KERN_WARN "PULP RAB: Falling back to one static first-level slice.\n");
+        printk(KERN_WARNING "PULP RAB: Static second-level slices are unsupported on your platform!\n");
+        printk(KERN_WARNING "PULP RAB: Falling back to one static first-level slice.\n");
       #endif
     case 0:
       retval = soc_mh_ena_static_1st_level(rab_config, &rab_slice_req, pgd_pa);
