@@ -8,8 +8,18 @@
 #define JUNO     4
 
 // from include/archi/pulp.h
-#define CHIP_BIGPULP 7
-#define PULP_CHIP    CHIP_BIGPULP
+#define CHIP_BIGPULP         7
+#define CHIP_BIGPULP_Z_7020  8
+#define CHIP_BIGPULP_Z_7045  9
+
+#define PULP_CHIP_FAMILY CHIP_BIGPULP
+#if PLATFORM == ZEDBOARD
+  #define PULP_CHIP CHIP_BIGPULP_Z_7020
+#elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  #define PULP_CHIP CHIP_BIGPULP_Z_7045
+#else // PLATFORM == JUNO
+  #define PULP_CHIP CHIP_BIGPULP
+#endif
 
 #include "archi/bigpulp/pulp.h"
 
