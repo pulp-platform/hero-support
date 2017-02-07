@@ -1984,12 +1984,12 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
  */
 int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
 {
-  const pgd_t*    pgd;
+  const pgd_t *   pgd;
   unsigned long   pgd_pa;
   RabSliceReq     rab_slice_req;
   int             retval;
 
-  pgd = current->mm->pgd;
+  pgd = (const pgd_t *)current->mm->pgd;
 
   /**
    * Determine the physical address of the Page Global Directory (i.e., the process-specific
