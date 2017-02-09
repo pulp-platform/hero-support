@@ -875,13 +875,21 @@ int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int e
     (set_num*RAB_L2_N_ENTRIES_PER_SET*4) + (entry_num*4)) );
 
   // unlock pages and invalidate cache.
-  page_old = l2.set[set_num].entry[entry_num].page_ptr;  
-  if (!PageReserved(page_old)) 
-    SetPageDirty(page_old);
-  page_cache_release(page_old);  
+  page_old = l2.set[set_num].entry[entry_num].page_ptr;
 
-  // free the allocated memory for page struct. TODO
-  //kfree(l2.set[set_num].entry[entry_num].page_ptr);
+  if (page_old) {
+    //// invalidate caches --- really needed?
+    //if ( !(data & 0x8) )
+    //  pulp_mem_cache_inv(page_old,0,PAGE_SIZE);
+
+    // unlock
+    if ( !PageReserved(page_old) ) 
+      SetPageDirty(page_old);
+    page_cache_release(page_old);
+
+    // reset page_ptr
+    l2.set[set_num].entry[entry_num].page_ptr = NULL;
+  }
 
   return 0;
 }
@@ -2814,12 +2822,9 @@ void pulp_rab_handle_miss(unsigned unused)
     // read out AR log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
       // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
-      //ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
-      //meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
-      //addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
-      meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
-      addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
-      ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
+      ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
+      meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
+      addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
 
       if ( (ts == 0) && (meta == 0) && (addr == 0) )
         break;
@@ -2845,13 +2850,10 @@ void pulp_rab_handle_miss(unsigned unused)
     // read out AW log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
       // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
-      //ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
-      //meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
-      //addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
-      meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
-      addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
-      ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
-  
+      ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
+      meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
+      addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
+
       if ( (ts == 0) && (meta == 0) && (addr == 0) )
         break;
   
