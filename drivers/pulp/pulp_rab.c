@@ -16,7 +16,7 @@ static struct work_struct rab_mh_w;
 static struct task_struct *user_task;
 static struct mm_struct *user_mm;
 static unsigned rab_mh_addr[RAB_MH_FIFO_DEPTH];
-static unsigned rab_mh_id[RAB_MH_FIFO_DEPTH];
+static unsigned rab_mh_meta[RAB_MH_FIFO_DEPTH];
 static unsigned rab_mh;
 static unsigned rab_mh_date;
 static unsigned rab_mh_acp;
@@ -2368,7 +2368,7 @@ unsigned pulp_rab_mh_sched(void)
 void pulp_rab_handle_miss(unsigned unused)
 {
   int err, i, j, handled, result;
-  unsigned id, id_pe, id_cluster;
+  unsigned meta, id_pe, id_cluster, prefetch;
   unsigned addr_start;
   unsigned long addr_phys;
     
@@ -2393,45 +2393,46 @@ void pulp_rab_handle_miss(unsigned unused)
   // empty miss-handling FIFOs
   for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
     // read ID first for empty FIFO detection
-    rab_mh_id[i]   = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ID_FIFO_OFFSET_B));
+    rab_mh_meta[i]   = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ID_FIFO_OFFSET_B));
     
     // detect empty FIFOs -> end routine
-    if ( rab_mh_id[i] & 0x80000000 )
+    if ( rab_mh_meta[i] & 0x80000000 )
       break;
 
     // read valid addr
     rab_mh_addr[i] = IOREAD_L((void *)((unsigned long)(pulp->rab_config)+RAB_MH_ADDR_FIFO_OFFSET_B));
 
     if ((DEBUG_LEVEL_RAB_MH > 0)) { //} || (i > 0)) {
-      printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
-       i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
+      printk(KERN_INFO "PULP: RAB miss - i = %2d, date = %#3x, meta = %#5x, addr = %#8x\n",
+       i, rab_mh_date, rab_mh_meta[i], rab_mh_addr[i]);
     }
      
     // handle every miss separately
     err = 0;
     addr_start = rab_mh_addr[i];
-    id = rab_mh_id[i];
+    meta = rab_mh_meta[i];
     
     // check the ID
-    id_pe      = BF_GET(id, 0, AXI_ID_WIDTH_CORE);
-    id_cluster = BF_GET(id, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC);
+    id_pe      = BF_GET(meta, 0, AXI_ID_WIDTH_CORE);
+    id_cluster = BF_GET(meta, AXI_ID_WIDTH_CLUSTER + AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_SOC);
+    prefetch   = BF_GET(meta, AXI_ID_WIDTH + 1, AXI_USER_WIDTH);
     // - 0x3;
     //id_cluster = BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) - 0x2;
 
     // identify RAB port - for now, only handle misses on Port 1: PULP -> Host
-    if ( BF_GET(id, AXI_ID_WIDTH, 1) )
+    if ( BF_GET(meta, AXI_ID_WIDTH, 1) )
       rab_slice_req->rab_port = 1;    
     else {
       printk(KERN_WARNING "PULP: Cannot handle RAB miss on ports different from Port 1.\n");
-      printk(KERN_WARNING "PULP: RAB miss - id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
+      printk(KERN_WARNING "PULP: RAB miss - meta = %#5x, addr = %#8x\n", rab_mh_meta[i], rab_mh_addr[i]);
       continue;
     }
 
     // only handle misses from PEs' data interfaces
-    if ( ( BF_GET(id, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) != 0x2 ) ||
+    if ( ( BF_GET(meta, AXI_ID_WIDTH_CORE, AXI_ID_WIDTH_CLUSTER) != 0x2 ) ||
          ( (id_cluster < 0) || (id_cluster > (N_CLUSTERS-1)) ) || 
          ( (id_pe < 0) || (id_pe > N_CORES-1) ) ) {
-      printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces. id = %#x | addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
+      printk(KERN_WARNING "PULP: Can only handle RAB misses originating from PE's data interfaces. meta = %#x | addr = %#x\n", rab_mh_meta[i], rab_mh_addr[i]);
       // for debugging
       //   pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
 
@@ -2459,10 +2460,10 @@ void pulp_rab_handle_miss(unsigned unused)
         handled = 1;
         if (DEBUG_LEVEL_RAB_MH > 0) {
           printk(KERN_WARNING "PULP: Already handled a miss to this page.\n");
-          printk(KERN_INFO "PULP: RAB miss - j = %d,        %#x, id = %#x, addr = %#x\n",
-            j, rab_mh_date, rab_mh_id[j], rab_mh_addr[j]);
-          printk(KERN_INFO "PULP: RAB miss - i = %d, date = %#x, id = %#x, addr = %#x\n",
-            i, rab_mh_date, rab_mh_id[i], rab_mh_addr[i]);
+          printk(KERN_INFO "PULP: RAB miss - j = %2d,        %#3x, meta = %#5x, addr = %#8x\n",
+            j, rab_mh_date, rab_mh_meta[j], rab_mh_addr[j]);
+          printk(KERN_INFO "PULP: RAB miss - i = %2d, date = %#3x, meta = %#5x, addr = %#8x\n",
+            i, rab_mh_date, rab_mh_meta[i], rab_mh_addr[i]);
         // for debugging only - deactivate fetch enable
           // iowrite32(0xC0000000,(void *)((unsigned long)(pulp->gpio)+0x8));
         }
@@ -2627,10 +2628,12 @@ void pulp_rab_handle_miss(unsigned unused)
     // // for debugging
     // pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
 
-    // wake up the sleeping PE
-    iowrite32(BIT_N_SET(id_pe),
-              (void *)((unsigned long)(pulp->clusters) + CLUSTER_SIZE_B*id_cluster
-                       + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B));
+    if (!prefetch) {
+      // wake up the sleeping PE
+      iowrite32(BIT_N_SET(id_pe),
+                (void *)((unsigned long)(pulp->clusters) + CLUSTER_SIZE_B*id_cluster
+                         + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B));
+    }
 
     /*
      * printk(KERN_INFO "WAKEUP: value = %#x, address = %#x\n",BIT_N_SET(id_pe), CLUSTER_SIZE_B*id_cluster \
@@ -2697,7 +2700,7 @@ void pulp_rab_handle_miss(unsigned unused)
   // error handling
   miss_handling_error:
     if (err) {
-      printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_id[i], rab_mh_addr[i]);
+      printk(KERN_WARNING "PULP: Cannot handle RAB miss: id = %#x, addr = %#x\n", rab_mh_meta[i], rab_mh_addr[i]);
 
       // for debugging
       pulp_rab_mapping_print(pulp->rab_config,0xAAAA);

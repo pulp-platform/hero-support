@@ -236,6 +236,7 @@
 #else // !JUNO
   #define AXI_ID_WIDTH_SOC   1
 #endif
+#define AXI_USER_WIDTH       6
 
 /*
  * Platform specific settings
