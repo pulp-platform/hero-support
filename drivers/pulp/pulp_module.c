@@ -958,25 +958,25 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       }
     #endif 
 
-    if ( printk_ratelimit() ) {
-      if ( (DEBUG_LEVEL_RAB_MH > 1) || 
-           ( (RAB_MISS_IRQ == irq) && (0 == rab_mh) ) ||
-           ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) || 
-           ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
-           ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {
-        do_gettimeofday(&time);
+    if ( (DEBUG_LEVEL_RAB_MH > 1) || 
+         ( (RAB_MISS_IRQ == irq) && (0 == rab_mh) ) ||
+         ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) || 
+         ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
+         ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {
+      do_gettimeofday(&time);
+
+      if ( printk_ratelimit() ) {
         printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
                rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+      }
+      // for debugging
+      //if ( ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
+      //     ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) )
+      //  pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
-        // for debugging
-        //if ( ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
-        //     ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) )
-        //  pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
-
-        if (RAB_MULTI_IRQ == irq){
-          pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
-          pulp_rab_l2_print_valid_entries(1);
-        }
+      if (RAB_MULTI_IRQ == irq){
+        pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
+        pulp_rab_l2_print_valid_entries(1);
       }
     }
   
