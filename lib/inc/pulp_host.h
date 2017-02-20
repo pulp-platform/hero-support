@@ -206,8 +206,7 @@
 //#define RAB_CONFIG_CHECK_PROT     1
 #define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
 #define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
-#define RAB_MH_ID_FIFO_OFFSET_B   0x8
-#define RAB_MH_FIFO_DEPTH         16
+#define RAB_MH_META_FIFO_OFFSET_B 0x8
 
 #define PULP_SIZE_B     0x10000000
 #define CLUSTER_SIZE_MB 4
@@ -281,6 +280,8 @@
     #define RAB_L1_N_SLICES_PORT_1   4
     // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
     static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 0};
+
+    #define RAB_MH_FIFO_DEPTH 8
   
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
   
@@ -307,6 +308,8 @@
     #define RAB_L1_N_SLICES_PORT_1  32
     // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
     static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
+
+    #define RAB_MH_FIFO_DEPTH 64
   
   #endif // PLATFORM
 
@@ -354,6 +357,8 @@
   #define RAB_L1_N_SLICES_PORT_1  32
   // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
   static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
+
+  #define RAB_MH_FIFO_DEPTH 64
 
 #endif // PLATFORM
 
