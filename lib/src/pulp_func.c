@@ -98,7 +98,7 @@ void pulp_print_v_addr(PulpDev *pulp)
  */
 int pulp_read32(const unsigned *base_addr, unsigned off, char off_type)
 {
-  if (DEBUG_LEVEL > 3) {
+  if (DEBUG_LEVEL > 4) {
     const unsigned *addr;
     if (off_type == 'b') 
       addr = base_addr + (off>>2);
@@ -121,7 +121,7 @@ int pulp_read32(const unsigned *base_addr, unsigned off, char off_type)
  */
 void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned value)
 {
-  if (DEBUG_LEVEL > 3) {
+  if (DEBUG_LEVEL > 4) {
     unsigned *addr;
     if (off_type == 'b')
       addr = base_addr + (off>>2);
@@ -645,7 +645,7 @@ int pulp_mbox_write(PulpDev *pulp, unsigned word)
 
   // mbox is ready to receive
   pulp_write32(pulp->mbox.v_addr,MBOX_WRDATA_OFFSET_B,'b', word);
-  if (DEBUG_LEVEL > 2)
+  if (DEBUG_LEVEL > 3)
     printf("Wrote %#x to mbox.\n",word);
 
   return 0;
@@ -1665,14 +1665,14 @@ int pulp_offload_pass_desc(PulpDev *pulp, const TaskDesc *task, const unsigned *
 
       pulp_mbox_write(pulp, addr);
       if (DEBUG_LEVEL > 2)
-        printf("Element %d: wrote %#x to mbox.\n", i, addr);
+        printf("Element %d: wrote addr %#x to mbox.\n", i, addr);
     }
     else {
       // pass data element by value and of type input/output or input
       if ( (task->data_desc[i].type == 0) || (task->data_desc[i].type == 1) ) {
         pulp_mbox_write(pulp, *(unsigned *)(task->data_desc[i].ptr));
         if (DEBUG_LEVEL > 2)
-          printf("Element %d: wrote %#x to mbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
+          printf("Element %d: wrote val  %#x to mbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
       }
       else {// pass by value, but type is output only
         if (DEBUG_LEVEL > 2)
