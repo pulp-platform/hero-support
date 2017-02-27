@@ -2014,7 +2014,7 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
   rab_slice_req.page_idx_end    = 0;
   rab_slice_req.rab_port        = 1;
   rab_slice_req.rab_mapping     = 0;
-  rab_slice_req.rab_slice       = 4;      // Slice 4 is reserved for the first level of the PT.
+  rab_slice_req.rab_slice       = 1;      // Slice 1 is reserved for the first level of the PT.
   rab_slice_req.flags_drv       = 0b001;  // not setup in every mapping, not striped, constant
   rab_slice_req.flags_hw        = 0b1011; // cache-coherent, disable write, enable read, valid
 
