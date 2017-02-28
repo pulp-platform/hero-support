@@ -22,6 +22,7 @@ static unsigned rab_mh_date;
 static unsigned rab_mh_acp;
 static unsigned rab_mh_lvl;
 static unsigned rab_soc_mh_is_ena;
+static unsigned rab_n_slices_reserved_for_host;
 
 // AX logger
 #if RAB_AX_LOG_EN == 1
@@ -127,6 +128,8 @@ int pulp_rab_init(PulpDev * pulp_ptr)
 
   // By default, RAB misses are handled by the host, not by the SoC.
   rab_soc_mh_is_ena = 0;
+  rab_n_slices_reserved_for_host = RAB_L1_N_SLICES_PORT_1;
+
   // initialize AX logger
   #if RAB_AX_LOG_EN == 1
     err = pulp_rab_ax_log_init();
@@ -2041,6 +2044,14 @@ int pulp_rab_soc_mh_ena(void* rab_config, unsigned static_2nd_lvl_slices)
   rab_slice_req.rab_slice       = 1;      // Slice 1 is reserved for the first level of the PT.
   rab_slice_req.flags_drv       = 0b001;  // not setup in every mapping, not striped, constant
   rab_slice_req.flags_hw        = 0b1011; // cache-coherent, disable write, enable read, valid
+
+  /**
+   * Even if the SoC manages the RAB, the first few slices remain reserved for the host, namely:
+   *  - the first slice containing the mapping to contiguous L3, and
+   *  - the next N slices containing the mapings to the entry level(s) of the page table (the value
+   *    of N depends on whether first- or second-level slices are mapped statically).
+   */
+  rab_n_slices_reserved_for_host = 1 + (static_2nd_lvl_slices ? RAB_N_STATIC_2ND_LEVEL_SLICES : 1);
 
   /**
    * Set up RAB slices either for the first-level page table or for the second-level page tables.
