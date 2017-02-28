@@ -266,6 +266,24 @@ int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
 // }}}
 
 // slice_get {{{
+
+static inline unsigned pulp_rab_slice_is_managed_by_host(const RabSliceReq* const req)
+{
+  // All slices on port 0 are managed by the host.
+  if (req->rab_port == 0)
+    return 1;
+
+  // If the RAB Miss Handler on the SoC is not enabled, all RAB slices are managed by the host.
+  if (!rab_soc_mh_is_ena)
+    return 1;
+
+  // If the RAB slice is reserved for the host, then it is managed by the host.
+  if (req->rab_slice < rab_n_slices_reserved_for_host)
+    return 1;
+
+  return 0;
+}
+
 /**
  * Get a free RAB slice. Returns 0 on success, 1 otherwise.
  *
@@ -287,9 +305,11 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
   for (i=0; i<n_slices; i++) {
     rab_slice_req->rab_slice = i;
 
-    if ( pulp_rab_slice_check(rab_slice_req) ) // found an expired slice
+    if ( pulp_rab_slice_check(rab_slice_req) && pulp_rab_slice_is_managed_by_host(rab_slice_req) ) {
+      // Found a slice available to the host.
       break;
-    else if (i == (n_slices-1) ) { // no slice free
+    } else if (i == (n_slices-1) ) {
+      // No slice is available to the host.
       err = 1;
       printk(KERN_INFO "PULP RAB L1: No slice available on Port %d.\n", rab_slice_req->rab_port);
     }
