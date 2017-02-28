@@ -1921,6 +1921,13 @@ static inline int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceRe
   req->addr_end     = req->addr_start + ((PTRS_PER_PGD << 3) - 1);
   req->addr_offset  = pgd_pa;
 
+  ret = pulp_rab_slice_get(req);
+  if (ret != 0) {
+    printk(KERN_ERR "PULP RAB SoC MH Enable failed to get RAB slice!\n");
+    return ret;
+  }
+  pulp_rab_slice_free(rab_config, req);
+
   printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
         req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
 
@@ -1960,6 +1967,13 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
 
     req->addr_offset = pmd_pa;
 
+    ret = pulp_rab_slice_get(req);
+    if (ret != 0) {
+      printk(KERN_ERR "PULP RAB SoC MH Enable failed to get RAB slice!\n");
+      return ret;
+    }
+    pulp_rab_slice_free(rab_config, req);
+
     printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
           req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
 
@@ -1969,7 +1983,6 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
       return ret;
     }
 
-    req->rab_slice    += 1;
   }
 
   return 0;
@@ -2041,7 +2054,6 @@ int pulp_rab_soc_mh_ena(void* rab_config, unsigned static_2nd_lvl_slices)
   rab_slice_req.page_idx_end    = 0;
   rab_slice_req.rab_port        = 1;
   rab_slice_req.rab_mapping     = 0;
-  rab_slice_req.rab_slice       = 1;      // Slice 1 is reserved for the first level of the PT.
   rab_slice_req.flags_drv       = 0b001;  // not setup in every mapping, not striped, constant
   rab_slice_req.flags_hw        = 0b1011; // cache-coherent, disable write, enable read, valid
 
