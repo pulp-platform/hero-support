@@ -1909,6 +1909,8 @@ static inline int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceRe
 {
   unsigned ret;
 
+  pulp_rab_page_ptrs_get_field(req);
+
   req->addr_start   = PGD_BASE_ADDR;
   req->addr_end     = req->addr_start + ((PTRS_PER_PGD << 3) - 1);
   req->addr_offset  = pgd_pa;
@@ -1939,6 +1941,8 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
   pmd_va = PGD_BASE_ADDR;
   for (i_pmd = 0; i_pmd < n_slices; ++i_pmd) {
 
+    pulp_rab_page_ptrs_get_field(req);
+
     req->addr_start   = pmd_va;
     req->addr_end     = req->addr_start + ((PTRS_PER_PMD << 3) - 1);
 
@@ -1962,7 +1966,6 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
       return ret;
     }
 
-    req->page_ptr_idx -= 1;
     req->rab_slice    += 1;
   }
 
@@ -2009,7 +2012,6 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
    */
   rab_slice_req.date_cur        = 0;
   rab_slice_req.date_exp        = RAB_MAX_DATE_MH;
-  rab_slice_req.page_ptr_idx    = RAB_L1_N_SLICES_PORT_1 - 1;
   rab_slice_req.page_idx_start  = 0;
   rab_slice_req.page_idx_end    = 0;
   rab_slice_req.rab_port        = 1;
