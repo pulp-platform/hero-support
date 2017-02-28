@@ -360,6 +360,8 @@
 
   #define RAB_MH_FIFO_DEPTH 64
 
+  #define RAB_N_STATIC_2ND_LEVEL_SLICES (1 << (32 - PGDIR_SHIFT))
+
 #endif // PLATFORM
 
 #define CLUSTER_MASK  (unsigned)((1 << N_CLUSTERS) - 1)

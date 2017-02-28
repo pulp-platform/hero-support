@@ -1934,15 +1934,12 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
     const pgd_t* const pgd)
 {
   unsigned      i_pmd;
-  unsigned      n_slices;
   unsigned long pmd_pa;
   unsigned      pmd_va;
   unsigned      ret;
 
-  n_slices = 1 << (32 - PGDIR_SHIFT);
-
   pmd_va = PGD_BASE_ADDR;
-  for (i_pmd = 0; i_pmd < n_slices; ++i_pmd) {
+  for (i_pmd = 0; i_pmd < RAB_N_STATIC_2ND_LEVEL_SLICES; ++i_pmd) {
 
     pulp_rab_page_ptrs_get_field(req);
 
