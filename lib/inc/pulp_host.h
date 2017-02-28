@@ -277,7 +277,7 @@
     #define L2_MEM_SIZE_KB  64
     #define L1_MEM_SIZE_KB  32
     #define RAB_L1_N_SLICES_PORT_0   4
-    #define RAB_L1_N_SLICES_PORT_1   4
+    #define RAB_L1_N_SLICES_PORT_1   8
     // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
     static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 0};
 
