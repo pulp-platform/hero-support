@@ -1998,6 +1998,40 @@ static inline unsigned static_2nd_lvl_slices_are_supported(void)
 }
 
 /**
+ * Check if there are no static slices among those not reserved for the host and free all other
+ * slices.
+ *
+ * @rab_config: kernel virtual address of the RAB configuration port
+ *
+ * @return  1 if all RAB slices not reserved to the host have been freed; 0 if at least one slice
+ *          has not yet expired.
+ */
+static inline unsigned rab_is_ready_for_soc_mh(void* const rab_config)
+{
+  RabSliceReq req;
+  unsigned i;
+
+  /**
+   * Setting `date_cur` to `RAB_MAX_DATE_MH` will free all slices set up by the driver and the
+   * runtime except if they are required to persist until the end of the application (so called
+   * "static" slices).  `pulp_rab_slice_free()` will thus succeed for all except static slices.
+   */
+  req.date_cur    = RAB_MAX_DATE_MH;
+  req.rab_mapping = 0;
+  req.rab_port    = 1;
+
+  for (i = rab_n_slices_reserved_for_host; i < RAB_L1_N_SLICES_PORT_1; ++i) {
+    req.rab_slice = i;
+      if (pulp_rab_slice_check(&req))
+        pulp_rab_slice_free(rab_config, &req);
+      else
+        return 0;
+  }
+
+  return 1;
+}
+
+/**
  * Delegate RAB Miss Handling to the PULP SoC.
  *
  * This functions configures RAB so that the page table hierarchy can be accessed from the SoC.  For
@@ -2015,7 +2049,8 @@ static inline unsigned static_2nd_lvl_slices_are_supported(void)
  *                                former behavior and emit a warning.
  *
  * @return  0 on success; a nonzero errno on errors.  In particular,  -EALREADY if misses are
- *          already handled by the SoC.
+ *          already handled by the SoC, -EBUSY if RAB slices that are now to be managed by the SoC
+ *          are already configured.
  */
 int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
 {
@@ -2064,6 +2099,11 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
    *    of N depends on whether first- or second-level slices are mapped statically).
    */
   rab_n_slices_reserved_for_host = 1 + (static_2nd_lvl_slices ? RAB_N_STATIC_2ND_LEVEL_SLICES : 1);
+
+  if (!rab_is_ready_for_soc_mh(rab_config)) {
+    printk(KERN_ERR "PULP RAB: RAB is not ready to enable the SoC Miss Handler!\n");
+    return -EBUSY;
+  }
 
   /**
    * Set up RAB slices either for the first-level page table or for the second-level page tables.
