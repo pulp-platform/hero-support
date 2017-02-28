@@ -21,6 +21,7 @@ static unsigned rab_mh;
 static unsigned rab_mh_date;
 static unsigned rab_mh_acp;
 static unsigned rab_mh_lvl;
+static unsigned rab_soc_mh_is_ena;
 
 // AX logger
 #if RAB_AX_LOG_EN == 1
@@ -124,6 +125,8 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   rab_mh_acp = 0;
   rab_mh_lvl = 0;
 
+  // By default, RAB misses are handled by the host, not by the SoC.
+  rab_soc_mh_is_ena = 0;
   // initialize AX logger
   #if RAB_AX_LOG_EN == 1
     err = pulp_rab_ax_log_init();
@@ -1989,7 +1992,8 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
  *                                architectures.  If unsupported, the driver will fall back to the
  *                                former behavior and emit a warning.
  *
- * @return  0 on success; a nonzero errno on errors.
+ * @return  0 on success; a nonzero errno on errors.  In particular,  -EALREADY if misses are
+ *          already handled by the SoC.
  */
 int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
 {
@@ -1997,6 +2001,11 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
   unsigned long   pgd_pa;
   RabSliceReq     rab_slice_req;
   int             retval;
+
+  if (rab_soc_mh_is_ena == 1) {
+    printk(KERN_WARNING "PULP RAB: Not enabling SoC MH because it is already enabled.\n");
+    return -EALREADY;
+  }
 
   pgd = (const pgd_t *)current->mm->pgd;
 
@@ -2045,6 +2054,8 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
         return retval;
       }
   };
+
+  rab_soc_mh_is_ena = 1;
 
   /**
    * The SoC now has access to the page table hierarchy in memory and will handle all RAB misses.
