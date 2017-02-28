@@ -340,6 +340,11 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
   slice     = rab_slice_req->rab_slice;
   flags_drv = rab_slice_req->flags_drv;
 
+  if (!pulp_rab_slice_is_managed_by_host(rab_slice_req)) {
+    printk(KERN_WARNING "PULP - RAB: Dropping request to free slice not managed by host.\n");
+    return;
+  }
+
   if (DEBUG_LEVEL_RAB > 0) {
     printk(KERN_INFO "PULP - RAB L1: Port %d, Mapping %d, Slice %d: Freeing.\n",
       port, mapping, slice);
