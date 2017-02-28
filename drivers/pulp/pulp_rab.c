@@ -1975,6 +1975,15 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
   return 0;
 }
 
+static inline unsigned static_2nd_lvl_slices_are_supported(void)
+{
+  #if PLATFORM == JUNO
+    return 1;
+  #else
+    return 0;
+  #endif
+}
+
 /**
  * Delegate RAB Miss Handling to the PULP SoC.
  *
@@ -1995,7 +2004,7 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
  * @return  0 on success; a nonzero errno on errors.  In particular,  -EALREADY if misses are
  *          already handled by the SoC.
  */
-int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
+int pulp_rab_soc_mh_ena(void* rab_config, unsigned static_2nd_lvl_slices)
 {
   const pgd_t *   pgd;
   unsigned long   pgd_pa;
@@ -2005,6 +2014,13 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
   if (rab_soc_mh_is_ena == 1) {
     printk(KERN_WARNING "PULP RAB: Not enabling SoC MH because it is already enabled.\n");
     return -EALREADY;
+  }
+
+  if (static_2nd_lvl_slices && !static_2nd_lvl_slices_are_supported())
+  {
+    printk(KERN_WARNING "PULP RAB: Static second-level slices are unsupported on your platform!\n");
+    printk(KERN_WARNING "PULP RAB: Falling back to one static first-level slice.\n");
+    static_2nd_lvl_slices = 0;
   }
 
   pgd = (const pgd_t *)current->mm->pgd;
@@ -2034,26 +2050,20 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
    * If this fails, the SoC cannot handle RAB misses because it cannot access the page table
    * hierarchy in memory.
    */
-  switch (static_2nd_lvl_slices) {
-    case 1:
-      #if PLATFORM == JUNO
-        retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
-        if (retval != 0) {
-          printk(KERN_ERR "PULP RAB: Failed to configure slices for second level of page table!\n");
-          return retval;
-        }
-        break;
-      #else
-        printk(KERN_WARNING "PULP RAB: Static second-level slices are unsupported on your platform!\n");
-        printk(KERN_WARNING "PULP RAB: Falling back to one static first-level slice.\n");
-      #endif
-    case 0:
-      retval = soc_mh_ena_static_1st_level(rab_config, &rab_slice_req, pgd_pa);
-      if (retval != 0) {
-        printk(KERN_ERR "PULP RAB: Failed to configure slices for first level of page table!\n");
-        return retval;
-      }
-  };
+  if (static_2nd_lvl_slices)
+    retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
+  else
+    retval = soc_mh_ena_static_1st_level(rab_config, &rab_slice_req, pgd_pa);
+
+  if (retval != 0) {
+    char level[255];
+    if (static_2nd_lvl_slices)
+      strcpy(level, "second");
+    else
+      strcpy(level, "first");
+    printk(KERN_ERR "PULP RAB: Failed to configure slices for %s level of page table!\n", level);
+    return retval;
+  }
 
   rab_soc_mh_is_ena = 1;
 
