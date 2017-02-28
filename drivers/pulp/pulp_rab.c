@@ -2135,6 +2135,7 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
    * If this fails, the SoC cannot handle RAB misses because it cannot access the page table
    * hierarchy in memory.
    */
+  rab_soc_mh_is_ena = 1;
   if (static_2nd_lvl_slices)
     retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
   else
@@ -2147,10 +2148,9 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
     else
       strcpy(level, "first");
     printk(KERN_ERR "PULP RAB: Failed to configure slices for %s level of page table!\n", level);
+    rab_soc_mh_is_ena = 0;
     return retval;
   }
-
-  rab_soc_mh_is_ena = 1;
 
   /**
    * The SoC now has access to the page table hierarchy in memory and will handle all RAB misses.
