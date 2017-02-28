@@ -2017,7 +2017,7 @@ static inline unsigned static_2nd_lvl_slices_are_supported(void)
  * @return  0 on success; a nonzero errno on errors.  In particular,  -EALREADY if misses are
  *          already handled by the SoC.
  */
-int pulp_rab_soc_mh_ena(void* rab_config, unsigned static_2nd_lvl_slices)
+int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
 {
   const pgd_t *   pgd;
   unsigned long   pgd_pa;
