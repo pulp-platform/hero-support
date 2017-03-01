@@ -2173,6 +2173,46 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
 }
 // }}}
 
+// soc_mh_dis {{{
+/**
+ * Disable handling of RAB Misses by the SoC.
+ *
+ * This function frees and deconfigures all slices used to map the initial level of the page table,
+ * and hands the slices that were reserved to be managed by the SoC back to the host.
+ *
+ * @param rab_config  Pointer to the RAB configuration port.
+ *
+ * @return  0 on success; a nonzero errno on errors.  In particular, -EALREADY if miss handling on
+ *          the SoC is already disabled.
+ */
+int pulp_rab_soc_mh_dis(void* const rab_config)
+{
+  unsigned i;
+  RabSliceReq req;
+
+  if (rab_soc_mh_is_ena == 0) {
+    return -EALREADY;
+  }
+
+  /**
+   * To make sure that the SoC can no longer access the page table hierarchy, we free all slices
+   * used to map the initial levels of the page table.
+   */
+  req.rab_port    = 1;
+  req.rab_mapping = 0;
+  req.flags_drv   = 0b001;
+  for (i = 1; i < rab_n_slices_reserved_for_host; ++i) {
+    req.rab_slice = i;
+    pulp_rab_slice_free(rab_config, &req);
+  }
+
+  rab_n_slices_reserved_for_host = RAB_L1_N_SLICES_PORT_1;
+  rab_soc_mh_is_ena = 0;
+
+  return 0;
+}
+// }}}
+
 // }}}
 
 // Mailbox Requests {{{
