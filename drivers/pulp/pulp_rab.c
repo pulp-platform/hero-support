@@ -2108,8 +2108,8 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
   /**
    * Initialize the RAB slice with basic properties that are the same for all slices.
    */
-  rab_slice_req.date_cur        = 0;
-  rab_slice_req.date_exp        = RAB_MAX_DATE_MH;
+  rab_slice_req.date_cur        = RAB_MAX_DATE;
+  rab_slice_req.date_exp        = RAB_MAX_DATE;
   rab_slice_req.page_idx_start  = 0;
   rab_slice_req.page_idx_end    = 0;
   rab_slice_req.rab_port        = 1;
