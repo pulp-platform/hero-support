@@ -934,6 +934,23 @@ int pulp_rab_soc_mh_enable(const PulpDev* pulp, const unsigned static_2nd_lvl_sl
 }
 
 /**
+ * Disable handling of RAB misses by the SoC.
+ *
+ * The PULP driver function called by this function frees and deconfigures all slices used to map
+ * the initial level of the page table and hands the slices that were reserved to be managed by the
+ * SoC back to the host.
+ *
+ * @param   pulp    Pointer to the PulpDev struct.
+ *
+ * @return  0 on success; negative value with an errno on errors.  See the documentation of
+ *          `pulp_rab_soc_mh_dis()` for particular values.
+ */
+int pulp_rab_soc_mh_disable(const PulpDev* const pulp)
+{
+    return ioctl(pulp->fd, PULP_IOCTL_RAB_SOC_MH_DIS);
+}
+
+/**
  * Setup a DMA transfer using the Zynq PS DMA engine
  *
  * @pulp      : pointer to the PulpDev structure
