@@ -663,6 +663,7 @@ int pulp_open(struct inode *inode, struct file *filp)
 int pulp_release(struct inode *p_inode, struct file *filp)
 {
   pulp_mbox_clear();
+  pulp_rab_release();
 
   printk(KERN_INFO "PULP: Device released.\n");
  
