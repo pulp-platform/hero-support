@@ -2064,9 +2064,11 @@ static inline unsigned rab_is_ready_for_soc_mh(void* const rab_config)
  * This functions configures RAB so that the page table hierarchy can be accessed from the SoC.  For
  * this, slices either for the first-level page table or for all second-level page tables are
  * configured in RAB (definable, see parameter below).  If RAB has been configured successfully,
- * handling of RAB misses by this Kernel driver is disabled.  The SoC must at runtime configure the
- * RAB slices for the subsequent levels of the page table.  Thus, the proper VMM software must be
- * running on the SoC; otherwise, RAB misses will not be handled at all.
+ * handling of RAB misses by this Kernel driver is disabled and all RAB slices but the first ones
+ * (which contain a mapping to the contiguous L3 memory and to the initial level of the page table)
+ * are reserved to be managed by the SoC.  The SoC must at runtime configure the RAB slices for the
+ * subsequent levels of the page table.  Thus, the proper VMM software must be running on the SoC;
+ * otherwise, RAB misses will not be handled at all.
  *
  * @param   rab_config            Pointer to the RAB configuration port.
  * @param   static_2nd_lvl_slices If 0, the driver sets up a single RAB slice for the first level of
