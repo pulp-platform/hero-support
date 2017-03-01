@@ -1965,53 +1965,55 @@ static inline int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceRe
   return 0;
 }
 
-static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
-    const pgd_t* const pgd)
-{
-  unsigned      i_pmd;
-  unsigned long pmd_pa;
-  unsigned      pmd_va;
-  unsigned      ret;
+#if PLATFORM == JUNO
+  static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
+      const pgd_t* const pgd)
+  {
+    unsigned      i_pmd;
+    unsigned long pmd_pa;
+    unsigned      pmd_va;
+    unsigned      ret;
 
-  pmd_va = PGD_BASE_ADDR;
-  for (i_pmd = 0; i_pmd < RAB_N_STATIC_2ND_LEVEL_SLICES; ++i_pmd) {
+    pmd_va = PGD_BASE_ADDR;
+    for (i_pmd = 0; i_pmd < RAB_N_STATIC_2ND_LEVEL_SLICES; ++i_pmd) {
 
-    pulp_rab_page_ptrs_get_field(req);
+      pulp_rab_page_ptrs_get_field(req);
 
-    req->addr_start   = pmd_va;
-    req->addr_end     = req->addr_start + ((PTRS_PER_PMD << 3) - 1);
+      req->addr_start   = pmd_va;
+      req->addr_end     = req->addr_start + ((PTRS_PER_PMD << 3) - 1);
 
-    pmd_va = req->addr_end + 1;
+      pmd_va = req->addr_end + 1;
 
-    pmd_pa = (unsigned long)(*(pgd + pgd_index(PGDIR_SIZE * i_pmd)));
+      pmd_pa = (unsigned long)(*(pgd + pgd_index(PGDIR_SIZE * i_pmd)));
 
-    if (pmd_none(pmd_pa) || pmd_bad(pmd_pa))
-      continue;
+      if (pmd_none(pmd_pa) || pmd_bad(pmd_pa))
+        continue;
 
-    pmd_pa &= PAGE_MASK;
+      pmd_pa &= PAGE_MASK;
 
-    req->addr_offset = pmd_pa;
+      req->addr_offset = pmd_pa;
 
-    ret = pulp_rab_slice_get(req);
-    if (ret != 0) {
-      printk(KERN_ERR "PULP RAB SoC MH Enable failed to get RAB slice!\n");
-      return ret;
+      ret = pulp_rab_slice_get(req);
+      if (ret != 0) {
+        printk(KERN_ERR "PULP RAB SoC MH Enable failed to get RAB slice!\n");
+        return ret;
+      }
+      pulp_rab_slice_free(rab_config, req);
+
+      printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
+            req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
+
+      ret = pulp_rab_slice_setup(rab_config, req, NULL);
+      if (ret != 0) {
+        printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", req->rab_slice);
+        return ret;
+      }
+
     }
-    pulp_rab_slice_free(rab_config, req);
 
-    printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
-          req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
-
-    ret = pulp_rab_slice_setup(rab_config, req, NULL);
-    if (ret != 0) {
-      printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", req->rab_slice);
-      return ret;
-    }
-
+    return 0;
   }
-
-  return 0;
-}
+#endif
 
 static inline unsigned static_2nd_lvl_slices_are_supported(void)
 {
@@ -2123,7 +2125,12 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
    *  - the next N slices containing the mapings to the entry level(s) of the page table (the value
    *    of N depends on whether first- or second-level slices are mapped statically).
    */
-  rab_n_slices_reserved_for_host = 1 + (static_2nd_lvl_slices ? RAB_N_STATIC_2ND_LEVEL_SLICES : 1);
+  rab_n_slices_reserved_for_host = 1;
+  #if PLATFORM == JUNO
+    rab_n_slices_reserved_for_host += (static_2nd_lvl_slices ? RAB_N_STATIC_2ND_LEVEL_SLICES : 1);
+  #else
+    rab_n_slices_reserved_for_host += 1;
+  #endif
 
   if (!rab_is_ready_for_soc_mh(rab_config)) {
     printk(KERN_ERR "PULP RAB: RAB is not ready to enable the SoC Miss Handler!\n");
@@ -2136,10 +2143,12 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
    * hierarchy in memory.
    */
   rab_soc_mh_is_ena = 1;
-  if (static_2nd_lvl_slices)
-    retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
-  else
-    retval = soc_mh_ena_static_1st_level(rab_config, &rab_slice_req, pgd_pa);
+  #if PLATFORM == JUNO
+    if (static_2nd_lvl_slices)
+      retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
+    else
+  #endif
+      retval = soc_mh_ena_static_1st_level(rab_config, &rab_slice_req, pgd_pa);
 
   if (retval != 0) {
     char level[255];
