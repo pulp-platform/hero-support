@@ -126,9 +126,8 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   rab_mh_acp = 0;
   rab_mh_lvl = 0;
 
-  // By default, RAB misses are handled by the host, not by the SoC.
-  rab_soc_mh_is_ena = 0;
-  rab_n_slices_reserved_for_host = RAB_L1_N_SLICES_PORT_1;
+  // By default, the SoC does not handle RAB misses.
+  pulp_rab_soc_mh_dis(pulp->rab_config);
 
   // initialize AX logger
   #if RAB_AX_LOG_EN == 1
