@@ -138,6 +138,7 @@ typedef struct {
 
 // methods declarations
 int pulp_rab_init(PulpDev * pulp_ptr);
+int pulp_rab_release(void);
 
 void pulp_rab_l1_init(void);
 int  pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req);

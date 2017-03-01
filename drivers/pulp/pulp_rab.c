@@ -147,6 +147,25 @@ int pulp_rab_init(PulpDev * pulp_ptr)
 }
 // }}}
 
+// release {{{
+/**
+ * Release control of the RAB.
+ *
+ * @return  0 on success; negative value with errno on errors.
+ */
+int pulp_rab_release(void)
+{
+  int ret = 0;
+  ret = pulp_rab_soc_mh_dis(pulp->rab_config);
+  if (ret != 0 && ret != -EALREADY) {
+    printk(KERN_WARNING "PULP RAB: Failed to disable SoC RAB Miss Handler!\n");
+    return ret;
+  }
+
+  return 0;
+}
+// }}}
+
 // L1 Management {{{
 /***********************************************************************************
  *
