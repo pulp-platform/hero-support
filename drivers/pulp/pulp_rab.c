@@ -705,7 +705,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
         flags_hw = ioread32((void *)((unsigned long)rab_config+offset+0x38));
         RAB_GET_PROT(prot, flags_hw);
         if (prot) {
-          printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#lx , flags_hw = %#x\n", j, i,
+          printk(KERN_INFO "Port %d, Slice %2d: 0x%08x - 0x%08x -> 0x%010lx , flags_hw = %#x\n", j, i,
             ioread32((void *)((unsigned long)rab_config+offset+0x20)),
             ioread32((void *)((unsigned long)rab_config+offset+0x28)),
             (unsigned long)IOREAD_L((void *)((unsigned long)rab_config+offset+0x30)),
