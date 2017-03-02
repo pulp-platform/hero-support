@@ -367,6 +367,7 @@ int pulp_munmap(PulpDev *pulp)
   // close the file descriptor
   printf("Close the file descriptor. \n");
   close(pulp->fd);
+  pulp->fd = -1;
 
   return 0;
 }
