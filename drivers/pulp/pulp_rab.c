@@ -3092,7 +3092,6 @@ void pulp_rab_handle_miss(unsigned unused)
 
     // read out AR log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-      // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
       ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
       meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
       addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
@@ -3120,7 +3119,6 @@ void pulp_rab_handle_miss(unsigned unused)
 
     // read out AW log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-      // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
       ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
       meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
       addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
