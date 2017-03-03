@@ -138,6 +138,7 @@ typedef struct {
 
 // methods declarations
 int pulp_rab_init(PulpDev * pulp_ptr);
+int pulp_rab_release(void);
 
 void pulp_rab_l1_init(void);
 int  pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req);
@@ -162,7 +163,8 @@ long pulp_rab_req(void *rab_config, unsigned long arg);
 long pulp_rab_req_striped(void *rab_config, unsigned long arg);
 void pulp_rab_free(void *rab_config, unsigned long arg);
 void pulp_rab_free_striped(void *rab_config, unsigned long arg);
-int pulp_rab_soc_mh_ena(void* rab_config, unsigned static_2nd_lvl_slices);
+int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices);
+int pulp_rab_soc_mh_dis(void* const rab_config);
 void pulp_rab_update(unsigned update_req);
 void pulp_rab_switch(void);
 

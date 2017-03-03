@@ -663,6 +663,7 @@ int pulp_open(struct inode *inode, struct file *filp)
 int pulp_release(struct inode *p_inode, struct file *filp)
 {
   pulp_mbox_clear();
+  pulp_rab_release();
 
   printk(KERN_INFO "PULP: Device released.\n");
  
@@ -1267,6 +1268,10 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   case PULP_IOCTL_RAB_SOC_MH_ENA:
     retval = pulp_rab_soc_mh_ena(my_dev.rab_config, arg & 1);
+    break;
+
+  case PULP_IOCTL_RAB_SOC_MH_DIS:
+    retval = pulp_rab_soc_mh_dis(my_dev.rab_config);
     break;
 
   case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space

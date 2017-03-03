@@ -154,7 +154,7 @@
  */
 #define PULP_IOCTL_MAGIC 'p'
 #define PULP_IOC_NR_MIN 0xB0
-#define PULP_IOC_NR_MAX 0xB8
+#define PULP_IOC_NR_MAX 0xB9
 
 #define PULP_IOCTL_RAB_REQ   _IOW(PULP_IOCTL_MAGIC,0xB0,unsigned) // ptr
 #define PULP_IOCTL_RAB_FREE  _IOW(PULP_IOCTL_MAGIC,0xB1,unsigned) // value
@@ -170,6 +170,7 @@
 #define PULP_IOCTL_INFO_PASS _IOW(PULP_IOCTL_MAGIC,0xB7,unsigned) // ptr  
 
 #define PULP_IOCTL_RAB_SOC_MH_ENA _IOW(PULP_IOCTL_MAGIC,0xB8,unsigned)
+#define PULP_IOCTL_RAB_SOC_MH_DIS _IO(PULP_IOCTL_MAGIC,0xB9)
 
 /*
  * Independent parameters
@@ -359,6 +360,8 @@
   static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
 
   #define RAB_MH_FIFO_DEPTH 64
+
+  #define RAB_N_STATIC_2ND_LEVEL_SLICES (1 << (32 - PGDIR_SHIFT))
 
 #endif // PLATFORM
 

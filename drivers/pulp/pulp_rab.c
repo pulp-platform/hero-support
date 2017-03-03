@@ -21,6 +21,8 @@ static unsigned rab_mh;
 static unsigned rab_mh_date;
 static unsigned rab_mh_acp;
 static unsigned rab_mh_lvl;
+static unsigned rab_soc_mh_is_ena;
+static unsigned rab_n_slices_reserved_for_host;
 
 // AX logger
 #if RAB_AX_LOG_EN == 1
@@ -124,6 +126,9 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   rab_mh_acp = 0;
   rab_mh_lvl = 0;
 
+  // By default, the SoC does not handle RAB misses.
+  pulp_rab_soc_mh_dis(pulp->rab_config);
+
   // initialize AX logger
   #if RAB_AX_LOG_EN == 1
     err = pulp_rab_ax_log_init();
@@ -139,6 +144,25 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   #endif
 
   return err;
+}
+// }}}
+
+// release {{{
+/**
+ * Release control of the RAB.
+ *
+ * @return  0 on success; negative value with errno on errors.
+ */
+int pulp_rab_release(void)
+{
+  int ret = 0;
+  ret = pulp_rab_soc_mh_dis(pulp->rab_config);
+  if (ret != 0 && ret != -EALREADY) {
+    printk(KERN_WARNING "PULP RAB: Failed to disable SoC RAB Miss Handler!\n");
+    return ret;
+  }
+
+  return 0;
 }
 // }}}
 
@@ -260,6 +284,24 @@ int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
 // }}}
 
 // slice_get {{{
+
+static inline unsigned pulp_rab_slice_is_managed_by_host(const RabSliceReq* const req)
+{
+  // All slices on port 0 are managed by the host.
+  if (req->rab_port == 0)
+    return 1;
+
+  // If the RAB Miss Handler on the SoC is not enabled, all RAB slices are managed by the host.
+  if (!rab_soc_mh_is_ena)
+    return 1;
+
+  // If the RAB slice is reserved for the host, then it is managed by the host.
+  if (req->rab_slice < rab_n_slices_reserved_for_host)
+    return 1;
+
+  return 0;
+}
+
 /**
  * Get a free RAB slice. Returns 0 on success, 1 otherwise.
  *
@@ -281,9 +323,11 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
   for (i=0; i<n_slices; i++) {
     rab_slice_req->rab_slice = i;
 
-    if ( pulp_rab_slice_check(rab_slice_req) ) // found an expired slice
+    if ( pulp_rab_slice_check(rab_slice_req) && pulp_rab_slice_is_managed_by_host(rab_slice_req) ) {
+      // Found a slice available to the host.
       break;
-    else if (i == (n_slices-1) ) { // no slice free
+    } else if (i == (n_slices-1) ) {
+      // No slice is available to the host.
       err = 1;
       printk(KERN_INFO "PULP RAB L1: No slice available on Port %d.\n", rab_slice_req->rab_port);
     }
@@ -313,6 +357,11 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
   mapping   = rab_slice_req->rab_mapping;
   slice     = rab_slice_req->rab_slice;
   flags_drv = rab_slice_req->flags_drv;
+
+  if (!pulp_rab_slice_is_managed_by_host(rab_slice_req)) {
+    printk(KERN_WARNING "PULP - RAB: Dropping request to free slice not managed by host.\n");
+    return;
+  }
 
   if (DEBUG_LEVEL_RAB > 0) {
     printk(KERN_INFO "PULP - RAB L1: Port %d, Mapping %d, Slice %d: Freeing.\n",
@@ -1904,16 +1953,23 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
 
 // soc_mh_ena {{{
 
-static inline int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
+int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
     const unsigned long pgd_pa)
 {
   unsigned ret;
 
-  req->page_ptr_idx = RAB_L1_N_SLICES_PORT_1 - 1;
-  req->rab_slice    = 4;
+  pulp_rab_page_ptrs_get_field(req);
+
   req->addr_start   = PGD_BASE_ADDR;
   req->addr_end     = req->addr_start + ((PTRS_PER_PGD << 3) - 1);
   req->addr_offset  = pgd_pa;
+
+  ret = pulp_rab_slice_get(req);
+  if (ret != 0) {
+    printk(KERN_ERR "PULP RAB SoC MH Enable failed to get RAB slice!\n");
+    return ret;
+  }
+  pulp_rab_slice_free(rab_config, req);
 
   printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
         req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
@@ -1927,48 +1983,97 @@ static inline int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceRe
   return 0;
 }
 
-static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
-    const pgd_t* const pgd)
-{
-  unsigned      i_pmd;
-  unsigned      n_slices;
-  unsigned long pmd_pa;
-  unsigned      pmd_va;
-  unsigned      ret;
+#if PLATFORM == JUNO
+  int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
+      const pgd_t* const pgd)
+  {
+    unsigned      i_pmd;
+    unsigned long pmd_pa;
+    unsigned      pmd_va;
+    unsigned      ret;
 
-  n_slices = 1 << (32 - PGDIR_SHIFT);
+    pmd_va = PGD_BASE_ADDR;
+    for (i_pmd = 0; i_pmd < RAB_N_STATIC_2ND_LEVEL_SLICES; ++i_pmd) {
 
-  pmd_va = PGD_BASE_ADDR;
-  for (i_pmd = 0; i_pmd < n_slices; ++i_pmd) {
+      pulp_rab_page_ptrs_get_field(req);
 
-    req->page_ptr_idx = RAB_L1_N_SLICES_PORT_1 - 1 - i_pmd;
-    req->rab_slice    = 4 + i_pmd;
-    req->addr_start   = pmd_va;
-    req->addr_end     = req->addr_start + ((PTRS_PER_PMD << 3) - 1);
+      req->addr_start   = pmd_va;
+      req->addr_end     = req->addr_start + ((PTRS_PER_PMD << 3) - 1);
 
-    pmd_va = req->addr_end + 1;
+      pmd_va = req->addr_end + 1;
 
-    pmd_pa = (unsigned long)(*(pgd + pgd_index(PGDIR_SIZE * i_pmd)));
+      pmd_pa = (unsigned long)(*(pgd + pgd_index(PGDIR_SIZE * i_pmd)));
 
-    if (pmd_none(pmd_pa) || pmd_bad(pmd_pa))
-      continue;
+      if (pmd_none(pmd_pa) || pmd_bad(pmd_pa))
+        continue;
 
-    pmd_pa &= PAGE_MASK;
+      pmd_pa &= PAGE_MASK;
 
-    req->addr_offset = pmd_pa;
+      req->addr_offset = pmd_pa;
 
-    printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
-          req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
+      ret = pulp_rab_slice_get(req);
+      if (ret != 0) {
+        printk(KERN_ERR "PULP RAB SoC MH Enable failed to get RAB slice!\n");
+        return ret;
+      }
+      pulp_rab_slice_free(rab_config, req);
 
-    ret = pulp_rab_slice_setup(rab_config, req, NULL);
-    if (ret != 0) {
-      printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", req->rab_slice);
-      return ret;
+      printk(KERN_DEBUG "PULP RAB SoC MH slice %u request: start 0x%08x, end 0x%08x, off 0x%010lx\n",
+            req->rab_slice, req->addr_start, req->addr_end, req->addr_offset);
+
+      ret = pulp_rab_slice_setup(rab_config, req, NULL);
+      if (ret != 0) {
+        printk(KERN_ERR "PULP RAB SoC MH slice %u request failed!\n", req->rab_slice);
+        return ret;
+      }
+
     }
 
+    return 0;
+  }
+#endif
+
+unsigned static_2nd_lvl_slices_are_supported(void)
+{
+  #if PLATFORM == JUNO
+    return 1;
+  #else
+    return 0;
+  #endif
+}
+
+/**
+ * Check if there are no static slices among those not reserved for the host and free all other
+ * slices.
+ *
+ * @rab_config: kernel virtual address of the RAB configuration port
+ *
+ * @return  1 if all RAB slices not reserved to the host have been freed; 0 if at least one slice
+ *          has not yet expired.
+ */
+unsigned rab_is_ready_for_soc_mh(void* const rab_config)
+{
+  RabSliceReq req;
+  unsigned i;
+
+  /**
+   * Setting `date_cur` to `RAB_MAX_DATE_MH` will free all slices set up by the driver and the
+   * runtime except if they are required to persist until the end of the application (so called
+   * "static" slices).  `pulp_rab_slice_free()` will thus succeed for all except static slices.
+   */
+  req.date_cur    = RAB_MAX_DATE_MH;
+  req.rab_mapping = 0;
+  req.rab_port    = 1;
+
+  for (i = rab_n_slices_reserved_for_host; i < RAB_L1_N_SLICES_PORT_1; ++i) {
+    req.rab_slice = i;
+      if (pulp_rab_slice_check(&req))
+        pulp_rab_slice_free(rab_config, &req);
+      else
+        return 0;
   }
 
-  return 0;
+  return 1;
 }
 
 /**
@@ -1977,9 +2082,11 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
  * This functions configures RAB so that the page table hierarchy can be accessed from the SoC.  For
  * this, slices either for the first-level page table or for all second-level page tables are
  * configured in RAB (definable, see parameter below).  If RAB has been configured successfully,
- * handling of RAB misses by this Kernel driver is disabled.  The SoC must at runtime configure the
- * RAB slices for the subsequent levels of the page table.  Thus, the proper VMM software must be
- * running on the SoC; otherwise, RAB misses will not be handled at all.
+ * handling of RAB misses by this Kernel driver is disabled and all RAB slices but the first ones
+ * (which contain a mapping to the contiguous L3 memory and to the initial level of the page table)
+ * are reserved to be managed by the SoC.  The SoC must at runtime configure the RAB slices for the
+ * subsequent levels of the page table.  Thus, the proper VMM software must be running on the SoC;
+ * otherwise, RAB misses will not be handled at all.
  *
  * @param   rab_config            Pointer to the RAB configuration port.
  * @param   static_2nd_lvl_slices If 0, the driver sets up a single RAB slice for the first level of
@@ -1988,14 +2095,28 @@ static inline int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceRe
  *                                architectures.  If unsupported, the driver will fall back to the
  *                                former behavior and emit a warning.
  *
- * @return  0 on success; a nonzero errno on errors.
+ * @return  0 on success; a nonzero errno on errors.  In particular,  -EALREADY if misses are
+ *          already handled by the SoC, -EBUSY if RAB slices that are now to be managed by the SoC
+ *          are already configured.
  */
-int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
+int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
 {
   const pgd_t *   pgd;
   unsigned long   pgd_pa;
   RabSliceReq     rab_slice_req;
   int             retval;
+
+  if (rab_soc_mh_is_ena == 1) {
+    printk(KERN_WARNING "PULP RAB: Not enabling SoC MH because it is already enabled.\n");
+    return -EALREADY;
+  }
+
+  if (static_2nd_lvl_slices && !static_2nd_lvl_slices_are_supported())
+  {
+    printk(KERN_WARNING "PULP RAB: Static second-level slices are unsupported on your platform!\n");
+    printk(KERN_WARNING "PULP RAB: Falling back to one static first-level slice.\n");
+    static_2nd_lvl_slices = 0;
+  }
 
   pgd = (const pgd_t *)current->mm->pgd;
 
@@ -2009,8 +2130,8 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
   /**
    * Initialize the RAB slice with basic properties that are the same for all slices.
    */
-  rab_slice_req.date_cur        = 0;
-  rab_slice_req.date_exp        = RAB_MAX_DATE_MH;
+  rab_slice_req.date_cur        = RAB_MAX_DATE;
+  rab_slice_req.date_exp        = RAB_MAX_DATE;
   rab_slice_req.page_idx_start  = 0;
   rab_slice_req.page_idx_end    = 0;
   rab_slice_req.rab_port        = 1;
@@ -2019,36 +2140,92 @@ int pulp_rab_soc_mh_ena(void* rab_config, const unsigned static_2nd_lvl_slices)
   rab_slice_req.flags_hw        = 0b1011; // cache-coherent, disable write, enable read, valid
 
   /**
+   * Even if the SoC manages the RAB, the first few slices remain reserved for the host, namely:
+   *  - the first slice containing the mapping to contiguous L3, and
+   *  - the next N slices containing the mapings to the entry level(s) of the page table (the value
+   *    of N depends on whether first- or second-level slices are mapped statically).
+   */
+  rab_n_slices_reserved_for_host = 1;
+  #if PLATFORM == JUNO
+    rab_n_slices_reserved_for_host += (static_2nd_lvl_slices ? RAB_N_STATIC_2ND_LEVEL_SLICES : 1);
+  #else
+    rab_n_slices_reserved_for_host += 1;
+  #endif
+
+  if (!rab_is_ready_for_soc_mh(rab_config)) {
+    printk(KERN_ERR "PULP RAB: RAB is not ready to enable the SoC Miss Handler!\n");
+    return -EBUSY;
+  }
+
+  /**
    * Set up RAB slices either for the first-level page table or for the second-level page tables.
    * If this fails, the SoC cannot handle RAB misses because it cannot access the page table
    * hierarchy in memory.
    */
-  switch (static_2nd_lvl_slices) {
-    case 1:
-      #if PLATFORM == JUNO
-        retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
-        if (retval != 0) {
-          printk(KERN_ERR "PULP RAB: Failed to configure slices for second level of page table!\n");
-          return retval;
-        }
-        break;
-      #else
-        printk(KERN_WARNING "PULP RAB: Static second-level slices are unsupported on your platform!\n");
-        printk(KERN_WARNING "PULP RAB: Falling back to one static first-level slice.\n");
-      #endif
-    case 0:
+  rab_soc_mh_is_ena = 1;
+  #if PLATFORM == JUNO
+    if (static_2nd_lvl_slices)
+      retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
+    else
+  #endif
       retval = soc_mh_ena_static_1st_level(rab_config, &rab_slice_req, pgd_pa);
-      if (retval != 0) {
-        printk(KERN_ERR "PULP RAB: Failed to configure slices for first level of page table!\n");
-        return retval;
-      }
-  };
+
+  if (retval != 0) {
+    char level[255];
+    if (static_2nd_lvl_slices)
+      strcpy(level, "second");
+    else
+      strcpy(level, "first");
+    printk(KERN_ERR "PULP RAB: Failed to configure slices for %s level of page table!\n", level);
+    rab_soc_mh_is_ena = 0;
+    return retval;
+  }
 
   /**
    * The SoC now has access to the page table hierarchy in memory and will handle all RAB misses.
    * This Kernel driver must no longer handle these misses.
    */
   pulp_rab_mh_dis();
+
+  return 0;
+}
+// }}}
+
+// soc_mh_dis {{{
+/**
+ * Disable handling of RAB Misses by the SoC.
+ *
+ * This function frees and deconfigures all slices used to map the initial level of the page table,
+ * and hands the slices that were reserved to be managed by the SoC back to the host.
+ *
+ * @param rab_config  Pointer to the RAB configuration port.
+ *
+ * @return  0 on success; a nonzero errno on errors.  In particular, -EALREADY if miss handling on
+ *          the SoC is already disabled.
+ */
+int pulp_rab_soc_mh_dis(void* const rab_config)
+{
+  unsigned i;
+  RabSliceReq req;
+
+  if (rab_soc_mh_is_ena == 0) {
+    return -EALREADY;
+  }
+
+  /**
+   * To make sure that the SoC can no longer access the page table hierarchy, we free all slices
+   * used to map the initial levels of the page table.
+   */
+  req.rab_port    = 1;
+  req.rab_mapping = 0;
+  req.flags_drv   = 0b001;
+  for (i = 1; i < rab_n_slices_reserved_for_host; ++i) {
+    req.rab_slice = i;
+    pulp_rab_slice_free(rab_config, &req);
+  }
+
+  rab_n_slices_reserved_for_host = RAB_L1_N_SLICES_PORT_1;
+  rab_soc_mh_is_ena = 0;
 
   return 0;
 }
