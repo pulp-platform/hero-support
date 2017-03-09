@@ -2231,6 +2231,86 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
 }
 // }}}
 
+// ax_log_to_user {{{
+#if RAB_AX_LOG_EN == 1
+  /**
+   * Writes the kernel-space buffers to user space.
+   * Note:
+   *       - It resets the indices similar to the log_print() function. Subsequent calls to
+   *         log_print() will thus print nothing.
+   */
+  void pulp_rab_ax_log_to_user(unsigned long arg)
+  {
+    unsigned idxs[2];
+
+    // to read from and write to user space
+    unsigned ptrs[3];
+    unsigned long n_bytes_do, n_bytes_left;
+    unsigned byte;
+
+    // what we get from user space
+    unsigned status;
+    unsigned ar_log_buf_user;
+    unsigned aw_log_buf_user;
+
+    // get the pointers - arg already checked above
+    byte = 0;
+    n_bytes_left = 3*sizeof(unsigned);
+    n_bytes_do = n_bytes_left;
+    while (n_bytes_do > 0) {
+      n_bytes_left = __copy_from_user((void *)((char *)ptrs+byte),
+                             (void __user *)((char *)arg+byte), n_bytes_do);
+      byte += (n_bytes_do - n_bytes_left);
+      n_bytes_do = n_bytes_left;
+    }
+
+    // extract addresses
+    status          = ptrs[0];
+    ar_log_buf_user = ptrs[1];
+    aw_log_buf_user = ptrs[2];
+
+    // write AR log buffer
+    byte = 0;
+    n_bytes_left = rab_ar_log_buf_idx*3*sizeof(unsigned);
+    n_bytes_do = n_bytes_left;
+    while (n_bytes_do > 0) {
+      n_bytes_left = copy_to_user((void __user *)((char *)ar_log_buf_user+byte),
+                              (void *)((char *)rab_ar_log_buf+byte), n_bytes_do);
+      byte += (n_bytes_do - n_bytes_left);
+      n_bytes_do = n_bytes_left;
+    }
+
+    // write AW log buffer
+    byte = 0;
+    n_bytes_left = rab_aw_log_buf_idx*3*sizeof(unsigned);
+    n_bytes_do = n_bytes_left;
+    while (n_bytes_do > 0) {
+      n_bytes_left = copy_to_user((void __user *)((char *)aw_log_buf_user+byte),
+                              (void *)((char *)rab_aw_log_buf+byte), n_bytes_do);
+      byte += (n_bytes_do - n_bytes_left);
+      n_bytes_do = n_bytes_left;
+    }
+
+    // write status
+    idxs[0] = rab_ar_log_buf_idx;
+    idxs[1] = rab_aw_log_buf_idx;
+    byte = 0;
+    n_bytes_left = 2*sizeof(unsigned);
+    n_bytes_do = n_bytes_left;
+    while (n_bytes_do > 0) {
+      n_bytes_left = copy_to_user((void __user *)((char *)status+byte),
+                              (void *)((char *)idxs+byte), n_bytes_do);
+      byte += (n_bytes_do - n_bytes_left);
+      n_bytes_do = n_bytes_left;
+    }
+
+    // reset indices
+    rab_ar_log_buf_idx = 0;
+    rab_aw_log_buf_idx = 0;
+  }
+#endif
+// }}}
+
 // }}}
 
 // Mailbox Requests {{{

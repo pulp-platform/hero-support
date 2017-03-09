@@ -1292,6 +1292,12 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     break;
 
+  case PULP_IOCTL_RAB_AX_LOG_READ: // userspace wants to read the AX log buffers
+    #if RAB_AX_LOG_EN == 1
+      pulp_rab_ax_log_to_user(arg);
+    #endif
+    break;
+
   default:
     return -ENOTTY;
   }

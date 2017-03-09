@@ -154,7 +154,7 @@
  */
 #define PULP_IOCTL_MAGIC 'p'
 #define PULP_IOC_NR_MIN 0xB0
-#define PULP_IOC_NR_MAX 0xB9
+#define PULP_IOC_NR_MAX 0xBA
 
 #define PULP_IOCTL_RAB_REQ   _IOW(PULP_IOCTL_MAGIC,0xB0,unsigned) // ptr
 #define PULP_IOCTL_RAB_FREE  _IOW(PULP_IOCTL_MAGIC,0xB1,unsigned) // value
@@ -171,6 +171,8 @@
 
 #define PULP_IOCTL_RAB_SOC_MH_ENA _IOW(PULP_IOCTL_MAGIC,0xB8,unsigned) // value
 #define PULP_IOCTL_RAB_SOC_MH_DIS _IO(PULP_IOCTL_MAGIC,0xB9)
+
+#define PULP_IOCTL_RAB_AX_LOG_READ _IOW(PULP_IOCTL_MAGIC,0xBA,unsigned) // ptr
 
 /*
  * Independent parameters

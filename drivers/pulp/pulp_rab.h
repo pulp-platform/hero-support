@@ -178,6 +178,7 @@ void     pulp_rab_handle_miss(unsigned unused);
   void pulp_rab_ax_log_free(void);
   void pulp_rab_ax_log_read(unsigned pulp_cluster_select, unsigned clear);
   void pulp_rab_ax_log_print(void);
+  void pulp_rab_ax_log_to_user(unsigned long arg);
 #endif
 
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
