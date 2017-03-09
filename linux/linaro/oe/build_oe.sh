@@ -4,6 +4,6 @@ cd ./openembedded
 export OE_HOME=`pwd`
 
 cd $OE_HOME/openembedded-core
-./oe-init-build-env
+. ./oe-init-build-env
 cd $OE_HOME/build
 bitbake linaro-image-minimal
