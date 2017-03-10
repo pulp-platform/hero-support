@@ -2243,19 +2243,25 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
   {
     unsigned idxs[2];
 
+    /**
+     * We assume that the application that calls this function operates in a 32-bit address space.
+     * Thus, all user-space pointers are 32 bit wide, while kernel-space pointers can be either 32
+     * or 64 bit wide.
+     */
+
     // to read from and write to user space
-    unsigned * ptrs[3];
+    uint32_t ptrs[3];
     unsigned long n_bytes_do, n_bytes_left;
     unsigned byte;
 
     // what we get from user space
-    unsigned * status;
-    unsigned * ar_log_buf_user;
-    unsigned * aw_log_buf_user;
+    unsigned long status;
+    unsigned long ar_log_buf_user;
+    unsigned long aw_log_buf_user;
 
     // get the pointers - arg already checked above
     byte = 0;
-    n_bytes_left = 3*sizeof(void *);
+    n_bytes_left = sizeof(ptrs);
     n_bytes_do = n_bytes_left;
     while (n_bytes_do > 0) {
       n_bytes_left = __copy_from_user((void *)((char *)ptrs+byte),
@@ -2265,9 +2271,9 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
     }
 
     // extract addresses
-    status          = ptrs[0];
-    ar_log_buf_user = ptrs[1];
-    aw_log_buf_user = ptrs[2];
+    status          = (unsigned long)ptrs[0];
+    ar_log_buf_user = (unsigned long)ptrs[1];
+    aw_log_buf_user = (unsigned long)ptrs[2];
 
     // write AR log buffer
     byte = 0;
