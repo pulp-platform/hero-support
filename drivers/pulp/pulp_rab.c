@@ -2244,18 +2244,18 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
     unsigned idxs[2];
 
     // to read from and write to user space
-    unsigned ptrs[3];
+    unsigned * ptrs[3];
     unsigned long n_bytes_do, n_bytes_left;
     unsigned byte;
 
     // what we get from user space
-    unsigned status;
-    unsigned ar_log_buf_user;
-    unsigned aw_log_buf_user;
+    unsigned * status;
+    unsigned * ar_log_buf_user;
+    unsigned * aw_log_buf_user;
 
     // get the pointers - arg already checked above
     byte = 0;
-    n_bytes_left = 3*sizeof(unsigned);
+    n_bytes_left = 3*sizeof(void *);
     n_bytes_do = n_bytes_left;
     while (n_bytes_do > 0) {
       n_bytes_left = __copy_from_user((void *)((char *)ptrs+byte),
@@ -2271,7 +2271,7 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
 
     // write AR log buffer
     byte = 0;
-    n_bytes_left = rab_ar_log_buf_idx*3*sizeof(unsigned);
+    n_bytes_left = rab_ar_log_buf_idx*3*sizeof(uint32_t);
     n_bytes_do = n_bytes_left;
     while (n_bytes_do > 0) {
       n_bytes_left = copy_to_user((void __user *)((char *)ar_log_buf_user+byte),
@@ -2282,7 +2282,7 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
 
     // write AW log buffer
     byte = 0;
-    n_bytes_left = rab_aw_log_buf_idx*3*sizeof(unsigned);
+    n_bytes_left = rab_aw_log_buf_idx*3*sizeof(uint32_t);
     n_bytes_do = n_bytes_left;
     while (n_bytes_do > 0) {
       n_bytes_left = copy_to_user((void __user *)((char *)aw_log_buf_user+byte),

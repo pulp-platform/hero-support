@@ -10,6 +10,8 @@
 #include <linux/delay.h>   /* udelay */
 #include <linux/vmalloc.h>
 
+#include <stdint.h>        /* uint32_t */
+
 #include "pulp_module.h"
 
 #include "pulp_host.h"
