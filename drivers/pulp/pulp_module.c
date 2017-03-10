@@ -855,7 +855,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 
       rab_mh = pulp_rab_mh_sched();
 
-      if ( (DEBUG_LEVEL_RAB_MH > 1) || (0 == rab_mh) ) {
+     if ( (DEBUG_LEVEL_RAB_MH > 1) && (rab_mh == 1) ) {
         if ( printk_ratelimit() ) {
           printk(KERN_INFO "PULP: RAB miss interrupt handled at %02li:%02li:%02li.\n",
             (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
