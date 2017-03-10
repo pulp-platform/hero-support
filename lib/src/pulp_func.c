@@ -2262,3 +2262,5 @@ int pulp_rab_req_striped_mchan_img(const PulpDev *pulp, unsigned char prot, unsi
 
   return 0;
 }
+
+// vim: ts=2 sw=2 sts=2 et tw=100
