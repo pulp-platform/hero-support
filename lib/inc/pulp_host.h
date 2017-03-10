@@ -331,7 +331,7 @@
   #define RAB_AW_LOG_BASE_ADDR 0x6E200000
 
   #define INTR_REG_SIZE_B       0x1000
-  #define RAB_AX_LOG_SIZE_B     0xC0000  // size of BRAM, 768 KiB = 64 Ki entries
+  #define RAB_AX_LOG_SIZE_B     0x60000  // size of BRAM, 384 KiB = 32 Ki entries
   #define RAB_AX_LOG_BUF_SIZE_B 0x600000 // size of buffer in driver, 6 MiB = 512 Ki entries
   #define RAB_AX_LOG_PRINT_FORMAT 0      // 0 = DEBUG, 1 = MATLAB
 
