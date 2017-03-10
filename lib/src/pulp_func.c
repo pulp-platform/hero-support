@@ -5,6 +5,7 @@
 #include <stdio.h>      // fclose(), fopen(), printf(), sprintf()
 #include <stdlib.h>     // free(), malloc()
 #include <sys/ioctl.h>  // ioctl()
+#include <time.h>       // struct tm, localtime(), time(), time_t
 
 //printf("%s %d\n",__FILE__,__LINE__);
 
@@ -959,12 +960,12 @@ int pulp_rab_soc_mh_disable(const PulpDev* const pulp)
 /**
  * Store the content of the RAB AX Logger to a file.
  *
- * This function reads the content of the RAB AX Logger from kernel space, sorts the entries according
- * the timestamp, and writes the data into the file rab_ax_log.txt.
- * Note:
- *        - Existing log files will be overwritten.
- *        - This function must be called before freeing the RAB, otherwise the RAB free will already
- *          empty the kernel space buffers.
+ * This function reads the content of the RAB AX Logger from kernel space, sorts the entries
+ * according the timestamp, and writes the data into the file `rab_ax_log_%Y-%m-%d_%H-%M-%S.txt`
+ * (see `man date` for the exact meaning of the format specifiers).
+ *
+ * This function must be called before freeing the RAB, otherwise the RAB free will already empty
+ * the kernel space buffers.
  *
  * @param   pulp    Pointer to the PulpDev struct.
  *
@@ -1009,9 +1010,26 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
       printf("ERROR: ioctl for RAB AX log read failed. err = %d, errno = %d\n", err, errno);
     }
 
+    // Obtain the current date and time for the file name.
+    const time_t t = time(NULL);
+    if (t < 0) {
+      printf("ERROR: Could not get time!\n");
+      return -ENODATA;
+    }
+    const struct tm* const lt = localtime(&t);
+    if (lt == NULL) {
+      printf("ERROR: Could not convert time to local time!\n");
+      return -ENODATA;
+    }
+    char lt_str[20];
+    sprintf(lt_str, "%04d-%02d-%02d_%02d-%02d-%02d",
+        lt->tm_year+1900, lt->tm_mon, lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);
+    char filename[64];
+    sprintf(filename, "rab_ax_log_%s.txt", lt_str);
+
     // write the data to a file
     FILE *fp;
-    if((fp = fopen("rab_ax_log.txt", "w")) == NULL) {
+    if((fp = fopen(filename, "w")) == NULL) {
       printf("ERROR: Could not open RAB AX log file.\n");
       return -ENOENT;
     }
