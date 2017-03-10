@@ -3020,7 +3020,7 @@ void pulp_rab_handle_miss(unsigned unused)
 
       rab_ar_log_buf_idx += 3;
 
-      if ( rab_ar_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4) ) {
+      if ( rab_ar_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4/3) ) {
         rab_ar_log_buf_idx = 0;
         printk(KERN_WARNING "PULP - RAB: AR log buf overflow!\n");
       }
@@ -3047,7 +3047,7 @@ void pulp_rab_handle_miss(unsigned unused)
       rab_aw_log_buf[rab_aw_log_buf_idx+2] = addr;
       rab_aw_log_buf_idx += 3;
 
-      if ( rab_aw_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4) ) {
+      if ( rab_aw_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4/3) ) {
         rab_aw_log_buf_idx = 0;
         printk(KERN_WARNING "PULP - RAB: AW log buf overflow!\n");
       }
