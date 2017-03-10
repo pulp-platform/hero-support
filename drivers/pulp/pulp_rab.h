@@ -10,6 +10,8 @@
 #include <linux/delay.h>   /* udelay */
 #include <linux/vmalloc.h>
 
+#include <stdint.h>        /* uint32_t */
+
 #include "pulp_module.h"
 
 #include "pulp_host.h"
@@ -178,6 +180,7 @@ void     pulp_rab_handle_miss(unsigned unused);
   void pulp_rab_ax_log_free(void);
   void pulp_rab_ax_log_read(unsigned pulp_cluster_select, unsigned clear);
   void pulp_rab_ax_log_print(void);
+  void pulp_rab_ax_log_to_user(unsigned long arg);
 #endif
 
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)

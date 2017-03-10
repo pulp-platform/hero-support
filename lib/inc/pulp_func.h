@@ -116,6 +116,8 @@ void pulp_rab_mh_disable(const PulpDev *pulp);
 int pulp_rab_soc_mh_enable(const PulpDev* pulp, const unsigned static_2nd_lvl_slices);
 int pulp_rab_soc_mh_disable(const PulpDev* pulp);
 
+int pulp_rab_ax_log_read(const PulpDev* pulp);
+
 int pulp_dma_xfer(const PulpDev *pulp,
                   unsigned addr_l3, unsigned addr_pulp, unsigned size_b,
                   unsigned host_read);

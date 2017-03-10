@@ -1,6 +1,12 @@
 #include "pulp_func.h"
 #include "pulp_host.h"
 
+#include <errno.h>
+#include <stdio.h>      // fclose(), fopen(), printf(), sprintf()
+#include <stdlib.h>     // free(), malloc()
+#include <sys/ioctl.h>  // ioctl()
+#include <time.h>       // struct tm, localtime(), time(), time_t
+
 //printf("%s %d\n",__FILE__,__LINE__);
 
 /**
@@ -949,6 +955,165 @@ int pulp_rab_soc_mh_enable(const PulpDev* pulp, const unsigned static_2nd_lvl_sl
 int pulp_rab_soc_mh_disable(const PulpDev* const pulp)
 {
     return ioctl(pulp->fd, PULP_IOCTL_RAB_SOC_MH_DIS);
+}
+
+/**
+ * Store the content of the RAB AX Logger to a file.
+ *
+ * This function reads the content of the RAB AX Logger from kernel space, sorts the entries
+ * according the timestamp, and writes the data into the file `rab_ax_log_%Y-%m-%d_%H-%M-%S.txt`
+ * (see `man date` for the exact meaning of the format specifiers).
+ *
+ * This function must be called before freeing the RAB, otherwise the RAB free will already empty
+ * the kernel space buffers.
+ *
+ * @param   pulp    Pointer to the PulpDev struct.
+ *
+ * @return  0 on success; negative value with an errno on errors.
+ */
+int pulp_rab_ax_log_read(const PulpDev* const pulp)
+{
+  int err = 0;
+
+  #if RAB_AX_LOG_EN == 1
+    // allocate memory for ptrs
+    unsigned ** ptrs = (unsigned **)malloc(3*sizeof(unsigned *));
+    if ( !ptrs ) {
+      printf("ERROR: Malloc failed for ptrs.\n");
+      return -ENOMEM;
+    }
+
+    // allocate memory for status
+    unsigned * status = (unsigned *)malloc(2*sizeof(unsigned));
+    if ( !status ) {
+      printf("ERROR: Malloc failed for status.\n");
+      return -ENOMEM;
+    }
+
+    // allocate the buffers in user space
+    unsigned * rab_ar_log_buf = (unsigned *)malloc(RAB_AX_LOG_BUF_SIZE_B);
+    unsigned * rab_aw_log_buf = (unsigned *)malloc(RAB_AX_LOG_BUF_SIZE_B);
+    if ( (rab_ar_log_buf == NULL) || (rab_aw_log_buf == NULL) ) {
+      printf("ERROR: Malloc failed for rab_ar_log_buf/rab_aw_log_buf.\n");
+      return -ENOMEM;
+    }
+    memset((void *)rab_ar_log_buf, 0, (size_t)RAB_AX_LOG_BUF_SIZE_B);
+    memset((void *)rab_aw_log_buf, 0, (size_t)RAB_AX_LOG_BUF_SIZE_B);
+
+    ptrs[0] = &status[0];
+    ptrs[1] = &rab_ar_log_buf[0];
+    ptrs[2] = &rab_aw_log_buf[0];
+
+    // get the data from kernel space
+    err = ioctl(pulp->fd,PULP_IOCTL_RAB_AX_LOG_READ,&ptrs[0]);
+    if (err) {
+      printf("ERROR: ioctl for RAB AX log read failed. err = %d, errno = %d\n", err, errno);
+    }
+
+    // Obtain the current date and time for the file name.
+    const time_t t = time(NULL);
+    if (t < 0) {
+      printf("ERROR: Could not get time!\n");
+      return -ENODATA;
+    }
+    const struct tm* const lt = localtime(&t);
+    if (lt == NULL) {
+      printf("ERROR: Could not convert time to local time!\n");
+      return -ENODATA;
+    }
+    char lt_str[20];
+    sprintf(lt_str, "%04d-%02d-%02d_%02d-%02d-%02d",
+        lt->tm_year+1900, lt->tm_mon, lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);
+    char filename[64];
+    sprintf(filename, "rab_ax_log_%s.txt", lt_str);
+
+    // write the data to a file
+    FILE *fp;
+    if((fp = fopen(filename, "w")) == NULL) {
+      printf("ERROR: Could not open RAB AX log file.\n");
+      return -ENOENT;
+    }
+
+    unsigned ar_idx = 0;
+    unsigned aw_idx = 0;
+    unsigned ar_idx_max = status[0];
+    unsigned aw_idx_max = status[1];
+
+    unsigned ts, meta, addr, len, id, type;
+    unsigned ar_ts = 0, ar_meta = 0, ar_addr = 0;
+    unsigned aw_ts = 0, aw_meta = 0, aw_addr = 0;
+
+    type = 0;
+
+    while ( (ar_idx+aw_idx) < (ar_idx_max+aw_idx_max) ) {
+
+      // read next entry from buffers
+      if (ar_idx < ar_idx_max) {
+        ar_ts   = rab_ar_log_buf[ar_idx+0];
+        ar_meta = rab_ar_log_buf[ar_idx+1];
+        ar_addr = rab_ar_log_buf[ar_idx+2];
+      }
+      if (aw_idx < aw_idx_max) {
+        aw_ts   = rab_aw_log_buf[aw_idx+0];
+        aw_meta = rab_aw_log_buf[aw_idx+1];
+        aw_addr = rab_aw_log_buf[aw_idx+2];
+      }
+
+      // determine which entry to write to log file
+      if ( (ar_idx < ar_idx_max) && (aw_idx < aw_idx_max) ) { // both buffers have valid entries
+        if (ar_ts < aw_ts) {
+          ts   = ar_ts;
+          meta = ar_meta;
+          addr = ar_addr;
+          ar_idx+=3;
+          type = 0;
+        }
+        else {
+          ts   = aw_ts;
+          meta = aw_meta;
+          addr = aw_addr;
+          aw_idx+=3;
+          type = 1;
+        }
+      }
+      else {
+        if (ar_idx < ar_idx_max) {
+          ts   = ar_ts;
+          meta = ar_meta;
+          addr = ar_addr;
+          ar_idx+=3;
+          type = 0;
+        }
+        else { // aw_idx < aw_idx_max
+          ts   = aw_ts;
+          meta = aw_meta;
+          addr = aw_addr;
+          aw_idx+=3;
+          type = 1;
+        }
+      }
+
+      // write the entry into the log file
+      len = BF_GET(meta, 0, 8 );
+      id  = BF_GET(meta, 8, 10);
+      #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
+        fprintf(fp, "%u %#8x %3u %#3x %u\n", ts, addr, len, id, type);
+      #else // 1 = MATLAB
+        fprintf(fp, "%u %u %u %u %u\n", ts, addr, len, id, type);
+      #endif
+    }
+
+    fclose(fp);
+
+    // free the buffers
+    free(rab_aw_log_buf);
+    free(rab_ar_log_buf);
+    free(status);
+    free(ptrs);
+
+  #endif
+
+  return err;
 }
 
 /**
