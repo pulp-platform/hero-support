@@ -1097,7 +1097,7 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
       len = BF_GET(meta, 0, 8 );
       id  = BF_GET(meta, 8, 10);
       #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
-        fprintf(fp, "%u %#8x %3u %#3x %u\n", ts, addr, len, id, type);
+        fprintf(fp, "%10u 0x%08x %3u 0x%03x %u\n", ts, addr, len, id, type);
       #else // 1 = MATLAB
         fprintf(fp, "%u %u %u %u %u\n", ts, addr, len, id, type);
       #endif
