@@ -1,6 +1,11 @@
 #include "pulp_func.h"
 #include "pulp_host.h"
 
+#include <errno.h>
+#include <stdio.h>      // fclose(), fopen(), printf(), sprintf()
+#include <stdlib.h>     // free(), malloc()
+#include <sys/ioctl.h>  // ioctl()
+
 //printf("%s %d\n",__FILE__,__LINE__);
 
 /**
