@@ -46,7 +46,7 @@ int pulp_reserve_v_addr(PulpDev *pulp)
  * @pulp: pointer to the PulpDev structure
  */
 int pulp_free_v_addr(const PulpDev *pulp)
-{  
+{
   int status;
 
   if (DEBUG_LEVEL > 0)
@@ -100,7 +100,7 @@ int pulp_read32(const unsigned *base_addr, unsigned off, char off_type)
 {
   if (DEBUG_LEVEL > 4) {
     const unsigned *addr;
-    if (off_type == 'b') 
+    if (off_type == 'b')
       addr = base_addr + (off>>2);
     else
       addr = base_addr + off;
@@ -1300,7 +1300,7 @@ void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr)
  *             0x1F: pass by reference, do not touch (custom marshalling)
  */
 int pulp_offload_get_data_idxs(const TaskDesc *task, unsigned **data_idxs) {
-  
+
   int i, n_data, n_idxs, size_b;
 
   n_data = task->n_data;
