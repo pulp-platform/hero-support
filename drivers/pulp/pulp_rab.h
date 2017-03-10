@@ -9,8 +9,8 @@
 #include <asm/io.h>        /* ioremap, iounmap, iowrite32 */
 #include <linux/delay.h>   /* udelay */
 #include <linux/vmalloc.h>
+#include <linux/types.h>   /* uint32_t */
 
-#include <stdint.h>        /* uint32_t */
 
 #include "pulp_module.h"
 
