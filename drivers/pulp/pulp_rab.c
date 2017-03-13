@@ -2301,7 +2301,7 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
     idxs[0] = rab_ar_log_buf_idx;
     idxs[1] = rab_aw_log_buf_idx;
     byte = 0;
-    n_bytes_left = 2*sizeof(unsigned);
+    n_bytes_left = sizeof(idxs);
     n_bytes_do = n_bytes_left;
     while (n_bytes_do > 0) {
       n_bytes_left = copy_to_user((void __user *)((char *)status+byte),
