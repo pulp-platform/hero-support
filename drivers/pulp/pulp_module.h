@@ -56,6 +56,7 @@ typedef struct {
   #if RAB_AX_LOG_EN == 1
     void *rab_ar_log;
     void *rab_aw_log;
+    void *rab_cfg_log;
   #endif // RAB_AX_LOG_EN == 1
 } PulpDev;
 

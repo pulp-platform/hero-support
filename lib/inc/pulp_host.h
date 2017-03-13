@@ -264,6 +264,7 @@
   #define RAB_MHR_FULL_IRQ       66
   #define RAB_AR_LOG_FULL_IRQ    67
   #define RAB_AW_LOG_FULL_IRQ    68
+  // #define RAB_CFG_LOG_FULL_IRQ TODO (also in HW)
 
   #if PLATFORM == ZEDBOARD
 
@@ -292,6 +293,7 @@
 
     #define RAB_AR_LOG_BASE_ADDR  0x51100000
     #define RAB_AW_LOG_BASE_ADDR  0x51200000
+    // #define RAB_CFG_LOG_BASE_ADDR TODO (also in HW)
 
     #define RAB_AX_LOG_SIZE_B     0x6000   // size of BRAM, 192 KiB = 2 Ki entries
     #define RAB_AX_LOG_BUF_SIZE_B 0x600000 // size of buffer in driver, 6 MiB = 512 Ki entries
@@ -323,17 +325,19 @@
   #define RAB_AX_LOG_EN    1
 
   // PULP address map
-  #define H_GPIO_BASE_ADDR     0x6E000000
-  #define CLKING_BASE_ADDR     0x6E010000
-  #define RAB_CONFIG_BASE_ADDR 0x6E030000
-  #define INTR_REG_BASE_ADDR   0x6E050000
-  #define RAB_AR_LOG_BASE_ADDR 0x6E100000
-  #define RAB_AW_LOG_BASE_ADDR 0x6E200000
+  #define H_GPIO_BASE_ADDR      0x6E000000
+  #define CLKING_BASE_ADDR      0x6E010000
+  #define RAB_CONFIG_BASE_ADDR  0x6E030000
+  #define INTR_REG_BASE_ADDR    0x6E050000
+  #define RAB_AR_LOG_BASE_ADDR  0x6E100000
+  #define RAB_AW_LOG_BASE_ADDR  0x6E200000
+  #define RAB_CFG_LOG_BASE_ADDR 0x6E300000
 
   #define INTR_REG_SIZE_B       0x1000
-  #define RAB_AX_LOG_SIZE_B     0x60000  // size of BRAM, 384 KiB = 32 Ki entries
-  #define RAB_AX_LOG_BUF_SIZE_B 0x600000 // size of buffer in driver, 6 MiB = 512 Ki entries
-  #define RAB_AX_LOG_PRINT_FORMAT 0      // 0 = DEBUG, 1 = MATLAB
+  #define RAB_AX_LOG_SIZE_B     0xC0000   // size of BRAM, 786 KiB = 64 Ki entries
+  #define RAB_CFG_LOG_SIZE_B    0x30000   // size of BRAM, 196 KiB = 16 Ki entries
+  #define RAB_AX_LOG_BUF_SIZE_B 0x6000000 // size of buffer in driver, 96 MiB = 8 Mi entries
+  #define RAB_AX_LOG_PRINT_FORMAT 0       // 0 = DEBUG, 1 = MATLAB
 
   #define INTR_EOC_0              0
   #define INTR_EOC_N   N_CLUSTERS-1 // max 15
@@ -345,6 +349,7 @@
   #define INTR_RAB_MHR_FULL      20
   #define INTR_RAB_AR_LOG_FULL   21
   #define INTR_RAB_AW_LOG_FULL   22
+  #define INTR_RAB_CFG_LOG_FULL  23
 
   #define PULP_DEFAULT_FREQ_MHZ 25
   #define CLKING_INPUT_FREQ_MHZ 100
@@ -386,11 +391,13 @@
 
 #define GPIO_RST_N          31
 #define GPIO_CLK_EN         30
+#define GPIO_RAB_CFG_LOG_RDY 27
 #define GPIO_RAB_AR_LOG_RDY 28
 #define GPIO_RAB_AW_LOG_RDY 29
 #define GPIO_RAB_AR_LOG_CLR 28
 #define GPIO_RAB_AW_LOG_CLR 29
 #define GPIO_RAB_AX_LOG_EN  27
+#define GPIO_RAB_CFG_LOG_CLR 26
 
 // Fulmine uses Timer v.1 which has 4 core timers only
 #if N_CORES > 4
