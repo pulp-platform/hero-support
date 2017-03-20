@@ -297,6 +297,7 @@
 
     #define RAB_AX_LOG_SIZE_B     0x6000   // size of BRAM, 192 KiB = 2 Ki entries
     #define RAB_AX_LOG_BUF_SIZE_B 0x600000 // size of buffer in driver, 6 MiB = 512 Ki entries
+    #define RAB_CFG_LOG_SIZE_B    0x30000   // size of BRAM, 196 KiB = 16 Ki entries
     #define RAB_AX_LOG_PRINT_FORMAT 0      // 0 = DEBUG, 1 = MATLAB
 
     #define PULP_DEFAULT_FREQ_MHZ 50

@@ -3044,7 +3044,9 @@ void pulp_rab_handle_miss(unsigned unused)
     BIT_SET(gpio,BF_MASK_GEN(GPIO_CLK_EN,1));
     BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
     BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
-    BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+    #if PLATFORM == JUNO
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+    #endif
     iowrite32(gpio,(void *)((unsigned long)(pulp->gpio)+0x8));
 
     // wait for ready
@@ -3053,14 +3055,18 @@ void pulp_rab_handle_miss(unsigned unused)
       udelay(25);
       status = ioread32((void *)((unsigned long)pulp->gpio));
       ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
-        && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1)
-        && BF_GET(status, GPIO_RAB_CFG_LOG_RDY, 1);
+        && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1);
+        #if PLATFORM == JUNO
+          ready = ready && BF_GET(status, GPIO_RAB_CFG_LOG_RDY, 1);
+        #endif
     }
 
     // remove the AX log clear
     BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
     BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
-    BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+    #if PLATFORM == JUNO
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+    #endif
     iowrite32(gpio,(void *)((unsigned long)(pulp->gpio)+0x8));
 
     return 0;
