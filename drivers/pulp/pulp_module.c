@@ -311,6 +311,10 @@ static int __init pulp_init(void)
     my_dev.rab_aw_log = ioremap_nocache(RAB_AW_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
     printk(KERN_INFO "PULP: RAB AW log mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.rab_aw_log);
+
+    my_dev.rab_cfg_log = ioremap_nocache(RAB_CFG_LOG_BASE_ADDR, RAB_CFG_LOG_SIZE_B);
+    printk(KERN_INFO "PULP: RAB CFG log mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.rab_cfg_log);
   #endif // RAB_AX_LOG_EN == 1
 
   my_dev.gpio = ioremap_nocache(H_GPIO_BASE_ADDR, H_GPIO_SIZE_B);
@@ -459,6 +463,13 @@ static int __init pulp_init(void)
         printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
         goto fail_request_irq;
       }
+
+      // RAB CFG Log full
+      err = request_irq(RAB_CFG_LOG_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
+      if (err) {
+        printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+        goto fail_request_irq;
+      }
     #endif // RAB_AX_LOG_EN == 1
 
   #endif // PLATFORM != JUNO
@@ -517,6 +528,7 @@ static int __init pulp_init(void)
       #if RAB_AX_LOG_EN == 1
         free_irq(RAB_AR_LOG_FULL_IRQ,NULL);
         free_irq(RAB_AW_LOG_FULL_IRQ,NULL);
+        free_irq(RAB_CFG_LOG_FULL_IRQ,NULL);
       #endif
     #endif // PLATFORM == JUNO
   fail_request_irq:
@@ -529,6 +541,7 @@ static int __init pulp_init(void)
       pulp_rab_ax_log_free();
       iounmap(my_dev.rab_ar_log);
       iounmap(my_dev.rab_aw_log);
+      iounmap(my_dev.rab_cfg_log);
     #endif // RAB_AX_LOG_EN == 1
     #if PLATFORM == JUNO
       iounmap(my_dev.intr_reg);
@@ -586,6 +599,7 @@ static void __exit pulp_exit(void)
     #if RAB_AX_LOG_EN == 1
       free_irq(RAB_AR_LOG_FULL_IRQ,NULL);
       free_irq(RAB_AW_LOG_FULL_IRQ,NULL);
+      free_irq(RAB_CFG_LOG_FULL_IRQ,NULL);
     #endif 
   #endif // PLATFORM == JUNO
   #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
@@ -597,6 +611,7 @@ static void __exit pulp_exit(void)
     pulp_rab_ax_log_free();
     iounmap(my_dev.rab_ar_log);
     iounmap(my_dev.rab_aw_log);
+    iounmap(my_dev.rab_cfg_log);
   #endif // RAB_AX_LOG_EN == 1
   #if PLATFORM == JUNO
     iounmap(my_dev.intr_reg);
@@ -855,7 +870,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 
       rab_mh = pulp_rab_mh_sched();
 
-      if ( (DEBUG_LEVEL_RAB_MH > 1) || (0 == rab_mh) ) {
+     if ( (DEBUG_LEVEL_RAB_MH > 1) && (rab_mh == 1) ) {
         if ( printk_ratelimit() ) {
           printk(KERN_INFO "PULP: RAB miss interrupt handled at %02li:%02li:%02li.\n",
             (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
@@ -893,7 +908,8 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
     }
     #if RAB_AX_LOG_EN == 1
       if ( BF_GET(intr_reg_value, INTR_RAB_AR_LOG_FULL, 1)
-        || BF_GET(intr_reg_value, INTR_RAB_AW_LOG_FULL, 1) ) {
+        || BF_GET(intr_reg_value, INTR_RAB_AW_LOG_FULL, 1)
+        || BF_GET(intr_reg_value, INTR_RAB_CFG_LOG_FULL, 1) ) {
         printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
           (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
         
@@ -952,7 +968,8 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   
     #if RAB_AX_LOG_EN == 1
       if ( ( RAB_AR_LOG_FULL_IRQ == irq ) || 
-           ( RAB_AW_LOG_FULL_IRQ == irq ) ) {
+           ( RAB_AW_LOG_FULL_IRQ == irq ) ||
+           ( RAB_CFG_LOG_FULL_IRQ == irq ) ) {
         strcpy(rab_interrupt_type,"AX log full");
           
         pulp_rab_ax_log_read(pulp_cluster_select, 1);
@@ -963,7 +980,8 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
          ( (RAB_MISS_IRQ == irq) && (0 == rab_mh) ) ||
          ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) || 
          ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
-         ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {
+         ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
+         ( (RAB_CFG_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {
       do_gettimeofday(&time);
 
       if ( printk_ratelimit() ) {
@@ -972,7 +990,8 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       }
       // for debugging
       //if ( ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
-      //     ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) )
+      //     ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
+      //     ( (RAB_CFG_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) )
       //  pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
 
       if (RAB_MULTI_IRQ == irq){

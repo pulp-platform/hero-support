@@ -367,6 +367,7 @@ int pulp_munmap(PulpDev *pulp)
   // close the file descriptor
   printf("Close the file descriptor. \n");
   close(pulp->fd);
+  pulp->fd = -1;
 
   return 0;
 }
@@ -977,14 +978,14 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
 
   #if RAB_AX_LOG_EN == 1
     // allocate memory for ptrs
-    unsigned ** ptrs = (unsigned **)malloc(3*sizeof(unsigned *));
+    unsigned ** ptrs = (unsigned **)malloc(4*sizeof(unsigned *));
     if ( !ptrs ) {
       printf("ERROR: Malloc failed for ptrs.\n");
       return -ENOMEM;
     }
 
     // allocate memory for status
-    unsigned * status = (unsigned *)malloc(2*sizeof(unsigned));
+    unsigned * status = (unsigned *)malloc(3*sizeof(unsigned));
     if ( !status ) {
       printf("ERROR: Malloc failed for status.\n");
       return -ENOMEM;
@@ -993,16 +994,19 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
     // allocate the buffers in user space
     unsigned * rab_ar_log_buf = (unsigned *)malloc(RAB_AX_LOG_BUF_SIZE_B);
     unsigned * rab_aw_log_buf = (unsigned *)malloc(RAB_AX_LOG_BUF_SIZE_B);
-    if ( (rab_ar_log_buf == NULL) || (rab_aw_log_buf == NULL) ) {
-      printf("ERROR: Malloc failed for rab_ar_log_buf/rab_aw_log_buf.\n");
+    unsigned * rab_cfg_log_buf = (unsigned *)malloc(RAB_AX_LOG_BUF_SIZE_B);
+    if ( (rab_ar_log_buf == NULL) || (rab_aw_log_buf == NULL) || (rab_cfg_log_buf == NULL) ) {
+      printf("ERROR: Malloc failed for rab_ar_log_buf/rab_aw_log_buf/rab_cfg_log_buf.\n");
       return -ENOMEM;
     }
     memset((void *)rab_ar_log_buf, 0, (size_t)RAB_AX_LOG_BUF_SIZE_B);
     memset((void *)rab_aw_log_buf, 0, (size_t)RAB_AX_LOG_BUF_SIZE_B);
+    memset((void *)rab_cfg_log_buf, 0, (size_t)RAB_AX_LOG_BUF_SIZE_B);
 
     ptrs[0] = &status[0];
     ptrs[1] = &rab_ar_log_buf[0];
     ptrs[2] = &rab_aw_log_buf[0];
+    ptrs[3] = &rab_cfg_log_buf[0];
 
     // get the data from kernel space
     err = ioctl(pulp->fd,PULP_IOCTL_RAB_AX_LOG_READ,&ptrs[0]);
@@ -1036,8 +1040,10 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
 
     unsigned ar_idx = 0;
     unsigned aw_idx = 0;
+    unsigned cfg_idx = 0;
     unsigned ar_idx_max = status[0];
     unsigned aw_idx_max = status[1];
+    unsigned cfg_idx_max = status[2];
 
     unsigned ts, meta, addr, len, id, type;
     unsigned ar_ts = 0, ar_meta = 0, ar_addr = 0;
@@ -1045,6 +1051,8 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
 
     type = 0;
 
+    // TODO: sorting of cfg
+    // (really necessary? what if we also want to add the read/write response buffers?)
     while ( (ar_idx+aw_idx) < (ar_idx_max+aw_idx_max) ) {
 
       // read next entry from buffers
@@ -1103,11 +1111,26 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
       #endif
     }
 
+    for (cfg_idx = 0; cfg_idx < cfg_idx_max; cfg_idx += 3) {
+      type = 2;
+      ts   = rab_cfg_log_buf[cfg_idx+0];
+      meta = rab_cfg_log_buf[cfg_idx+1];
+      addr = rab_cfg_log_buf[cfg_idx+2];
+      len  = BF_GET(meta, 0, 8);
+      id   = BF_GET(meta, 8, 10);
+      #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
+        fprintf(fp, "%10u 0x%08x %3u 0x%03x %u\n", ts, addr, len, id, type);
+      #else // 1 = MATLAB
+        fprintf(fp, "%u %u %u %u %u\n", ts, addr, len, id, type);
+      #endif
+    }
+
     fclose(fp);
 
     // free the buffers
     free(rab_aw_log_buf);
     free(rab_ar_log_buf);
+    free(rab_cfg_log_buf);
     free(status);
     free(ptrs);
 

@@ -28,8 +28,10 @@ static unsigned rab_n_slices_reserved_for_host;
 #if RAB_AX_LOG_EN == 1
   static unsigned * rab_ar_log_buf;
   static unsigned * rab_aw_log_buf;
+  static unsigned * rab_cfg_log_buf;
   static unsigned rab_ar_log_buf_idx = 0;
   static unsigned rab_aw_log_buf_idx = 0;
+  static unsigned rab_cfg_log_buf_idx = 0;
 #endif
 
 // for profiling
@@ -705,7 +707,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
         flags_hw = ioread32((void *)((unsigned long)rab_config+offset+0x38));
         RAB_GET_PROT(prot, flags_hw);
         if (prot) {
-          printk(KERN_INFO "Port %d, Slice %2d: %#x - %#x -> %#lx , flags_hw = %#x\n", j, i,
+          printk(KERN_INFO "Port %d, Slice %2d: 0x%08x - 0x%08x -> 0x%010lx , flags_hw = %#x\n", j, i,
             ioread32((void *)((unsigned long)rab_config+offset+0x20)),
             ioread32((void *)((unsigned long)rab_config+offset+0x28)),
             (unsigned long)IOREAD_L((void *)((unsigned long)rab_config+offset+0x30)),
@@ -2241,7 +2243,7 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
    */
   void pulp_rab_ax_log_to_user(unsigned long arg)
   {
-    unsigned idxs[2];
+    unsigned idxs[3];
 
     /**
      * We assume that the application that calls this function operates in a 32-bit address space.
@@ -2250,7 +2252,7 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
      */
 
     // to read from and write to user space
-    uint32_t ptrs[3];
+    uint32_t ptrs[4];
     unsigned long n_bytes_do, n_bytes_left;
     unsigned byte;
 
@@ -2258,6 +2260,7 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
     unsigned long status;
     unsigned long ar_log_buf_user;
     unsigned long aw_log_buf_user;
+    unsigned long cfg_log_buf_user;
 
     // get the pointers - arg already checked above
     byte = 0;
@@ -2274,6 +2277,7 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
     status          = (unsigned long)ptrs[0];
     ar_log_buf_user = (unsigned long)ptrs[1];
     aw_log_buf_user = (unsigned long)ptrs[2];
+    cfg_log_buf_user = (unsigned long)ptrs[3];
 
     // write AR log buffer
     byte = 0;
@@ -2297,11 +2301,23 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
       n_bytes_do = n_bytes_left;
     }
 
+    // write CFG log buffer
+    byte = 0;
+    n_bytes_left = rab_cfg_log_buf_idx*3*sizeof(uint32_t);
+    n_bytes_do = n_bytes_left;
+    while (n_bytes_do > 0) {
+      n_bytes_left = copy_to_user((void __user *)((char *)cfg_log_buf_user+byte),
+                              (void *)((char *)rab_cfg_log_buf+byte), n_bytes_do);
+      byte += (n_bytes_do - n_bytes_left);
+      n_bytes_do = n_bytes_left;
+    }
+
     // write status
     idxs[0] = rab_ar_log_buf_idx;
     idxs[1] = rab_aw_log_buf_idx;
+    idxs[2] = rab_cfg_log_buf_idx;
     byte = 0;
-    n_bytes_left = 2*sizeof(unsigned);
+    n_bytes_left = sizeof(idxs);
     n_bytes_do = n_bytes_left;
     while (n_bytes_do > 0) {
       n_bytes_left = copy_to_user((void __user *)((char *)status+byte),
@@ -2313,6 +2329,7 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
     // reset indices
     rab_ar_log_buf_idx = 0;
     rab_aw_log_buf_idx = 0;
+    rab_cfg_log_buf_idx = 0;
   }
 #endif
 // }}}
@@ -3010,7 +3027,8 @@ void pulp_rab_handle_miss(unsigned unused)
     // allocate memory for the log buffers
     rab_ar_log_buf = (unsigned *)vmalloc(RAB_AX_LOG_BUF_SIZE_B);
     rab_aw_log_buf = (unsigned *)vmalloc(RAB_AX_LOG_BUF_SIZE_B);
-    if ( (rab_ar_log_buf == NULL) || (rab_aw_log_buf == NULL)) {
+    rab_cfg_log_buf = (unsigned *)vmalloc(RAB_AX_LOG_BUF_SIZE_B);
+    if ( (rab_ar_log_buf == NULL) || (rab_aw_log_buf == NULL) || (rab_cfg_log_buf == NULL)) {
       printk(KERN_WARNING "PULP: Could not allocate kernel memory for RAB AX log buffer.\n");
       return -ENOMEM;
     }
@@ -3018,6 +3036,7 @@ void pulp_rab_handle_miss(unsigned unused)
     // initialize indices
     rab_ar_log_buf_idx = 0;
     rab_aw_log_buf_idx = 0;
+    rab_cfg_log_buf_idx = 0;
 
     // clear AX log
     gpio = 0;
@@ -3025,6 +3044,7 @@ void pulp_rab_handle_miss(unsigned unused)
     BIT_SET(gpio,BF_MASK_GEN(GPIO_CLK_EN,1));
     BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
     BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+    BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
     iowrite32(gpio,(void *)((unsigned long)(pulp->gpio)+0x8));
 
     // wait for ready
@@ -3033,12 +3053,14 @@ void pulp_rab_handle_miss(unsigned unused)
       udelay(25);
       status = ioread32((void *)((unsigned long)pulp->gpio));
       ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
-        && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1);
+        && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1)
+        && BF_GET(status, GPIO_RAB_CFG_LOG_RDY, 1);
     }
 
     // remove the AX log clear
     BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
     BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+    BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
     iowrite32(gpio,(void *)((unsigned long)(pulp->gpio)+0x8));
 
     return 0;
@@ -3054,6 +3076,7 @@ void pulp_rab_handle_miss(unsigned unused)
   {
     vfree(rab_ar_log_buf);
     vfree(rab_aw_log_buf);
+    vfree(rab_cfg_log_buf);
 
     return;
   }
@@ -3092,7 +3115,6 @@ void pulp_rab_handle_miss(unsigned unused)
 
     // read out AR log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-      // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
       ts   = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+0)*4));
       meta = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+1)*4));
       addr = ioread32((void *)((unsigned long)(pulp->rab_ar_log)+(i*3+2)*4));
@@ -3120,7 +3142,6 @@ void pulp_rab_handle_miss(unsigned unused)
 
     // read out AW log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
-      // instead of ts, meta, addr (LSB to MSB), we get meta, addr, ts (LSB to MSB)
       ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
       meta = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+1)*4));
       addr = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+2)*4));
@@ -3151,10 +3172,54 @@ void pulp_rab_handle_miss(unsigned unused)
         udelay(25);
         status = ioread32((void *)((unsigned long)pulp->gpio));
         ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
-          && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1);
+          && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1)
+          && BF_GET(status, GPIO_RAB_CFG_LOG_RDY, 1);
       }
       BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
       BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+      iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
+    }
+
+    // read out CFG log
+    for (i=0; i<(RAB_CFG_LOG_SIZE_B/4/3); i++) {
+      ts   = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+0)*4));
+      meta = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+1)*4));
+      addr = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+2)*4));
+
+      if ( (ts == 0) && (meta == 0) && (addr == 0) )
+        break;
+
+      rab_cfg_log_buf[rab_cfg_log_buf_idx+0] = ts;
+      rab_cfg_log_buf[rab_cfg_log_buf_idx+1] = meta;
+      rab_cfg_log_buf[rab_cfg_log_buf_idx+2] = addr;
+      rab_cfg_log_buf_idx += 3;
+
+      if ( rab_cfg_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4/3) ) {
+        rab_cfg_log_buf_idx = 0;
+        printk(KERN_WARNING "PULP - RAB: CFG log buf overflow!\n");
+      }
+    }
+
+    // clear CFG log
+    if (clear) {
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+      iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
+
+      // wait for ready
+      ready = 0;
+      while ( !ready ) {
+        udelay(25);
+        status = ioread32((void *)((unsigned long)pulp->gpio));
+        ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
+          && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1)
+          && BF_GET(status, GPIO_RAB_CFG_LOG_RDY, 1);
+      }
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
       iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
 
       // continue
@@ -3213,6 +3278,24 @@ void pulp_rab_handle_miss(unsigned unused)
       #endif
     }
     rab_aw_log_buf_idx = 0;
+
+    // read out and clear the CFG log
+    type = 1;
+    for (i=0; i<rab_cfg_log_buf_idx; i=i+3) {
+      ts   = rab_cfg_log_buf[i+0];
+      meta = rab_cfg_log_buf[i+1];
+      addr = rab_cfg_log_buf[i+2];
+
+      len = BF_GET(meta, 0, 8 );
+      id  = BF_GET(meta, 8, 10);
+
+      #if RAB_AX_LOG_PRINT_FORMAT == 0 // DEBUG
+        printk(KERN_INFO "CFG Log: %u %#x %3u %#x %u\n", ts, addr, len, id, type);
+      #else // 1 = MATLAB
+        printk(KERN_INFO "CFG Log: %u %u %u %u %u\n", ts, addr, len, id, type);
+      #endif
+    }
+    rab_cfg_log_buf_idx = 0;
 
     return;
   }
