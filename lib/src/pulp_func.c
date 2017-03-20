@@ -1485,6 +1485,8 @@ void pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr)
  *             0x12: pass by reference, SVM, set up striped mapping
  *             0x13: pass by reference, SVM, do not set up mapping, use miss handling
  *
+ *             0x14: pass by reference, no SVM, use contiguous L3 memory, but to the tryx() - mapped to 0x10
+ *
  *             0x1F: pass by reference, do not touch (custom marshalling)
  */
 int pulp_offload_get_data_idxs(const TaskDesc *task, unsigned **data_idxs) {
@@ -1498,6 +1500,8 @@ int pulp_offload_get_data_idxs(const TaskDesc *task, unsigned **data_idxs) {
   for (i=0; i<n_data; i++) {
     if ( task->data_desc[i].size > size_b ) {
       (*data_idxs)[i] = 0x10 + (unsigned)(task->data_desc[i].sh_mem_ctrl);
+      if ( (*data_idxs)[i] == 0x14 )
+        (*data_idxs)[i] = 0x10; // the runtime maps 0x14 to 0x10
       n_idxs++;
     }
     else

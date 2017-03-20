@@ -64,6 +64,7 @@ typedef struct {
                               // 1: SVM, set up mapping at offload time, might fail - use with caution
                               // 2: SVM, use striping (L1 only), might fail - use with caution
                               // 3: SVM, use miss handling
+                              // 4: no SVM, copy-based sharing using contiguous L3 memory, but let the accelerator do the tryx()
   unsigned char  cache_ctrl;  // 0: flush caches, access through DRAM
                               // 1: do not flush caches, access through caches
   unsigned char  rab_lvl;     // 0: first L1, L2 when full
