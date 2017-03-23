@@ -3140,12 +3140,6 @@ void pulp_rab_handle_miss(unsigned unused)
       }
     }
 
-    // clear AR log
-    if (clear) {
-      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
-      iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
-    }
-
     // read out AW log
     for (i=0; i<(RAB_AX_LOG_SIZE_B/4/3); i++) {
       ts   = ioread32((void *)((unsigned long)(pulp->rab_aw_log)+(i*3+0)*4));
@@ -3164,13 +3158,6 @@ void pulp_rab_handle_miss(unsigned unused)
         rab_aw_log_buf_idx = 0;
         printk(KERN_WARNING "PULP - RAB: AW log buf overflow!\n");
       }
-    }
-
-    // clear AW log
-    if (clear) {
-      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
-      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
-      iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
     }
 
     // read out CFG log
@@ -3193,18 +3180,17 @@ void pulp_rab_handle_miss(unsigned unused)
           printk(KERN_WARNING "PULP - RAB: CFG log buf overflow!\n");
         }
       }
-
-      // clear CFG log
-      if (clear) {
-        BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
-        BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
-        BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
-        iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
-      }
     #endif
 
-    // wait for ready
+    // clear loggers and wait for ready
     if (clear) {
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+      #if PLATFORM == JUNO
+        BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+      #endif
+      iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
+
       ready = 0;
       while ( !ready ) {
         udelay(25);
