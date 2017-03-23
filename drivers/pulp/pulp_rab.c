@@ -2274,9 +2274,9 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
     }
 
     // extract addresses
-    status          = (unsigned long)ptrs[0];
-    ar_log_buf_user = (unsigned long)ptrs[1];
-    aw_log_buf_user = (unsigned long)ptrs[2];
+    status           = (unsigned long)ptrs[0];
+    ar_log_buf_user  = (unsigned long)ptrs[1];
+    aw_log_buf_user  = (unsigned long)ptrs[2];
     cfg_log_buf_user = (unsigned long)ptrs[3];
 
     // write AR log buffer
@@ -3168,22 +3168,8 @@ void pulp_rab_handle_miss(unsigned unused)
 
     // clear AW log
     if (clear) {
-      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
-      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
-      iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
-
-      // wait for ready
-      ready = 0;
-      while ( !ready ) {
-        udelay(25);
-        status = ioread32((void *)((unsigned long)pulp->gpio));
-        ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
-          && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1)
-          && BF_GET(status, GPIO_RAB_CFG_LOG_RDY, 1);
-      }
       BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
-      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
-      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
       iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
     }
 
@@ -3209,12 +3195,14 @@ void pulp_rab_handle_miss(unsigned unused)
 
     // clear CFG log
     if (clear) {
-      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
-      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
       BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
       iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
+    }
 
-      // wait for ready
+    // wait for ready
+    if (clear) {
       ready = 0;
       while ( !ready ) {
         udelay(25);
