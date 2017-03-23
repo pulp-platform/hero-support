@@ -3174,32 +3174,34 @@ void pulp_rab_handle_miss(unsigned unused)
     }
 
     // read out CFG log
-    for (i=0; i<(RAB_CFG_LOG_SIZE_B/4/3); i++) {
-      ts   = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+0)*4));
-      meta = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+1)*4));
-      addr = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+2)*4));
+    #if PLATFORM == JUNO
+      for (i=0; i<(RAB_CFG_LOG_SIZE_B/4/3); i++) {
+        ts   = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+0)*4));
+        meta = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+1)*4));
+        addr = ioread32((void *)((unsigned long)(pulp->rab_cfg_log)+(i*3+2)*4));
 
-      if ( (ts == 0) && (meta == 0) && (addr == 0) )
-        break;
+        if ( (ts == 0) && (meta == 0) && (addr == 0) )
+          break;
 
-      rab_cfg_log_buf[rab_cfg_log_buf_idx+0] = ts;
-      rab_cfg_log_buf[rab_cfg_log_buf_idx+1] = meta;
-      rab_cfg_log_buf[rab_cfg_log_buf_idx+2] = addr;
-      rab_cfg_log_buf_idx += 3;
+        rab_cfg_log_buf[rab_cfg_log_buf_idx+0] = ts;
+        rab_cfg_log_buf[rab_cfg_log_buf_idx+1] = meta;
+        rab_cfg_log_buf[rab_cfg_log_buf_idx+2] = addr;
+        rab_cfg_log_buf_idx += 3;
 
-      if ( rab_cfg_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4/3) ) {
-        rab_cfg_log_buf_idx = 0;
-        printk(KERN_WARNING "PULP - RAB: CFG log buf overflow!\n");
+        if ( rab_cfg_log_buf_idx > (RAB_AX_LOG_BUF_SIZE_B/4/3) ) {
+          rab_cfg_log_buf_idx = 0;
+          printk(KERN_WARNING "PULP - RAB: CFG log buf overflow!\n");
+        }
       }
-    }
 
-    // clear CFG log
-    if (clear) {
-      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
-      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
-      BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
-      iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
-    }
+      // clear CFG log
+      if (clear) {
+        BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
+        BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
+        BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+        iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
+      }
+    #endif
 
     // wait for ready
     if (clear) {
@@ -3208,12 +3210,16 @@ void pulp_rab_handle_miss(unsigned unused)
         udelay(25);
         status = ioread32((void *)((unsigned long)pulp->gpio));
         ready = BF_GET(status, GPIO_RAB_AR_LOG_RDY, 1)
-          && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1)
-          && BF_GET(status, GPIO_RAB_CFG_LOG_RDY, 1);
+          && BF_GET(status, GPIO_RAB_AW_LOG_RDY, 1);
+        #if PLATFORM == JUNO
+          ready = ready && BF_GET(status, GPIO_RAB_CFG_LOG_RDY, 1);
+        #endif
       }
       BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AR_LOG_CLR,1));
       BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_AW_LOG_CLR,1));
-      BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+      #if PLATFORM == JUNO
+        BIT_CLEAR(gpio,BF_MASK_GEN(GPIO_RAB_CFG_LOG_CLR,1));
+      #endif
       iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
 
       // continue
