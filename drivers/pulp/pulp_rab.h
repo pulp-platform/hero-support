@@ -165,10 +165,12 @@ long pulp_rab_req(void *rab_config, unsigned long arg);
 long pulp_rab_req_striped(void *rab_config, unsigned long arg);
 void pulp_rab_free(void *rab_config, unsigned long arg);
 void pulp_rab_free_striped(void *rab_config, unsigned long arg);
-int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices);
-int pulp_rab_soc_mh_dis(void* const rab_config);
+
 void pulp_rab_update(unsigned update_req);
 void pulp_rab_switch(void);
+
+int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices);
+int pulp_rab_soc_mh_dis(void* const rab_config);
 
 long     pulp_rab_mh_ena(void *rab_config, unsigned long arg);
 void     pulp_rab_mh_dis(void);
