@@ -1953,6 +1953,18 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
   }
 // }}}
 
+// SoC Miss Handling {{{
+/***********************************************************************************
+ *
+ * ███████╗ ██████╗  ██████╗    ███╗   ███╗██╗  ██╗
+ * ██╔════╝██╔═══██╗██╔════╝    ████╗ ████║██║  ██║
+ * ███████╗██║   ██║██║         ██╔████╔██║███████║
+ * ╚════██║██║   ██║██║         ██║╚██╔╝██║██╔══██║
+ * ███████║╚██████╔╝╚██████╗    ██║ ╚═╝ ██║██║  ██║
+ * ╚══════╝ ╚═════╝  ╚═════╝    ╚═╝     ╚═╝╚═╝  ╚═╝
+ *
+ ***********************************************************************************/
+
 // soc_mh_ena {{{
 
 int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
@@ -2231,6 +2243,8 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
 
   return 0;
 }
+// }}}
+
 // }}}
 
 // ax_log_to_user {{{
@@ -2526,22 +2540,21 @@ void pulp_rab_switch(void)
 
 // }}}
 
-// Miss Handling {{{
+// Host Miss Handling {{{
 /***********************************************************************************
  *
- * ███╗   ███╗██╗  ██╗██████╗
- * ████╗ ████║██║  ██║██╔══██╗
- * ██╔████╔██║███████║██████╔╝
- * ██║╚██╔╝██║██╔══██║██╔══██╗
- * ██║ ╚═╝ ██║██║  ██║██║  ██║
- * ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝
+ * ██╗  ██╗ ██████╗ ███████╗████████╗    ███╗   ███╗██╗  ██╗
+ * ██║  ██║██╔═══██╗██╔════╝╚══██╔══╝    ████╗ ████║██║  ██║
+ * ███████║██║   ██║███████╗   ██║       ██╔████╔██║███████║
+ * ██╔══██║██║   ██║╚════██║   ██║       ██║╚██╔╝██║██╔══██║
+ * ██║  ██║╚██████╔╝███████║   ██║       ██║ ╚═╝ ██║██║  ██║
+ * ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝       ╚═╝     ╚═╝╚═╝  ╚═╝
  *
  ***********************************************************************************/
 
 // mh_ena {{{
 /**
- * Check whether a particular slice has expired. Returns 1 if slice
- * has expired, 0 otherwise.
+ * Enable the host RAB miss handling routine by allocating the workqueue.
  *
  * @rab_config: kernel virtual address of the RAB configuration port.
  * @arg:        ioctl() argument
@@ -2575,7 +2588,7 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
   // create workqueue for RAB miss handling - single-threaded workqueue for strict ordering
   rab_mh_wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_HIGHPRI, 1, rab_mh_wq_name);
   if (rab_mh_wq == NULL) {
-    printk(KERN_WARNING "PULP: Allocation of workqueue for RAB miss handling failed.\n");
+    printk(KERN_WARNING "PULP: Allocation of workqueue for host RAB miss handling failed.\n");
     return -ENOMEM;
   }
   // initialize the workqueue
@@ -2589,7 +2602,7 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
   rab_mh = 1;
   rab_mh_date = 1;
 
-  printk(KERN_INFO "PULP: RAB miss handling enabled.\n");
+  printk(KERN_INFO "PULP: Host RAB miss handling enabled.\n");
 
   return 0;
 }
@@ -2611,7 +2624,7 @@ void pulp_rab_mh_dis(void)
     destroy_workqueue(rab_mh_wq);
     rab_mh_wq = 0;
 
-    printk(KERN_INFO "PULP: RAB miss handling disabled.\n");
+    printk(KERN_INFO "PULP: Host RAB miss handling disabled.\n");
   }
 
   return;
