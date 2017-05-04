@@ -712,7 +712,7 @@ int pulp_rab_req(const PulpDev *pulp, unsigned addr_start, unsigned size_b,
  * Free RAB slices
  *
  * @pulp      : pointer to the PulpDev structure
- * @date_cur  : current date, 0 = free all slices
+ * @date_cur  : current date, 0 = RAB_MAX_DATE = free all slices
  */
 void pulp_rab_free(const PulpDev *pulp, unsigned char date_cur) {
 
