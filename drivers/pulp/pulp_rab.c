@@ -1849,8 +1849,10 @@ void pulp_rab_free(void *rab_config, unsigned long arg)
   // for debugging
   //pulp_rab_mapping_print(rab_config,0xAAAA);
 
-  // free L2TLB
-  pulp_rab_l2_invalidate_all_entries(rab_config, 1);
+  #if PLATFORM != ZEDBOARD
+    // free L2TLB
+    pulp_rab_l2_invalidate_all_entries(rab_config, 1);
+  #endif
 
   return;
 }
