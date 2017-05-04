@@ -153,16 +153,54 @@ int pulp_rab_init(PulpDev * pulp_ptr)
 /**
  * Release control of the RAB.
  *
+ * Makes sure PULP has no more access to any user-space memory, and that the miss
+ * handlers are switched off. Moreover, any user-space pages previsouly pinned by
+ * the driver are unpinned.
+ *
  * @return  0 on success; negative value with errno on errors.
  */
 int pulp_rab_release(void)
 {
+  unsigned i, offset;
   int ret = 0;
+
+  const unsigned rab_n_slices_host = rab_n_slices_reserved_for_host;
+
+  if (DEBUG_LEVEL_RAB > 0) {
+    printk(KERN_INFO "PULP - RAB: Start release.\n");
+  }
+
+  /* Disable the SoC RAB miss handler.
+   *
+   * This also disables the RAB slices mapping the initital levels of the page
+   * table.
+   */
   ret = pulp_rab_soc_mh_dis(pulp->rab_config);
   if (ret != 0 && ret != -EALREADY) {
     printk(KERN_WARNING "PULP RAB: Failed to disable SoC RAB Miss Handler!\n");
     return ret;
   }
+
+  // disable the host RAB miss handler
+  pulp_rab_mh_dis();
+
+  // free RAB slices managed by SoC
+  for (i = rab_n_slices_host; i < RAB_L1_N_SLICES_PORT_1; i++) {
+    offset = 0x20*(RAB_L1_N_SLICES_PORT_0 + i);
+    iowrite32(0, (void *)((unsigned long)pulp->rab_config+offset+0x38));
+  }
+
+  /* Free RAB slices managed by host and reset management structures.
+   *
+   * L1-striped mappings and statically allocated mappings/mappings created
+   * by the host miss handler are freed separately through the _free and
+   * _free_striped functions, respectively.
+   */
+  for (i = 0; i < RAB_L1_N_MAPPINGS_PORT_1; i++) {
+    pulp_rab_free_striped(pulp->rab_config, i);
+  }
+
+  pulp_rab_free(pulp->rab_config, 0);
 
   return 0;
 }
@@ -1814,7 +1852,7 @@ void pulp_rab_free(void *rab_config, unsigned long arg)
 
   // check every slice on every port for every mapping
   for (i=0; i<RAB_N_PORTS; i++) {
-  rab_slice_req->rab_port = i;
+    rab_slice_req->rab_port = i;
 
     if (i == 0) {
       n_mappings = 1;
