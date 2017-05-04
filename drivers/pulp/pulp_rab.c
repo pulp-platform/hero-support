@@ -2159,7 +2159,7 @@ void pulp_rab_switch(void)
 
 // soc_mh_ena {{{
 
-int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
+static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
     const unsigned long pgd_pa)
 {
   unsigned ret;
@@ -2190,7 +2190,7 @@ int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
 }
 
 #if PLATFORM == JUNO
-  int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
+  static int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
       const pgd_t* const pgd)
   {
     unsigned      i_pmd;
@@ -2239,7 +2239,7 @@ int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
   }
 #endif
 
-unsigned static_2nd_lvl_slices_are_supported(void)
+static unsigned static_2nd_lvl_slices_are_supported(void)
 {
   #if PLATFORM == JUNO
     return 1;
@@ -2257,7 +2257,7 @@ unsigned static_2nd_lvl_slices_are_supported(void)
  * @return  1 if all RAB slices not reserved to the host have been freed; 0 if at least one slice
  *          has not yet expired.
  */
-unsigned rab_is_ready_for_soc_mh(void* const rab_config)
+static unsigned rab_is_ready_for_soc_mh(void* const rab_config)
 {
   RabSliceReq req;
   unsigned i;
