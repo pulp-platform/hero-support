@@ -392,15 +392,15 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
     page_idx_end_old   = l1.port_1.mappings[mapping].slices[slice].page_idx_end;
 
     // unlock remapped pages and invalidate caches
-    if ( !(flags_drv & 0x2) &&   // do not unlock pages in striped mode until the last slice is freed
-         !(flags_drv & 0x4) ) {  // only unlock pages in multi-mapping rule when the last mapping is removed
+    if ( !BIT_GET(flags_drv, RAB_FLAGS_DRV_STRIPED) &&   // do not unlock pages in striped mode until the last slice is freed
+         !BIT_GET(flags_drv, RAB_FLAGS_DRV_EVERY  ) ) {  // only unlock pages in multi-mapping rule when the last mapping is removed
       for (i=page_idx_start_old;i<=page_idx_end_old;i++) {
         if (DEBUG_LEVEL_RAB > 0) {
           printk(KERN_INFO "PULP - RAB L1: Port %d, Mapping %d, Slice %d: Unlocking Page %d.\n",
             port, mapping, slice, i);
         }
         //// invalidate caches --- invalidates entire pages only --- really needed?
-        //if ( !(flags_hw & 0x8) )
+        //if ( !BIT_GET(flags_hw, RAB_FLAGS_HW_CC) )
         //  pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
         // unlock
         if ( !PageReserved(pages_old[i]) )
@@ -413,7 +413,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 
     // free memory if no more references exist
     if ( !l1.port_1.mappings[mapping].page_ptr_ref_cntrs[page_ptr_idx_old] ) {
-      if ( !(flags_drv & 0x4) ) // only free pages ptr in multi-mapping rule when the last mapping is removed
+      if ( !BIT_GET(flags_drv, RAB_FLAGS_DRV_EVERY) ) // only free pages ptr in multi-mapping rule when the last mapping is removed
         kfree(pages_old);
       l1.port_1.mappings[mapping].page_ptrs[page_ptr_idx_old] = 0;
     }
@@ -422,7 +422,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
         l1.port_1.mappings[mapping].page_ptr_ref_cntrs[page_ptr_idx_old]);
     }
   }
-  else if ( (port == 1) && (flags_drv & 0x1) ) {
+  else if ( (port == 1) && BIT_GET(flags_drv, RAB_FLAGS_DRV_CONST) ) {
     if (l1.port_1.mappings[mapping].page_ptr_ref_cntrs[page_ptr_idx_old])
       l1.port_1.mappings[mapping].page_ptr_ref_cntrs[page_ptr_idx_old]--;
     if (mapping == l1.port_1.mapping_active) { // also free constant, active mappings on Port 1
@@ -507,7 +507,8 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
     // for the first segment, check that the selected reference list
     // entry is really free = memory has properly been freed
     if ( l1.port_1.mappings[mapping].page_ptr_ref_cntrs[rab_slice_req->page_ptr_idx]
-         & !rab_slice_req->page_idx_start & !(rab_slice_req->flags_drv & 0x2) ) {
+         & !rab_slice_req->page_idx_start
+         & !BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_STRIPED) ) {
       printk(KERN_WARNING "PULP - RAB L1: Selected reference list entry not free. Number of references = %d.\n",
         l1.port_1.mappings[mapping].page_ptr_ref_cntrs[rab_slice_req->page_ptr_idx]);
       return -EIO;
@@ -519,7 +520,7 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
         l1.port_1.mappings[mapping].page_ptr_ref_cntrs[rab_slice_req->page_ptr_idx]);
     }
 
-    if (rab_slice_req->flags_drv & 0x1)
+    if ( BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST) )
       l1.port_1.mappings[mapping].page_ptrs[rab_slice_req->page_ptr_idx] = 0;
     else
       l1.port_1.mappings[mapping].page_ptrs[rab_slice_req->page_ptr_idx] = pages;
@@ -1097,14 +1098,15 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
     printk(KERN_INFO "PULP: date_cur   = %d.\n",rab_slice_req->date_cur);
   }
 
+  rab_slice_req->flags_drv = 0;
   // check type of remapping
   if ( (rab_slice_req->rab_port == 0) || (rab_slice_req->addr_start == L3_MEM_BASE_ADDR) )
-    rab_slice_req->flags_drv = 0x1 | 0x4;
+    BIT_SET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST | RAB_FLAGS_DRV_EVERY);
   else  // for now, set up every request on every mapping
-    rab_slice_req->flags_drv = 0x4;
+    BIT_SET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_EVERY);
 
   rab_use_l1 = 0;
-  if (rab_slice_req->flags_drv & 0x1) { // constant remapping
+  if ( BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST) ) { // constant remapping
     switch(rab_slice_req->addr_start) {
 
     case MBOX_H_BASE_ADDR:
@@ -1131,7 +1133,8 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
     len = pulp_mem_get_num_pages(rab_slice_req->addr_start,size_b);
 
     // get and lock user-space pages
-    err = pulp_mem_get_user_pages(&pages, rab_slice_req->addr_start, len, rab_slice_req->flags_hw & 0x4);
+    err = pulp_mem_get_user_pages(&pages, rab_slice_req->addr_start, len,
+      BIT_GET(rab_slice_req->flags_hw, RAB_FLAGS_HW_WRITE));
     if (err) {
       printk(KERN_WARNING "PULP - RAB: Locking of user-space pages failed.\n");
       return (long)err;
@@ -1153,7 +1156,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
 
   if (rab_use_l1 == 1) { // use L1 TLB
 
-    if ( !(rab_slice_req->flags_drv & 0x1) ) { // not constant remapping
+    if ( !BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST) ) { // not constant remapping
       // virtual to physcial address translation + segmentation
       n_segments = pulp_mem_map_sg(&addr_start_vec, &addr_end_vec, &addr_offset_vec,
                                    &page_idxs_start, &page_idxs_end, &pages, len,
@@ -1170,7 +1173,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
     // to do: protect with semaphore!?
     for (i=0; i<n_segments; i++) {
 
-      if ( !(rab_slice_req->flags_drv & 0x1) ) {
+      if ( !BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST) ) {
         rab_slice_req->addr_start     = addr_start_vec[i];
         rab_slice_req->addr_end       = addr_end_vec[i];
         rab_slice_req->addr_offset    = addr_offset_vec[i];
@@ -1181,7 +1184,8 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
       // some requests need to be set up for every mapping
       for (j=0; j<RAB_L1_N_MAPPINGS_PORT_1; j++) {
 
-        if ( (rab_slice_req->rab_port == 1) && (rab_slice_req->flags_drv & 0x4) )
+        if ( (rab_slice_req->rab_port == 1)
+          && BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_EVERY) )
           rab_slice_req->rab_mapping = j;
 
         if ( rab_slice_req->rab_mapping == j ) {
@@ -1212,7 +1216,8 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
       }
 
       // flush caches
-      if ( !(rab_slice_req->flags_drv & 0x1) && !(rab_slice_req->flags_hw & 0x8) ) {
+      if ( !BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST)
+        && !BIT_GET(rab_slice_req->flags_hw , RAB_FLAGS_HW_CC) ) {
         for (j=page_idxs_start[i]; j<(page_idxs_end[i]+1); j++) {
           // flush the whole page?
           if (!i)
@@ -1250,19 +1255,20 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
       }
 
       // flush caches
-      if ( !(rab_slice_req->flags_drv & 0x1) && !(rab_slice_req->flags_hw & 0x8) ) {
+      if ( !BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST)
+        && !BIT_GET(rab_slice_req->flags_hw , RAB_FLAGS_HW_CC) ) {
         // flush the whole page?
         pulp_mem_cache_flush(pages[i],0,PAGE_SIZE);
       }
     } // for (i=0; i<len; i++) {
 
-    if ( !(rab_slice_req->flags_drv & 0x1) ) {
+    if ( !BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST) ) {
       kfree(pages); // No need of pages since we have the individual page ptr for L2 entry in page_ptr.
     }
   }
 
   // kfree
-  if ( (!(rab_slice_req->flags_drv & 0x1)) && rab_use_l1) {
+  if ( !BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST) && rab_use_l1) {
     kfree(addr_start_vec);
     kfree(addr_end_vec);
     kfree(addr_offset_vec);
@@ -1501,7 +1507,8 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
     #endif
 
     // get and lock user-space pages
-    err = pulp_mem_get_user_pages(&pages, addr_start, len, rab_stripe_elem[i].flags_hw & 0x4);
+    err = pulp_mem_get_user_pages(&pages, addr_start, len,
+      BIT_GET(rab_stripe_elem[i].flags_hw, RAB_FLAGS_HW_WRITE));
     if (err) {
       printk(KERN_WARNING "PULP: Locking of user-space pages failed.\n");
       return err;
@@ -1534,7 +1541,7 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
       n_cyc_tot_map_sg += n_cyc_map_sg;
     #endif
 
-    if( !(rab_stripe_elem[i].flags_hw & 0x8) ) {
+    if( !BIT_GET(rab_stripe_elem[i].flags_hw, RAB_FLAGS_HW_CC) ) {
       // flush caches for all segments
       for (j=0; j<n_segments; j++) {
         for (k=page_idxs_start[j]; k<(page_idxs_end[j]+1); k++) {
@@ -1681,7 +1688,8 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
         rab_slice_req->addr_start  = 0;
         rab_slice_req->addr_end    = 0;
         rab_slice_req->addr_offset = 0;
-        rab_slice_req->flags_hw    = rab_stripe_elem[i].flags_hw & 0xE; // do not yet enable
+        rab_slice_req->flags_hw    = rab_stripe_elem[i].flags_hw;
+        BIT_CLEAR(rab_slice_req->flags_hw, RAB_FLAGS_HW_EN); // do not yet enable
       }
       else {
         rab_slice_req->addr_start  = rab_stripe_elem[i].stripes[0].slice_configs[j].addr_start;
@@ -1690,10 +1698,9 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
         rab_slice_req->flags_hw    = rab_stripe_elem[i].flags_hw;
       }
       // force check in pulp_rab_slice_setup
-      if (j == 0)
-        rab_slice_req->flags_drv = 0x0;
-      else
-        rab_slice_req->flags_drv = 0x2; // striped mode, not constant
+      rab_slice_req->flags_drv = 0;
+      if (j > 0)
+        BIT_SET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_STRIPED); // striped mode, not constant
 
       // get a free slice
       err = pulp_rab_slice_get(rab_slice_req);
@@ -1831,11 +1838,11 @@ void pulp_rab_free(void *rab_config, unsigned long arg)
 
         if (rab_slice_req->rab_port == 1) {
           rab_slice_req->flags_drv = l1.port_1.mappings[j].slices[k].flags_drv;
-          if ( (rab_slice_req->flags_drv & 0x4) && (j == n_mappings-1) )
-            BIT_CLEAR(rab_slice_req->flags_drv,0x4); // unlock and release pages when freeing the last mapping
+          if ( BIT_GET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_EVERY) && (j == n_mappings-1) )
+            BIT_CLEAR(rab_slice_req->flags_drv, RAB_FLAGS_DRV_EVERY); // unlock and release pages when freeing the last mapping
         }
         else
-          rab_slice_req->flags_drv = 0x1; // Port 0 can only hold constant mappings
+          BIT_SET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_CONST); // Port 0 can only hold constant mappings
 
         if ( !rab_slice_req->date_cur ||
              (rab_slice_req->date_cur == RAB_MAX_DATE) ||
@@ -1908,10 +1915,9 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
         rab_slice_req->rab_slice = rab_stripe_elem[i].slice_idxs[j];
 
         // unlock and release pages when freeing the last slice
+        rab_slice_req->flags_drv = 0;
         if (j < (rab_stripe_elem[i].n_slices-1) )
-          rab_slice_req->flags_drv = 0x2;
-        else
-          rab_slice_req->flags_drv = 0x0;
+          BIT_SET(rab_slice_req->flags_drv, RAB_FLAGS_DRV_STRIPED);
 
         pulp_rab_slice_free(rab_config, rab_slice_req);
       }
@@ -2343,8 +2349,12 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
   rab_slice_req.page_idx_end    = 0;
   rab_slice_req.rab_port        = 1;
   rab_slice_req.rab_mapping     = 0;
-  rab_slice_req.flags_drv       = 0b001;  // not setup in every mapping, not striped, constant
-  rab_slice_req.flags_hw        = 0b1011; // cache-coherent, disable write, enable read, valid
+  // not setup in every mapping, not striped, constant
+  rab_slice_req.flags_drv = 0;
+  BIT_SET(rab_slice_req.flags_drv, RAB_FLAGS_DRV_CONST);
+  // cache-coherent, disable write, enable read, valid
+  rab_slice_req.flags_hw = 0;
+  BIT_SET(rab_slice_req.flags_hw, RAB_FLAGS_HW_CC | RAB_FLAGS_HW_READ | RAB_FLAGS_HW_EN);
 
   /**
    * Even if the SoC manages the RAB, the first few slices remain reserved for the host, namely:
@@ -2425,7 +2435,8 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
    */
   req.rab_port    = 1;
   req.rab_mapping = 0;
-  req.flags_drv   = 0b001;
+  req.flags_drv   = 0;
+  BIT_SET(req.flags_drv, RAB_FLAGS_DRV_CONST);
   for (i = 1; i < rab_n_slices_reserved_for_host; ++i) {
     req.rab_slice = i;
     pulp_rab_slice_free(rab_config, &req);
@@ -2742,8 +2753,12 @@ void pulp_rab_handle_miss(unsigned unused)
       rab_slice_req->addr_start  = (unsigned)start;
       rab_slice_req->addr_end    = (unsigned)start + PAGE_SIZE;
       rab_slice_req->addr_offset = addr_phys;
-      RAB_SET_PROT(rab_slice_req->flags_hw,(write << 2) | 0x2 | 0x1);
-      RAB_SET_ACP(rab_slice_req->flags_hw,rab_mh_acp);
+      rab_slice_req->flags_hw    = 0;
+      BIT_SET(rab_slice_req->flags_hw, RAB_FLAGS_HW_READ | RAB_FLAGS_HW_EN);
+      if (write)
+        BIT_SET(rab_slice_req->flags_hw, RAB_FLAGS_HW_WRITE);
+      if (rab_mh_acp)
+        BIT_SET(rab_slice_req->flags_hw, RAB_FLAGS_HW_CC);
 
       // Check which TLB level to use.
       // If rab_mh_lvl is 0, enter the entry in L1 if free slice is available. If not, enter in L2.
