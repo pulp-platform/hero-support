@@ -195,6 +195,14 @@
 #define RAB_CONFIG_SIZE_B         0x10000
 #define RAB_L1_N_MAPPINGS_PORT_1  2
 #define RAB_N_PORTS               2
+
+#define RAB_SLICE_SIZE_B               0x20
+#define RAB_SLICE_BASE_OFFSET_B        0x20
+#define RAB_SLICE_ADDR_START_OFFSET_B  0x0
+#define RAB_SLICE_ADDR_END_OFFSET_B    0x8
+#define RAB_SLICE_ADDR_OFFSET_OFFSET_B 0x10
+#define RAB_SLICE_FLAGS_OFFSET_B       0x18
+
 #define RAB_CONFIG_N_BITS_PORT    1
 #define RAB_CONFIG_N_BITS_ACP     1
 #define RAB_CONFIG_N_BITS_LVL     2
