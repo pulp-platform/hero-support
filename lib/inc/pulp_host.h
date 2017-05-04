@@ -471,9 +471,15 @@ typedef struct {
   unsigned       rab_stripe_elem_user_addr; // 32b user-space addr of stripe element array
 } RabStripeReqUser;
 
+typedef enum {
+  inout = 0,
+  in    = 1,
+  out   = 2,
+} ElemType;
+
 typedef struct {
   unsigned char id;
-  unsigned char type;              // 0 = inout, 1 = in, 2 = out
+  ElemType type;
   unsigned char flags;
   unsigned      max_stripe_size_b;
   unsigned      n_stripes;

@@ -57,9 +57,7 @@ typedef struct {
   void         * ptr_l3_v;    // host virtual address in contiguous L3 memory   - filled by runtime library based on sh_mem_ctrl
   void         * ptr_l3_p;    // PULP physical address in contiguous L3 memory  - filled by runtime library based on sh_mem_ctrl
   size_t         size;        // size in Bytes
-  int            type;        // 0: input and output
-                              // 1: input only
-                              // 2: output only
+  ElemType       type;
   unsigned char  sh_mem_ctrl; // 0: no SVM, copy-based sharing using contiguous L3 memory
                               // 1: SVM, set up mapping at offload time, might fail - use with caution
                               // 2: SVM, use striping (L1 only), might fail - use with caution

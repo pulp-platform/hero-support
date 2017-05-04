@@ -1423,13 +1423,13 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
     rab_stripe_elem[i].flags_hw            = rab_stripe_elem_user[i].flags | 0x2; // write only does not work in the hardware!
 
     // compute the actual number of required slices
-    if (rab_stripe_elem[i].type == 0)
+    if (rab_stripe_elem[i].type == inout)
       rab_stripe_elem[i].n_slices = 4*n_slices; // double buffering: *2 + inout: *2
     else
       rab_stripe_elem[i].n_slices = 2*n_slices; // double buffering: *2
 
     // set stripe_idx = stripe to configure at first update request
-    if (rab_stripe_elem[i].type == 2)
+    if (rab_stripe_elem[i].type == out)
       rab_stripe_elem[i].stripe_idx = 1; //0;
     else
       rab_stripe_elem[i].stripe_idx = 1;
@@ -2024,7 +2024,7 @@ void pulp_rab_update(unsigned update_req)
 
     n_slices   = elem->n_slices_per_stripe;
     stripe_idx = elem->stripe_idx;
-    if ( elem->type == 0 ) // inout -> Stripe 0, 4, 8 to Set 0, Stripe 1, 5, 9 to Set 1, etc.
+    if ( elem->type == inout ) // inout -> Stripe 0, 4, 8 to Set 0, Stripe 1, 5, 9 to Set 1, etc.
       idx_mask = 0x3;
     else // in, out -> Alternate even and odd stripes to Set 0 and 1, respectively.
       idx_mask = 0x1;
@@ -2060,9 +2060,9 @@ void pulp_rab_update(unsigned update_req)
 
     if (elem->stripe_idx == elem->n_stripes) {
       elem->stripe_idx = 0;
-      if      ( (elem->type == 0) && (elem->n_stripes & 0x3) ) // inout + number of stripes not divisible by 4 -> shift set mapping
+      if      ( (elem->type == inout) && (elem->n_stripes & 0x3) ) // inout + number of stripes not divisible by 4 -> shift set mapping
         elem->set_offset = (elem->set_offset + (elem->n_stripes & 0x3) ) & 0x3;
-      else if ( (elem->type != 0) && (elem->n_stripes & 0x1) ) // in, out + odd number of stripes -> flip set mapping
+      else if ( (elem->type != inout) && (elem->n_stripes & 0x1) ) // in, out + odd number of stripes -> flip set mapping
         elem->set_offset = (elem->set_offset) ? 0 : 1;
 
       if (DEBUG_LEVEL_RAB_STR > 0) {
@@ -2130,7 +2130,7 @@ void pulp_rab_switch(void)
   // reset stripe idxs for striped mappings
   for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
 
-    if ( rab_stripe_req[rab_mapping].elements[i].type == 2 ) // out
+    if ( rab_stripe_req[rab_mapping].elements[i].type == out ) // out
       rab_stripe_req[rab_mapping].elements[i].stripe_idx = 0;
     else  // in, inout
       rab_stripe_req[rab_mapping].elements[i].stripe_idx = 1;

@@ -800,9 +800,9 @@ int pulp_rab_req_striped(const PulpDev *pulp, const TaskDesc *task,
 
       // set protection and cache ctrl flags
       flags = 0;
-      if      (task->data_desc[k].type == 1) // in = read
+      if      (task->data_desc[k].type == in)  // in = read
         prot = 0x2 | 0x1;
-      else if (task->data_desc[k].type == 2) // out = write
+      else if (task->data_desc[k].type == out) // out = write
         prot = 0x4 | 0x1;
       else // 0: inout = read & write
         prot = 0x4 | 0x2 | 0x1;
@@ -828,7 +828,7 @@ int pulp_rab_req_striped(const PulpDev *pulp, const TaskDesc *task,
       // some apps need an overlap in some elements
       overlap = 0;
       if ( !strcmp(task->name, "rod") ) {
-        if ( task->data_desc[k].type == 1 ) // input elements are overlapped only
+        if ( task->data_desc[k].type == in ) // input elements are overlapped only
 
           overlap = 2 * sizeof(unsigned char)
             * (3 * (*(unsigned *)(task->data_desc[3].ptr)) ); // (R * w);
@@ -1607,9 +1607,9 @@ int pulp_offload_rab_setup(const PulpDev *pulp, const TaskDesc *task, unsigned *
     size_int[0]       = (unsigned)task->data_desc[order[0]].size;
     cache_ctrl_int[0] = task->data_desc[order[0]].cache_ctrl;
     rab_lvl_int[0]    = task->data_desc[order[0]].rab_lvl;
-    if      ( task->data_desc[order[0]].type == 0) // input & output
+    if      ( task->data_desc[order[0]].type == inout) // input & output
       prot_int[0] = 0x7; // read & write
-    else if ( task->data_desc[order[0]].type == 1) // input only
+    else if ( task->data_desc[order[0]].type == in) // input only
       prot_int[0] = 0x3; // read only
     else
       prot_int[0] = 0x5; // write only
@@ -1619,9 +1619,9 @@ int pulp_offload_rab_setup(const PulpDev *pulp, const TaskDesc *task, unsigned *
       gap_size = (unsigned)task->data_desc[j].ptr - (v_addr_int[n_data_int-1]
                                                      + size_int[n_data_int-1]);
 
-      if      ( task->data_desc[j].type == 0) // input & output
+      if      ( task->data_desc[j].type == inout) // input & output
         prot = 0x7; // read & write
-      else if ( task->data_desc[j].type == 1) // input only
+      else if ( task->data_desc[j].type == in) // input only
         prot = 0x3; // read only
       else
         prot = 0x5; // write only
@@ -1735,7 +1735,8 @@ int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, const unsigned *
 {
   int i;
   unsigned n_idxs_10;
-  int n_data, type;
+  int n_data;
+  ElemType type;
   size_t size;
 
   n_data = task->n_data;
@@ -1757,19 +1758,19 @@ int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, const unsigned *
         size = task->data_desc[i].size;
 
         switch(type) {
-          case 0: // input and output
+          case inout: // input and output
             task->data_desc[i].ptr_l3_v =
               (void *)pulp_l3_malloc(pulp, size, (unsigned *)&(task->data_desc[i].ptr_l3_p));
             memcpy((void *)(task->data_desc[i].ptr_l3_v), (void *)(task->data_desc[i].ptr), size);
             break;
 
-          case 1: // input only
+          case in: // input only
             task->data_desc[i].ptr_l3_v =
               (void *)pulp_l3_malloc(pulp, size, (unsigned *)&(task->data_desc[i].ptr_l3_p));
             memcpy((void *)(task->data_desc[i].ptr_l3_v), (void *)(task->data_desc[i].ptr), size);
             break;
 
-          case 2: // output only
+          case out: // output only
             task->data_desc[i].ptr_l3_v =
               (void *)pulp_l3_malloc(pulp, size, (unsigned *)&(task->data_desc[i].ptr_l3_p));
             break;
@@ -1797,7 +1798,8 @@ int pulp_offload_l3_copy_raw_in(PulpDev *pulp, const TaskDesc *task, const unsig
 {
   int i;
   unsigned n_idxs_10;
-  int n_data, type;
+  int n_data;
+  ElemType type;
   size_t size;
 
   n_data = task->n_data;
@@ -1819,18 +1821,18 @@ int pulp_offload_l3_copy_raw_in(PulpDev *pulp, const TaskDesc *task, const unsig
         size = task->data_desc[i].size;
 
         switch(type) {
-          case 0: // input and output
+          case inout: // input and output
             memcpy((void *)(task->data_desc[i].ptr), (void *)(task->data_desc[i].ptr_l3_v), size);
             pulp_l3_free(pulp, (unsigned)(task->data_desc[i].ptr_l3_v),
               (unsigned)(task->data_desc[i].ptr_l3_p));
             break;
 
-          case 1: // input only
+          case in: // input only
             pulp_l3_free(pulp, (unsigned)(task->data_desc[i].ptr_l3_v),
               (unsigned)(task->data_desc[i].ptr_l3_p));
             break;
 
-          case 2: // output only
+          case out: // output only
             memcpy((void *)(task->data_desc[i].ptr), (void *)(task->data_desc[i].ptr_l3_v), size);
             pulp_l3_free(pulp, (unsigned)(task->data_desc[i].ptr_l3_v),
               (unsigned)(task->data_desc[i].ptr_l3_p));
@@ -1879,7 +1881,7 @@ int pulp_offload_pass_desc(PulpDev *pulp, const TaskDesc *task, const unsigned *
     }
     else {
       // pass data element by value and of type input/output or input
-      if ( (task->data_desc[i].type == 0) || (task->data_desc[i].type == 1) ) {
+      if ( (task->data_desc[i].type == inout) || (task->data_desc[i].type == in) ) {
         pulp_mbox_write(pulp, *(unsigned *)(task->data_desc[i].ptr));
         if (DEBUG_LEVEL > 2)
           printf("Element %d: wrote val  %#x to mbox.\n",i,*(unsigned*)(task->data_desc[i].ptr));
@@ -1914,7 +1916,7 @@ int pulp_offload_get_desc(const PulpDev *pulp, TaskDesc *task, const unsigned **
   for (i=0; i<n_data; i++) {
     // check if argument has been passed by value and is of type output or input and output
     if ( ((*data_idxs)[i] == 0)
-          && ((task->data_desc[i].type == 0) || (task->data_desc[i].type == 2)) ) {
+          && ((task->data_desc[i].type == inout) || (task->data_desc[i].type == out)) ) {
       n_values++;
     }
   }
@@ -1931,7 +1933,7 @@ int pulp_offload_get_desc(const PulpDev *pulp, TaskDesc *task, const unsigned **
   for (i=0; i<n_data; i++) {
     // check if argument has been passed by value and is of type input/output or output
     if ( ((*data_idxs)[i] == 0)
-          && ((task->data_desc[i].type == 0) || (task->data_desc[i].type == 2)) ) {
+          && ((task->data_desc[i].type == inout) || (task->data_desc[i].type == out)) ) {
       // read from buffer
       *(unsigned *)(task->data_desc[i].ptr) = buffer[j];
       j++;
@@ -2115,7 +2117,8 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
   pulp_offload_get_data_idxs(task, &data_idxs);
 
   int i;
-  int data_size, data_ptr, data_type;
+  int data_size, data_ptr;
+  ElemType data_type;
 
   *ftask = (TaskDesc *)malloc(sizeof(TaskDesc));
   if ( *ftask == NULL ) {
@@ -2174,28 +2177,24 @@ int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
       // ptr to store the physical address in contiguous L3 used by PULP
 
       switch(data_type) {
-      case 0:
-        //INOUT
+      case inout:
         (*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
                                                           (unsigned *)&((*ftask)->data_desc[i].ptr));
         memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
         break;
 
-      case 1:
-        //IN
+      case in:
         (*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
                                                           (unsigned *)&((*ftask)->data_desc[i].ptr));
         memcpy((void *)(*ftask)->data_desc[i].type, (void *)data_ptr ,data_size);
         break;
 
-      case 2:
-        //OUT
+      case out:
         (*ftask)->data_desc[i].type = (int)pulp_l3_malloc(pulp, data_size,
                                                           (unsigned *)&((*ftask)->data_desc[i].ptr));
         break;
 
       default:
-        //NONE
         break;
       }
     }
@@ -2249,29 +2248,25 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
     //if not passed by value
     if (data_idxs[i] > 0) {
 
-      // we are abusing type of ftask->dta_desc  to store the virtual host address and
+      // we are abusing type of ftask->data_desc to store the virtual host address and
       // ptr to store the physical address in contiguous L3 used by PULP
 
       switch(task->data_desc[i].type) {
-      case 0:
-        //INOUT
+      case inout:
         memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
         pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
         break;
 
-      case 1:
-        //IN
+      case in:
         pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
         break;
 
-      case 2:
-        //OUT
+      case out:
         memcpy((void *)task->data_desc[i].ptr, (void *)(*ftask)->data_desc[i].type, task->data_desc[i].size);
         pulp_l3_free(pulp, (unsigned)(*ftask)->data_desc[i].type, (unsigned)(*ftask)->data_desc[i].ptr);
         break;
 
       default:
-        //NONE
         break;
       }
     }
@@ -2340,7 +2335,7 @@ int pulp_rab_req_striped_mchan_img(const PulpDev *pulp, unsigned char prot, unsi
 
   // generate the rab_stripes table
   elements[0].id    = 0;   // not used right now
-  elements[0].type  = 1;   // for now in
+  elements[0].type  = in;  // for now in
   elements[0].flags = 0x7;
   elements[0].max_stripe_size_b = stripe_size_b;
   elements[0].n_stripes = n_stripes_per_channel * n_channels;
