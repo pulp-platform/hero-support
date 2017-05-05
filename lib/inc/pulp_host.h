@@ -130,14 +130,14 @@
 
 #define MBOX_GET_REQ_TYPE(type, request) \
   ( type = BF_GET(request, 32-MBOX_N_BITS_REQ_TYPE, \
-         MBOX_N_BITS_REQ_TYPE) << (32-MBOX_N_BITS_REQ_TYPE) )  
+         MBOX_N_BITS_REQ_TYPE) << (32-MBOX_N_BITS_REQ_TYPE) )
 #define MBOX_GET_N_WORDS(n_words, request) \
   ( n_words = BF_GET(request, 0, 32-MBOX_N_BITS_REQ_TYPE) )
 
 #define RAB_UPDATE_GET_ELEM(elem_mask, request) \
   ( elem_mask = BF_GET(request, 0, RAB_UPDATE_N_BITS_ELEM) )
 #define RAB_UPDATE_GET_TYPE(type, request) \
-  ( type = BF_GET(request, RAB_UPDATE_N_BITS_ELEM, RAB_UPDATE_N_BITS_TYPE) )  
+  ( type = BF_GET(request, RAB_UPDATE_N_BITS_ELEM, RAB_UPDATE_N_BITS_TYPE) )
 
 // #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 // #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -168,7 +168,7 @@
 
 #define PULP_IOCTL_DMAC_XFER _IOW(PULP_IOCTL_MAGIC,0xB6,unsigned) // ptr
 
-#define PULP_IOCTL_INFO_PASS _IOW(PULP_IOCTL_MAGIC,0xB7,unsigned) // ptr  
+#define PULP_IOCTL_INFO_PASS _IOW(PULP_IOCTL_MAGIC,0xB7,unsigned) // ptr
 
 #define PULP_IOCTL_RAB_SOC_MH_ENA _IOW(PULP_IOCTL_MAGIC,0xB8,unsigned) // value
 #define PULP_IOCTL_RAB_SOC_MH_DIS _IO(PULP_IOCTL_MAGIC,0xB9)
@@ -254,7 +254,7 @@
  */
 // PLATFORM is exported in sourceme.sh and passed by the Makefile
 
-#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX 
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
 
   #define N_CLUSTERS       1
 
@@ -284,7 +284,7 @@
 
     // L3
     #define L3_MEM_SIZE_MB 8
-    
+
     // Cluster + RAB config
     #define N_CORES          2
     #define L2_MEM_SIZE_KB  64
@@ -295,9 +295,9 @@
     static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 0};
 
     #define RAB_MH_FIFO_DEPTH 8
-  
+
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
-  
+
     #define RAB_AX_LOG_EN         1
 
     #define RAB_AR_LOG_BASE_ADDR  0x51100000
@@ -314,7 +314,7 @@
 
     // L3
     #define L3_MEM_SIZE_MB 128
-    
+
     // Cluster + RAB config
     #define N_CORES                  8
     #define L2_MEM_SIZE_KB         256
@@ -325,7 +325,7 @@
     static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
 
     #define RAB_MH_FIFO_DEPTH 64
-  
+
   #endif // PLATFORM
 
 #else // JUNO
@@ -419,16 +419,16 @@
 #define MBOX_BASE_ADDR 0x1A121000  // Interface 1
 
 /*
- * Host memory map 
+ * Host memory map
  */
 #if PLATFORM != JUNO
   #define PULP_H_BASE_ADDR   0x40000000 // Address at which the host sees PULP
   #define L1_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR)
-  #define L2_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + L2_MEM_BASE_ADDR)  
+  #define L2_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + L2_MEM_BASE_ADDR)
   #define L3_MEM_H_BASE_ADDR \
     (DRAM_SIZE_MB - L3_MEM_SIZE_MB)*1024*1024 // = 0x38000000 for 1024 MB DRAM and 128 MB L3
   #define MBOX_H_BASE_ADDR \
-    (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + MBOX_BASE_ADDR - MBOX_SIZE_B) // Interface 0 
+    (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + MBOX_BASE_ADDR - MBOX_SIZE_B) // Interface 0
   #define SOC_PERIPHERALS_H_BASE_ADDR \
     (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + SOC_PERIPHERALS_BASE_ADDR)
 
@@ -439,7 +439,7 @@
   #define L3_MEM_H_BASE_ADDR         (0xA00000000LL - L3_MEM_SIZE_B)
   #define MBOX_H_BASE_ADDR            0x65120000 // Interface 0
   #define SOC_PERIPHERALS_H_BASE_ADDR 0x65100000
-  
+
 #endif // PLATFORM != JUNO
 
 #define CLUSTERS_H_BASE_ADDR (PULP_H_BASE_ADDR)
@@ -453,18 +453,18 @@
 #define RAB_MAX_DATE_MH  (RAB_MAX_DATE-2)
 
 // cluster peripherals, offsets compared to TCDM/clusters address
-#define TIMER_START_OFFSET_B       (TIMER_H_OFFSET_B + 0x00) 
-#define TIMER_STOP_OFFSET_B        (TIMER_H_OFFSET_B + 0x04) 
-#define TIMER_RESET_OFFSET_B       (TIMER_H_OFFSET_B + 0x08) 
-#define TIMER_GET_TIME_LO_OFFSET_B (TIMER_H_OFFSET_B + 0x0c) 
-#define TIMER_GET_TIME_HI_OFFSET_B (TIMER_H_OFFSET_B + 0x10) 
+#define TIMER_START_OFFSET_B       (TIMER_H_OFFSET_B + 0x00)
+#define TIMER_STOP_OFFSET_B        (TIMER_H_OFFSET_B + 0x04)
+#define TIMER_RESET_OFFSET_B       (TIMER_H_OFFSET_B + 0x08)
+#define TIMER_GET_TIME_LO_OFFSET_B (TIMER_H_OFFSET_B + 0x0c)
+#define TIMER_GET_TIME_HI_OFFSET_B (TIMER_H_OFFSET_B + 0x10)
 
 #define PE_TIMER_OFFSET_B         0x40
 
 /*
  * Type Definitions
  */
-// Stripe request structs - user space 
+// Stripe request structs - user space
 typedef struct {
   unsigned short id;
   unsigned short n_elements;
