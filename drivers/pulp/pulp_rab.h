@@ -20,6 +20,15 @@
 #define RAB_L2_N_ENTRIES_PER_SET 32
 #define RAB_L2_N_SETS            32
 
+#define RAB_FLAGS_DRV_CONST   0b00000001 // const mapping
+#define RAB_FLAGS_DRV_STRIPED 0b00000010 // striped mapping
+#define RAB_FLAGS_DRV_EVERY   0b00000100 // set up in every RAB mapping
+
+#define RAB_FLAGS_HW_EN       0b00000001 // enable mapping
+#define RAB_FLAGS_HW_READ     0b00000010 // enable read
+#define RAB_FLAGS_HW_WRITE    0b00000100 // enable write
+#define RAB_FLAGS_HW_CC       0b00001000 // cache-coherent mapping
+
 // type definitions
 typedef struct {
   // management
@@ -31,12 +40,12 @@ typedef struct {
   unsigned char rab_port;  
   unsigned      rab_mapping;
   unsigned      rab_slice;
-  unsigned char flags_drv; // bit 0 = const mapping, bit 1 = striped mapping, bit 2 = set up in every RAB mapping
+  unsigned char flags_drv; // FLAGS_DRV
   // actual config
   unsigned      addr_start;
   unsigned      addr_end;
   unsigned long addr_offset;
-  unsigned char flags_hw;  // bits 0-2: prot, bit 3: use_acp
+  unsigned char flags_hw;  // FLAGS_HW
 } RabSliceReq;
 
 // Stripe request structs - kernel space 
@@ -54,7 +63,7 @@ typedef struct {
 typedef struct {
   // management
   unsigned char id;
-  unsigned char type;                // 0 = inout, 1 = in, 2 = out
+  ElemType      type;
   unsigned char page_ptr_idx;
   unsigned      n_slices;            // number of slices allocated
   unsigned      n_slices_per_stripe; // number of slices used per stripe
@@ -165,10 +174,12 @@ long pulp_rab_req(void *rab_config, unsigned long arg);
 long pulp_rab_req_striped(void *rab_config, unsigned long arg);
 void pulp_rab_free(void *rab_config, unsigned long arg);
 void pulp_rab_free_striped(void *rab_config, unsigned long arg);
-int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices);
-int pulp_rab_soc_mh_dis(void* const rab_config);
+
 void pulp_rab_update(unsigned update_req);
 void pulp_rab_switch(void);
+
+int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices);
+int pulp_rab_soc_mh_dis(void* const rab_config);
 
 long     pulp_rab_mh_ena(void *rab_config, unsigned long arg);
 void     pulp_rab_mh_dis(void);
