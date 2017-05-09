@@ -122,7 +122,7 @@ int pulp_rab_req(const PulpDev *pulp, unsigned addr_start, unsigned size_b,
 void pulp_rab_free(const PulpDev *pulp, unsigned char date_cur);
 
 int pulp_rab_req_striped(const PulpDev *pulp, const TaskDesc *task,
-                         unsigned **pass_type, int n_elements);
+                         ElemPassType **pass_type, int n_elements);
 void pulp_rab_free_striped(const PulpDev *pulp);
 
 int  pulp_rab_mh_enable(const PulpDev *pulp, unsigned char use_acp, unsigned char rab_mh_lvl);
@@ -150,12 +150,12 @@ int  pulp_exe_wait(const PulpDev *pulp, int timeout_s);
 unsigned int pulp_l3_malloc(PulpDev *pulp, size_t size_b, unsigned *p_addr);
 void         pulp_l3_free(PulpDev *pulp, unsigned v_addr, unsigned p_addr);
 
-int pulp_offload_get_pass_type(const TaskDesc *task, unsigned **pass_type);
-int pulp_offload_rab_setup(const PulpDev *pulp, const TaskDesc *task, unsigned **pass_type, int n_ref);
-int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, const unsigned **pass_type);
-int pulp_offload_l3_copy_raw_in(PulpDev *pulp, const TaskDesc *task, const unsigned **pass_type);
-int pulp_offload_pass_desc(PulpDev *pulp, const TaskDesc *task, const unsigned **pass_type);
-int pulp_offload_get_desc(const PulpDev *pulp, TaskDesc *task, const unsigned **pass_type);
+int pulp_offload_get_pass_type(const TaskDesc *task, ElemPassType **pass_type);
+int pulp_offload_rab_setup(const PulpDev *pulp, const TaskDesc *task, ElemPassType **pass_type, int n_ref);
+int pulp_offload_l3_copy_raw_out(PulpDev *pulp, TaskDesc *task, const ElemPassType **pass_type);
+int pulp_offload_l3_copy_raw_in(PulpDev *pulp, const TaskDesc *task, const ElemPassType **pass_type);
+int pulp_offload_pass_desc(PulpDev *pulp, const TaskDesc *task, const ElemPassType **pass_type);
+int pulp_offload_get_desc(const PulpDev *pulp, TaskDesc *task, const ElemPassType **pass_type);
 
 int pulp_offload_out(PulpDev *pulp, TaskDesc *task);
 int pulp_offload_in(PulpDev *pulp, TaskDesc *task);
