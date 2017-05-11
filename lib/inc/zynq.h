@@ -8,10 +8,9 @@
 #define ZC706 2
 #define MINI_ITX 3
 
-//#define BOARD ZC706
 #ifndef BOARD
-#define BOARD MINI_ITX
-#endif // BOARD
+  #error "Define BOARD!"
+#endif
 
 /*
  * Board specific settings
