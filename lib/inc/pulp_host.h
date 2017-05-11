@@ -283,7 +283,7 @@
     #define CLKING_INPUT_FREQ_MHZ 50
 
     // L3
-    #define L3_MEM_SIZE_MB 8
+    #define L3_MEM_SIZE_MB 16
 
     // Cluster + RAB config
     #define N_CORES          2
