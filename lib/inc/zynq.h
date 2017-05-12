@@ -5,29 +5,25 @@
  * Board selection
  */
 #define ZEDBOARD 1
-#define ZC706 2
+#define ZC706    2
 #define MINI_ITX 3
 
-#ifndef BOARD
-  #error "Define BOARD!"
+#ifndef PLATFORM
+  #error "Define PLATFORM!"
 #endif
 
 /*
  * Board specific settings
  */
-#if BOARD == ZEDBOARD
-
-#define ARM_CLK_FREQ_MHZ 667
-//#define ARM_CLK_FREQ_MHZ 300
-#define DRAM_SIZE_MB 512
-
-#elif BOARD == ZC706 || BOARD == MINI_ITX
-
-//#define ARM_CLK_FREQ_MHZ 667
-#define ARM_CLK_FREQ_MHZ 333 // for benchmarking
-#define DRAM_SIZE_MB 1024
- 
-#endif // BOARD
+#if PLATFORM == ZEDBOARD
+  #define ARM_CLK_FREQ_MHZ 667
+  //#define ARM_CLK_FREQ_MHZ 300
+  #define DRAM_SIZE_MB 512
+#elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  //#define ARM_CLK_FREQ_MHZ 667
+  #define ARM_CLK_FREQ_MHZ 333 // for benchmarking
+  #define DRAM_SIZE_MB 1024
+#endif // PLATFORM
 
 /*
  * Independent parameters
