@@ -1,3 +1,17 @@
+/* Copyright (C) 2017 ETH Zurich, University of Bologna
+ * All rights reserved.
+ *
+ * This code is under development and not yet released to the public.
+ * Until it is released, the code is under the copyright of ETH Zurich and
+ * the University of Bologna, and may contain confidential and/or unpublished 
+ * work. Any reuse/redistribution is strictly forbidden without written
+ * permission from ETH Zurich.
+ *
+ * Bug fixes and contributions will eventually be released under the
+ * SolderPad open hardware license in the context of the PULP platform
+ * (http://www.pulp-platform.org), under the copyright of ETH Zurich and the
+ * University of Bologna.
+ */
 /* --=========================================================================--
  *
  * ██████╗ ██╗   ██╗██╗     ██████╗     ██████╗ ██████╗ ██╗██╗   ██╗███████╗██████╗ 
@@ -14,24 +28,6 @@
  *           RAB management for shared virtual memory between host and PULP
  * 
  * --=========================================================================--
- *
- * Copyright (C) 2016 Pirmin Vogel <vogelpi@iis.ee.ethz.ch>
- * 
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 1, or (at
- * your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA
- * 02110-1301 USA.
- * 
  */
 
 /***************************************************************************************/
