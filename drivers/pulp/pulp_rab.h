@@ -203,7 +203,7 @@ void     pulp_rab_handle_miss(unsigned unused);
 #if RAB_AX_LOG_EN == 1
   int  pulp_rab_ax_log_init(void);
   void pulp_rab_ax_log_free(void);
-  void pulp_rab_ax_log_read(unsigned pulp_cluster_select, unsigned clear);
+  void pulp_rab_ax_log_read(unsigned gpio_value, unsigned clear);
   void pulp_rab_ax_log_print(void);
   void pulp_rab_ax_log_to_user(unsigned long arg);
 #endif

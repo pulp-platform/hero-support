@@ -3074,26 +3074,20 @@ void pulp_rab_handle_miss(unsigned unused)
   /**
    * Read out the RAB AX Logger to the kernel buffers rab_ax_log_buf.
    *
-   * @pulp_cluster_select: cluster select flag, needed to set fetch enable
-   *                       correctly when manipulating the GPIO register
-   * @clear:               specifies whether the logger should be cleared
-   *                       (PULP is clock-gated during this procedure)
+   * @gpio_value: initial gpio value, needed to set e.g. fetch enable
+   *              correctly when manipulating the GPIO register
+   * @clear:      specifies whether the logger should be cleared
+   *              (PULP is clock-gated during this procedure)
    */
-  void pulp_rab_ax_log_read(unsigned pulp_cluster_select, unsigned clear)
+  void pulp_rab_ax_log_read(unsigned gpio_value, unsigned clear)
   {
     unsigned i;
     unsigned addr, ts, meta;
 
-    unsigned gpio, gpio_init;
+    unsigned gpio;
     unsigned status, ready;
 
-    gpio = 0;
-    BIT_SET(gpio,BF_MASK_GEN(GPIO_RST_N,1));
-    BIT_SET(gpio,BF_MASK_GEN(GPIO_CLK_EN,1));
-    BIT_SET(gpio,BF_MASK_GEN(GPIO_RAB_AX_LOG_EN,1));
-    BF_SET(gpio, pulp_cluster_select, 0, N_CLUSTERS);
-
-    gpio_init = gpio;
+    gpio = gpio_value;
 
     // disable clocks
     if (clear) {
@@ -3191,7 +3185,7 @@ void pulp_rab_handle_miss(unsigned unused)
       iowrite32(gpio, (void *)((unsigned long)(pulp->gpio)+0x8));
 
       // continue
-      iowrite32(gpio_init, (void *)((unsigned long)(pulp->gpio)+0x8));
+      iowrite32(gpio_value, (void *)((unsigned long)(pulp->gpio)+0x8));
     }
 
     return;

@@ -597,11 +597,23 @@ int pulp_init(PulpDev *pulp)
   // reset the l3_offset pointer
   pulp->l3_offset = 0;
 
+  // disable host interrupt for RAB misses if PULP handles them
+  #ifdef RAB_MH_ON_SOC
+    pulp->intr_rab_miss_dis = 1;
+  #else
+    pulp->intr_rab_miss_dis = 0;
+  #endif
+
   // pass information to driver
   unsigned gpio_val = 0;
   gpio_val |= pulp->cluster_sel & CLUSTER_MASK;
+
+  // Enable RAB AX Loggers.
   if (pulp->rab_ax_log_en == 1)
     gpio_val |= 1 << GPIO_RAB_AX_LOG_EN;
+  // Disable RAB miss interrupt to host.
+  if (pulp->intr_rab_miss_dis == 1)
+    gpio_val |= 1 << GPIO_INTR_RAB_MISS_DIS;
 
   ioctl(pulp->fd,PULP_IOCTL_INFO_PASS,(unsigned *)&gpio_val);
 
@@ -1379,6 +1391,9 @@ void pulp_exe_start(PulpDev *pulp)
   // Enable RAB AX Loggers.
   if (pulp->rab_ax_log_en == 1)
     gpio_val |= 1 << GPIO_RAB_AX_LOG_EN;
+  // Disable RAB miss interrupt to host.
+  if (pulp->intr_rab_miss_dis == 1)
+    gpio_val |= 1 << GPIO_INTR_RAB_MISS_DIS;
 
   printf("Starting program execution.\n");
   pulp_write32(pulp->gpio.v_addr,0x8,'b',gpio_val);
@@ -1397,6 +1412,9 @@ void pulp_exe_stop(PulpDev *pulp)
   // Enable RAB AX Loggers.
   if (pulp->rab_ax_log_en == 1)
     gpio_val |= 1 << GPIO_RAB_AX_LOG_EN;
+  // Disable RAB miss interrupt to host.
+  if (pulp->intr_rab_miss_dis == 1)
+    gpio_val |= 1 << GPIO_INTR_RAB_MISS_DIS;
 
   printf("Stopping program execution.\n");
   pulp_write32(pulp->gpio.v_addr,0x8,'b',gpio_val);

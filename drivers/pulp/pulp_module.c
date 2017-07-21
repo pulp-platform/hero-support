@@ -191,8 +191,8 @@ static PulpDev my_dev;
 
 static struct class *my_class; 
 
-static unsigned pulp_cluster_select = 0;
-static unsigned pulp_rab_ax_log_en  = 0;
+static unsigned pulp_rab_ax_log_en = 0;
+static unsigned gpio_value         = 0xC0000000;
 
 // for DMA
 static struct dma_chan * pulp_dma_chan[2];
@@ -906,7 +906,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 
       #if RAB_AX_LOG_EN == 1
         if (pulp_rab_ax_log_en)
-          pulp_rab_ax_log_read(pulp_cluster_select, 1);
+          pulp_rab_ax_log_read(gpio_value, 1);
       #endif
 
     }
@@ -917,7 +917,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
         printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
           (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
         
-        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+        pulp_rab_ax_log_read(gpio_value, 1);
       }
     #endif   
   
@@ -936,7 +936,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 
     #if RAB_AX_LOG_EN == 1
       if (pulp_rab_ax_log_en)
-        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+        pulp_rab_ax_log_read(gpio_value, 1);
     #endif
    
     // interrupt is just a pulse, no need to clear it
@@ -976,7 +976,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
            //( RAB_CFG_LOG_FULL_IRQ == irq ) ) {
         strcpy(rab_interrupt_type,"AX log full");
           
-        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+        pulp_rab_ax_log_read(gpio_value, 1);
       }
     #endif 
 
@@ -1102,7 +1102,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     #if RAB_AX_LOG_EN == 1
       if (pulp_rab_ax_log_en) {
-        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+        pulp_rab_ax_log_read(gpio_value, 1);
         pulp_rab_ax_log_print();
       }
     #endif
@@ -1125,7 +1125,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     #if RAB_AX_LOG_EN == 1
       if (pulp_rab_ax_log_en) {
-        pulp_rab_ax_log_read(pulp_cluster_select, 1);
+        pulp_rab_ax_log_read(gpio_value, 1);
         pulp_rab_ax_log_print();
       }
     #endif
@@ -1299,7 +1299,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space
 
-    // get gpio value from slice data from user space - arg already checked above
+    // get gpio value from user space - arg already checked above
     byte = 0;
     n_bytes_left = 1*sizeof(unsigned); 
     n_bytes_read = n_bytes_left;    
@@ -1310,8 +1310,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
       n_bytes_read = n_bytes_left;
     }
 
-    pulp_cluster_select = request[0] & CLUSTER_MASK;
-    pulp_rab_ax_log_en = (request[0] >> GPIO_RAB_AX_LOG_EN) & 0x1;
+    gpio_value = request[0];
+
+    pulp_rab_ax_log_en = (gpio_value >> GPIO_RAB_AX_LOG_EN) & 0x1;
 
     break;
 

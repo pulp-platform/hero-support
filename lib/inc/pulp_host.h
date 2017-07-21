@@ -413,6 +413,8 @@
 #define GPIO_EOC_0              0
 #define GPIO_EOC_N  (N_CLUSTERS-1) // max 15
 
+#define GPIO_INTR_RAB_MISS_DIS 17
+
 #define GPIO_RST_N          31
 #define GPIO_CLK_EN         30
 #define GPIO_RAB_CFG_LOG_RDY 27
