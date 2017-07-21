@@ -239,8 +239,8 @@
 
 #define CLUSTER_PERIPHERALS_OFFSET_B 0x200000
 #define BBMUX_CLKGATE_OFFSET_B       0x800
-#define GP_1_OFFSET_B                0x364
-#define GP_2_OFFSET_B                0x368
+#define EU_SW_EVENTS_OFFSET_B        0x600
+#define RAB_WAKEUP_OFFSET_B          0x0
 
 #define SOC_PERIPHERALS_SIZE_B 0x50000
 

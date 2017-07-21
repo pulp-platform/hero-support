@@ -2893,15 +2893,15 @@ void pulp_rab_handle_miss(unsigned unused)
     // pulp_rab_mapping_print(pulp->rab_config,0xAAAA);
 
     if (!axuser) {
-      // wake up the sleeping PE
-      iowrite32(BIT_N_SET(id_pe),
-                (void *)((unsigned long)(pulp->clusters) + CLUSTER_SIZE_B*id_cluster
-                         + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B));
+      iowrite32(BIT_N_SET(id_pe), (void *)((unsigned long)(pulp->clusters)
+        + CLUSTER_SIZE_B*id_cluster + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B
+        + EU_SW_EVENTS_OFFSET_B + RAB_WAKEUP_OFFSET_B));
     }
 
     /*
-     * printk(KERN_INFO "WAKEUP: value = %#x, address = %#x\n",BIT_N_SET(id_pe), CLUSTER_SIZE_B*id_cluster \
-     *        + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B + GP_2_OFFSET_B );
+     * printk(KERN_INFO "WAKEUP: value = %#x, address = %#x\n",BIT_N_SET(id_pe), \
+     *   CLUSTER_SIZE_B*id_cluster + CLUSTER_PERIPHERALS_OFFSET_B + BBMUX_CLKGATE_OFFSET_B
+     *   + EU_SW_EVENTS_OFFSET_B + RAB_WAKEUP_OFFSET_B);
      */
 
 #ifdef PROFILE_RAB_MH
