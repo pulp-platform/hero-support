@@ -1,3 +1,17 @@
+/* Copyright (C) 2017 ETH Zurich, University of Bologna
+ * All rights reserved.
+ *
+ * This code is under development and not yet released to the public.
+ * Until it is released, the code is under the copyright of ETH Zurich and
+ * the University of Bologna, and may contain confidential and/or unpublished 
+ * work. Any reuse/redistribution is strictly forbidden without written
+ * permission from ETH Zurich.
+ *
+ * Bug fixes and contributions will eventually be released under the
+ * SolderPad open hardware license in the context of the PULP platform
+ * (http://www.pulp-platform.org), under the copyright of ETH Zurich and the
+ * University of Bologna.
+ */
 #ifndef ZYNQ_H___
 #define ZYNQ_H___
 
@@ -5,30 +19,25 @@
  * Board selection
  */
 #define ZEDBOARD 1
-#define ZC706 2
+#define ZC706    2
 #define MINI_ITX 3
 
-//#define BOARD ZC706
-#ifndef BOARD
-#define BOARD MINI_ITX
-#endif // BOARD
+#ifndef PLATFORM
+  #error "Define PLATFORM!"
+#endif
 
 /*
  * Board specific settings
  */
-#if BOARD == ZEDBOARD
-
-#define ARM_CLK_FREQ_MHZ 667
-//#define ARM_CLK_FREQ_MHZ 300
-#define DRAM_SIZE_MB 512
-
-#elif BOARD == ZC706 || BOARD == MINI_ITX
-
-//#define ARM_CLK_FREQ_MHZ 667
-#define ARM_CLK_FREQ_MHZ 333 // for benchmarking
-#define DRAM_SIZE_MB 1024
- 
-#endif // BOARD
+#if PLATFORM == ZEDBOARD
+  #define ARM_CLK_FREQ_MHZ 667
+  //#define ARM_CLK_FREQ_MHZ 300
+  #define DRAM_SIZE_MB 512
+#elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  //#define ARM_CLK_FREQ_MHZ 667
+  #define ARM_CLK_FREQ_MHZ 333 // for benchmarking
+  #define DRAM_SIZE_MB 1024
+#endif // PLATFORM
 
 /*
  * Independent parameters

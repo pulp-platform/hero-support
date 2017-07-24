@@ -1,3 +1,17 @@
+/* Copyright (C) 2017 ETH Zurich, University of Bologna
+ * All rights reserved.
+ *
+ * This code is under development and not yet released to the public.
+ * Until it is released, the code is under the copyright of ETH Zurich and
+ * the University of Bologna, and may contain confidential and/or unpublished 
+ * work. Any reuse/redistribution is strictly forbidden without written
+ * permission from ETH Zurich.
+ *
+ * Bug fixes and contributions will eventually be released under the
+ * SolderPad open hardware license in the context of the PULP platform
+ * (http://www.pulp-platform.org), under the copyright of ETH Zurich and the
+ * University of Bologna.
+ */
 #include "zynq_pmm_user.h"
 
 /*
@@ -23,12 +37,12 @@ void zynq_pmm_close(int *fd){
  * Read the device
  */
 int zynq_pmm_read(int *fd, char *buffer){
-  
+
   int n_char, n_char_left, ret;
   ret = 1;
   n_char = 0;
   n_char_left = ZYNQ_PMM_PROC_N_CHARS_MAX;
-  
+
   // read until eof
   while (ret > 0 ) {
     ret = read(*fd, &buffer[n_char],n_char_left*sizeof(char));
@@ -39,7 +53,7 @@ int zynq_pmm_read(int *fd, char *buffer){
     n_char += ret;
     n_char_left -= ret;
   }
-  
+
   return 0;
 }
 
@@ -47,24 +61,24 @@ int zynq_pmm_read(int *fd, char *buffer){
  * Parse the string
  */
 int zynq_pmm_parse(char *buffer, long long *counters, int accumulate){
- 
+
   int i,j;
   int long number;
   char temp_buffer[100];
   char identifier[10];
   char *position;
-  
+
   // reset accumulation counters
   if (accumulate == -1) {
     for (i=0; i<N_ARM_CORES+1; i++) {
       for (j=0;j<2;j++) {
-	counters[i*2+j] = 0;
+        counters[i*2+j] = 0;
       }
     }
     return 0;
-  } 
+  }
 
-  // Copy 
+  // Copy
   for (i=0; i<N_ARM_CORES+1; i++) {
     // search for identifiers
     if (i < N_ARM_CORES)
@@ -78,7 +92,7 @@ int zynq_pmm_parse(char *buffer, long long *counters, int accumulate){
     }
     strncpy(temp_buffer,position,100);
 
-    // extract the individual numbers 
+    // extract the individual numbers
     position = strtok(temp_buffer,"|");
     if (position == NULL) {
       printf("Error: '|' not found in remaining string.\n");
@@ -88,20 +102,20 @@ int zynq_pmm_parse(char *buffer, long long *counters, int accumulate){
       // next
       position = strtok(NULL,"|");
       if (position == NULL) {
-	printf("Error: '|' not found in remaining string.\n");
-	return -1;
+        printf("Error: '|' not found in remaining string.\n");
+        return -1;
       }
       // remove leading white spaces
       while (isspace(*position))
-	position++;
+        position++;
         //*position++;
       // convert to number
       number = strtol(position,NULL,10);
       // save
-      if (!accumulate) 
-	counters[i*2+j] = (long long)number;
+      if (!accumulate)
+        counters[i*2+j] = (long long)number;
       else //(accumulate == 1)
-	counters[i*2+j] += (long long)number;
+        counters[i*2+j] += (long long)number;
     }
 
     // check for WARNING = overflow
@@ -120,7 +134,7 @@ int zynq_pmm_parse(char *buffer, long long *counters, int accumulate){
 int zynq_pmm_compute_rates(double *miss_rates, long long *counters) {
   int i;
   double n_misses, n_accesses;
-  
+
   // local miss rates
   for (i=0;i<N_ARM_CORES+1;i++) {
     n_misses = (double)counters[i*2];
@@ -130,13 +144,13 @@ int zynq_pmm_compute_rates(double *miss_rates, long long *counters) {
     else
       miss_rates[i] = n_misses/n_accesses;
   }
-  
+
   // global miss rates
   // mr1_x * mr2
   for (i=0;i<N_ARM_CORES;i++) {
     miss_rates[N_ARM_CORES+1+i] = miss_rates[N_ARM_CORES] * miss_rates[i];
   }
-  
+
   // total global miss rate
   // mr2 * (m1_0 + m1_1)/(a1_0 + a1_1)
   n_misses = 0;
@@ -163,38 +177,19 @@ int zynq_pmm_print_rates(double *miss_rates) {
   printf("Local cache miss rates:\n");
   for (i=0;i<N_ARM_CORES;i++) {
     printf("L1 Core %i: %.3f \n",i,miss_rates[i]);
-  } 
+  }
   printf("L2: %.3f \n",miss_rates[N_ARM_CORES]);
 
   printf("-----\n");
   printf("Global cache miss rates:\n");
   for (i=0;i<N_ARM_CORES;i++) {
     printf("Core %i: %.3f \n",i,miss_rates[N_ARM_CORES+1+i]);
-  } 
+  }
   printf("-----\n");
   printf("Total global cache miss rate: %.3f\n",miss_rates[(N_ARM_CORES+1)*2-1]);
   printf("-----\n");
 
   return 0;
-}
-
-/*
- * Reset the clock cycle counter in the PMU
- */
-inline void arm_clk_cntr_reset(){
-  // enable clock counter divider (by 64), reset & enable clock counter, PMCR register 
-  asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
-}
-
-/*
- * Read the clock cycle counter in the PMU
- */
-inline unsigned arm_clk_cntr_read(){
-  unsigned value;
-  // Read the counter value, PMCCNTR register
-  asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(value) : );
-  
-  return value;
 }
 
 /*
@@ -208,51 +203,51 @@ unsigned arm_clk_cntr_get_overhead(){
 
   // Reset the counter
   arm_clk_cntr_reset();
-  
+
   start = arm_clk_cntr_read();
 
   // Read the counter n_trials times
   arm_clk_cntr_read();
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  
-  arm_clk_cntr_read(); 
   arm_clk_cntr_read();
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-  arm_clk_cntr_read(); 
-   
-  acc = arm_clk_cntr_read(); 
-  
+  arm_clk_cntr_read();
+
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+  arm_clk_cntr_read();
+
+  acc = arm_clk_cntr_read();
+
   // Compute the overhead
-  overhead = (unsigned)((float)((acc - start)*ARM_PMU_CLK_DIV) / (float)n_trials); 
-  
+  overhead = (unsigned)((float)((acc - start)*ARM_PMU_CLK_DIV) / (float)n_trials);
+
   return overhead;
 }

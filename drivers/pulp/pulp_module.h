@@ -1,3 +1,17 @@
+/* Copyright (C) 2017 ETH Zurich, University of Bologna
+ * All rights reserved.
+ *
+ * This code is under development and not yet released to the public.
+ * Until it is released, the code is under the copyright of ETH Zurich and
+ * the University of Bologna, and may contain confidential and/or unpublished 
+ * work. Any reuse/redistribution is strictly forbidden without written
+ * permission from ETH Zurich.
+ *
+ * Bug fixes and contributions will eventually be released under the
+ * SolderPad open hardware license in the context of the PULP platform
+ * (http://www.pulp-platform.org), under the copyright of ETH Zurich and the
+ * University of Bologna.
+ */
 #ifndef _PULP_MODULE_H_
 #define _PULP_MODULE_H_
 
@@ -56,6 +70,7 @@ typedef struct {
   #if RAB_AX_LOG_EN == 1
     void *rab_ar_log;
     void *rab_aw_log;
+    void *rab_cfg_log;
   #endif // RAB_AX_LOG_EN == 1
 } PulpDev;
 

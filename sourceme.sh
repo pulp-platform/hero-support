@@ -69,7 +69,7 @@ if [ "${PLATFORM}" -eq "4" ]; then
     export TUPLE="arm-linux-gnueabihf"
 
     # GCC version 4.9, 5.2
-    GCC_VERSION="4.9" 
+    GCC_VERSION="5.2" 
 
     # Set up PATH variable
     export PATH=${WORKSPACE_DIR}/cross/linaro_gcc_${GCC_VERSION}/aarch64-linux-gnu/bin/:${WORKSPACE_DIR}/cross/linaro_gcc_${GCC_VERSION}/arm-linux-gnueabihf/bin/:$PATH
