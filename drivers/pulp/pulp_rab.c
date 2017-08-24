@@ -874,7 +874,8 @@ int pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, cha
     BF_SET(data_v, tlb_entry->pfn_v, 4, 20); // Parameterise TODO.
     iowrite32(data_v, (void *)((unsigned long)rab_config+off_v));
 
-    off_p = (port+1)*0x4000 + set_num*RAB_L2_N_ENTRIES_PER_SET*4 + entry_num*4 + 1024*4 ; // PA RAM address. Parameterise TODO.
+    off_p = (port+1)*0x4000 + set_num*RAB_L2_N_ENTRIES_PER_SET*4 + entry_num*4
+      + RAB_L2_N_ENTRIES_PER_SET*RAB_L2_N_SETS*4 ; // PA RAM address
     data_p =  tlb_entry->pfn_p;
     iowrite32(data_p, (void *)((unsigned long)rab_config+off_p));
 
