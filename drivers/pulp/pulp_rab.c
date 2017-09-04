@@ -110,7 +110,12 @@ static unsigned rab_n_slices_reserved_for_host;
     static unsigned n_first_misses = 0;
     static unsigned n_misses       = 0;
   #endif
+#endif
 
+#ifdef PROFILE_RAB_MH_SIMPLE
+  static unsigned n_first_misses = 0;
+  static unsigned n_misses       = 0;
+  static unsigned n_schedule     = 0;
 #endif
 
 // }}}
@@ -150,6 +155,12 @@ int pulp_rab_init(PulpDev * pulp_ptr)
     err = pulp_rab_ax_log_init();
     if (err)
       return err;
+  #endif
+
+  #ifdef PROFILE_RAB_MH_SIMPLE
+    n_first_misses = 0;
+    n_misses       = 0;
+    n_schedule     = 0;
   #endif
 
   // prepare for profiling
@@ -215,6 +226,15 @@ int pulp_rab_release(void)
   }
 
   pulp_rab_free(pulp->rab_config, 0);
+
+  #ifdef PROFILE_RAB_MH_SIMPLE
+    printk(KERN_INFO "PROFILE_RAB_MH_SIMPLE: n_misses = %d, n_first_misses = %d, n_schedule = %d\n",
+      n_misses, n_first_misses, n_schedule);
+
+    n_first_misses = 0;
+    n_misses       = 0;
+    n_schedule     = 0;
+  #endif
 
   return 0;
 }
@@ -2649,6 +2669,10 @@ void pulp_rab_handle_miss(unsigned unused)
   if (DEBUG_LEVEL_RAB_MH > 1)
     printk(KERN_INFO "PULP: RAB miss handling routine started.\n");
 
+  #ifdef PROFILE_RAB_MH_SIMPLE
+    n_schedule++;
+  #endif
+
   // empty miss-handling FIFOs
   for (i=0; i<RAB_MH_FIFO_DEPTH; i++) {
     // read ID first for empty FIFO detection
@@ -2710,6 +2734,9 @@ void pulp_rab_handle_miss(unsigned unused)
 
       n_misses++;
     #endif
+    #ifdef PROFILE_RAB_MH_SIMPLE
+      n_misses++;
+    #endif
 
     // check if there has been a miss to the same page before
     handled = 0;
@@ -2742,6 +2769,9 @@ void pulp_rab_handle_miss(unsigned unused)
         // read the ARM clock counter
         asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
 
+        n_first_misses++;
+      #endif
+      #ifdef PROFILE_RAB_MH_SIMPLE
         n_first_misses++;
       #endif
 
