@@ -13,8 +13,8 @@ cp ${IMAGE_PATH}/image.ub ../sd_image/.
 cp ${IMAGE_PATH}/BOOT.BIN ../sd_image/.
 
 # Copy to SD card
-cp ../sd_image/* /media/TE0808_BOOT/.
+cp ../sd_image/* /run/media/${USER}/TE0808_BOOT/.
 
 # Unmount SD card
 sync
-umount /media/TE0808*
+umount /run/media/${USER}/TE0808*
