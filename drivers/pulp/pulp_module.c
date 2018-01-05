@@ -982,7 +982,8 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
 
     if ( (DEBUG_LEVEL_RAB_MH > 1) || 
          ( (RAB_MISS_IRQ == irq) && (0 == rab_mh) ) ||
-         ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) || 
+         ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) ||
+         ( RAB_MHR_FULL_IRQ == irq ) ||
          ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
          ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {// ||
          //( (RAB_CFG_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {

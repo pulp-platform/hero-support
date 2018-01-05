@@ -20,6 +20,7 @@
 #include <stdlib.h>     // free(), malloc()
 #include <sys/ioctl.h>  // ioctl()
 #include <time.h>       // struct tm, localtime(), time(), time_t
+#include <sys/stat.h>     // fstat()
 
 //printf("%s %d\n",__FILE__,__LINE__);
 
@@ -1348,27 +1349,54 @@ int pulp_load_bin(PulpDev *pulp, const char *name)
 
   printf("Loading binary file: %s\n",bin_name);
 
-  // read in binary
-  FILE *fp;
-  if((fp = fopen(bin_name, "r")) == NULL) {
+  // load the binary
+  int fd;
+  size_t size_b;
+  struct stat file_stats;
+  unsigned * bin;
+  unsigned status;
+
+  // open file and get size
+  fd = open(bin_name, O_RDONLY);
+  if (fd < 0) {
     printf("ERROR: Could not open PULP binary.\n");
     return -ENOENT;
   }
-  int sz, nsz;
-  unsigned *bin;
-  fseek(fp, 0L, SEEK_END);
-  sz = ftell(fp);
-  fseek(fp, 0L, SEEK_SET);
-  bin = (unsigned *) malloc(sz*sizeof(char));
-  if((nsz = fread(bin, sizeof(char), sz, fp)) != sz)
-    printf("ERROR: Red only %d bytes in binary.\n", nsz);
-  fclose(fp);
+  fstat(fd, &file_stats);
+  size_b = file_stats.st_size;
+
+  // memory map the binary, MAP_POPULATE makes sure there will be no page faults later on (DMA)
+  bin = (unsigned *)mmap(NULL, size_b, PROT_READ, MAP_SHARED | MAP_POPULATE, fd, 0);
+  if (bin  == MAP_FAILED) {
+    printf("MMAP failed for PULP binary.\n");
+    return -EIO;
+  }
 
   // write binary to L2
-  for (i=0; i<nsz/4; i++)
+  for (i=0; i<size_b/4; i++)
     pulp->l2_mem.v_addr[i] = bin[i];
 
+  if (DEBUG_LEVEL > 0) {
+    int j;
+    int n_failed = 0;
+    for (j=0; j<size_b/4; j++) {
+      if (pulp->l2_mem.v_addr[j] != bin[j]) {
+        n_failed++;
+      }
+    }
+    if (n_failed)
+      printf("WARNING: PULP binary not successfully copied to L2 memory. Failed for %i words.\n", n_failed);
+    else
+      printf("PULP binary successfully copied to L2 memory.\n");
+  }
+
   // cleanup
+  status = munmap(bin, size_b);
+  if (status) {
+    printf("MUNMAP failed for PULP binary.\n");
+  }
+  close(fd);
+
   if (append)
     free(bin_name);
 

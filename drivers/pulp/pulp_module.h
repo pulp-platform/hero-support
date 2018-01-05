@@ -36,6 +36,7 @@
 //#define PROFILE_DMA
 //#define PROFILE_RAB_STR
 //#define PROFILE_RAB_MH
+//#define PROFILE_RAB_MH_SIMPLE
 
 // macros
 #if PLATFORM == JUNO
