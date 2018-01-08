@@ -19,7 +19,7 @@
 #include <linux/dma-mapping.h>  /* dma_alloc_coherent(),dma_free_coherent() */
 #include <linux/completion.h>   /* For complete(), wait_for_completion_*() */
 #include <linux/mm.h>           /* vm_area_struct struct, page struct, PAGE_SHIFT, page_to_phys */
-#include <linux/pagemap.h>      /* page_cache_release() */
+#include <linux/pagemap.h>      /* page_put() */
 #include <linux/slab.h>         /* kmalloc() */
 
 #include "pulp_module.h"

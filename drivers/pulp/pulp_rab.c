@@ -477,7 +477,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
         // unlock
         if ( !PageReserved(pages_old[i]) )
           SetPageDirty(pages_old[i]);
-        page_cache_release(pages_old[i]);
+        put_page(pages_old[i]);
       }
     }
     // lower reference counter
@@ -1009,7 +1009,7 @@ int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int e
     // unlock
     if ( !PageReserved(page_old) )
       SetPageDirty(page_old);
-    page_cache_release(page_old);
+    put_page(page_old);
 
     // reset page_ptr
     l2.set[set_num].entry[entry_num].page_ptr = NULL;
@@ -2794,10 +2794,10 @@ void pulp_rab_handle_miss(unsigned unused)
       // try read/write mode first - fall back to read only
       write = 1;
       down_read(&user_task->mm->mmap_sem);
-      result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
+      result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
       if ( result == -EFAULT ) {
         write = 0;
-        result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
+        result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
       }
       up_read(&user_task->mm->mmap_sem);
       //current->mm = user_task->mm;

@@ -128,7 +128,7 @@ void pulp_dma_xfer_cleanup(DmaCleanup * pulp_dma_cleanup){
   for (i=0; i<n_pages; i++) {
     if (!PageReserved(pages[i]))
       SetPageDirty(pages[i]);
-    page_cache_release(pages[i]);
+    put_page(pages[i]);
   }
   
   // free pages struct pointer array

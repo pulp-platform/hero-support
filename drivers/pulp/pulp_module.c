@@ -42,7 +42,7 @@
 #include <linux/cdev.h>       /* cdev struct */
 #include <linux/fs.h>         /* file_operations struct */
 #include <linux/mm.h>         /* vm_area_struct struct, page struct, PAGE_SHIFT, page_to_phys */
-#include <linux/pagemap.h>    /* page_cache_release() */
+#include <linux/pagemap.h>    /* page_put() */
 #include <asm/cacheflush.h>   /* __cpuc_flush_dcache_area, outer_cache.flush_range */
 #include <asm/uaccess.h>      /* copy_to_user, copy_from_user, access_ok */
 #include <linux/time.h>       /* do_gettimeofday */

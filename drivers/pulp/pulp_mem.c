@@ -155,9 +155,7 @@ int pulp_mem_get_user_pages(struct page *** pages, unsigned addr_start, unsigned
   start = (unsigned long)(addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT));
 
   // get pointers to user-space buffers and lock them into memory
-  down_read(&current->mm->mmap_sem);
-  result = get_user_pages(current, current->mm, start, n_pages, write, 0, *pages, NULL);
-  up_read(&current->mm->mmap_sem);
+  result = get_user_pages_fast(start, (int)n_pages, (int)write, *pages);
   if (result != n_pages) {
     printk(KERN_WARNING "PULP - MEM: Could not get requested user-space virtual addresses.\n");
     printk(KERN_WARNING "Requested %d pages starting at v_addr %#x\n",n_pages,addr_start);
