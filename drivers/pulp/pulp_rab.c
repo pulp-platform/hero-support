@@ -2321,7 +2321,7 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
 
 static unsigned static_2nd_lvl_slices_are_supported(void)
 {
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     return 1;
   #else
     return 0;
@@ -2436,7 +2436,7 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
    *    of N depends on whether first- or second-level slices are mapped statically).
    */
   rab_n_slices_reserved_for_host = 1;
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     rab_n_slices_reserved_for_host += (static_2nd_lvl_slices ? RAB_N_STATIC_2ND_LEVEL_SLICES : 1);
   #else
     rab_n_slices_reserved_for_host += 1;

@@ -20,6 +20,7 @@
 #define ZC706    2
 #define MINI_ITX 3
 #define JUNO     4
+#define TE0808   5
 
 // from include/archi/pulp.h
 #define CHIP_BIGPULP         7
@@ -29,7 +30,7 @@
 #define PULP_CHIP_FAMILY CHIP_BIGPULP
 #if PLATFORM == ZEDBOARD
   #define PULP_CHIP CHIP_BIGPULP_Z_7020
-#elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
+#elif PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
   #define PULP_CHIP CHIP_BIGPULP_Z_7045
 #else // PLATFORM == JUNO
   #define PULP_CHIP CHIP_BIGPULP
@@ -342,7 +343,7 @@
 
   #endif // PLATFORM
 
-#else // JUNO
+#elif PLATFORM == JUNO
 
   #define N_CLUSTERS       4
 
@@ -376,6 +377,58 @@
   #define INTR_RAB_CFG_LOG_FULL  23
 
   #define PULP_DEFAULT_FREQ_MHZ 25
+  #define CLKING_INPUT_FREQ_MHZ 100
+
+  // L3
+  #define L3_MEM_SIZE_MB 128
+
+  // Cluster + RAB config
+  #define N_CORES          8
+  #define L2_MEM_SIZE_KB 256
+  #define L1_MEM_SIZE_KB 256
+  #define RAB_L1_N_SLICES_PORT_0   4
+  #define RAB_L1_N_SLICES_PORT_1  32
+  // Specify for each of the RAB_N_PORTS if L2 is active on that port: {Port 0, Port 1}.
+  static const unsigned RAB_L2_EN_ON_PORT[RAB_N_PORTS] = {0, 1};
+
+  #define RAB_MH_FIFO_DEPTH 64
+
+  #define RAB_N_STATIC_2ND_LEVEL_SLICES (1 << (32 - PGDIR_SHIFT))
+
+#else // TE0808
+
+  #define N_CLUSTERS       1
+
+  #define RAB_AX_LOG_EN    1
+
+  // PULP address map
+  #define H_GPIO_BASE_ADDR      0xAE000000
+  #define CLKING_BASE_ADDR      0xAE010000
+  #define RAB_CONFIG_BASE_ADDR  0xAE030000
+  #define INTR_REG_BASE_ADDR    0xAE050000
+  #define RAB_AR_LOG_BASE_ADDR  0xAE100000
+  #define RAB_AW_LOG_BASE_ADDR  0xAE200000
+  #define RAB_CFG_LOG_BASE_ADDR 0xAE300000
+
+  #define INTR_REG_SIZE_B       0x1000
+  #define RAB_AX_LOG_SIZE_B     0xC0000   // size of BRAM, 786 KiB = 64 Ki entries
+  #define RAB_CFG_LOG_SIZE_B    0x30000   // size of BRAM, 196 KiB = 16 Ki entries
+  #define RAB_AX_LOG_BUF_SIZE_B 0x6000000 // size of buffer in driver, 96 MiB = 8 Mi entries
+  #define RAB_AX_LOG_PRINT_FORMAT 0       // 0 = DEBUG, 1 = MATLAB
+
+  #define INTR_EOC_0              0
+  #define INTR_EOC_N   N_CLUSTERS-1 // max 15
+
+  #define INTR_MBOX              16
+  #define INTR_RAB_MISS          17
+  #define INTR_RAB_MULTI         18
+  #define INTR_RAB_PROT          19
+  #define INTR_RAB_MHR_FULL      20
+  #define INTR_RAB_AR_LOG_FULL   21
+  #define INTR_RAB_AW_LOG_FULL   22
+  #define INTR_RAB_CFG_LOG_FULL  23
+
+  #define PULP_DEFAULT_FREQ_MHZ 50
   #define CLKING_INPUT_FREQ_MHZ 100
 
   // L3
@@ -437,7 +490,7 @@
 /*
  * Host memory map
  */
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
   #define PULP_H_BASE_ADDR   0x40000000 // Address at which the host sees PULP
   #define L1_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR)
   #define L2_MEM_H_BASE_ADDR (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + L2_MEM_BASE_ADDR)
@@ -448,7 +501,7 @@
   #define SOC_PERIPHERALS_H_BASE_ADDR \
     (PULP_H_BASE_ADDR - PULP_BASE_REMOTE_ADDR + SOC_PERIPHERALS_BASE_ADDR)
 
-#else // PLATFORM == JUNO
+#elif PLATFORM == JUNO
   #define PULP_H_BASE_ADDR            0x60000000 // Address at which the host sees PULP
   #define L1_MEM_H_BASE_ADDR          PULP_H_BASE_ADDR
   #define L2_MEM_H_BASE_ADDR          0x67000000
@@ -456,7 +509,15 @@
   #define MBOX_H_BASE_ADDR            0x65120000 // Interface 0
   #define SOC_PERIPHERALS_H_BASE_ADDR 0x65100000
 
-#endif // PLATFORM != JUNO
+#else // PLATFORM == TE0808
+  #define PULP_H_BASE_ADDR            0xA0000000 // Address at which the host sees PULP
+  #define L1_MEM_H_BASE_ADDR          PULP_H_BASE_ADDR
+  #define L2_MEM_H_BASE_ADDR          0xA7000000
+  #define L3_MEM_H_BASE_ADDR         (0x80000000 - L3_MEM_SIZE_B)
+  #define MBOX_H_BASE_ADDR            0xA5120000 // Interface 0
+  #define SOC_PERIPHERALS_H_BASE_ADDR 0xA5100000
+
+#endif // PLATFORM
 
 #define CLUSTERS_H_BASE_ADDR (PULP_H_BASE_ADDR)
 #define TIMER_H_OFFSET_B     (TIMER_BASE_ADDR - PULP_BASE_ADDR)

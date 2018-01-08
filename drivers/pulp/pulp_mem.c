@@ -28,7 +28,7 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
   void * kaddr;
   unsigned size_b;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
   long unsigned int paddr;
 #endif
 
@@ -39,7 +39,7 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
   kaddr = kaddr + offset_start;
   size_b = offset_end - offset_start;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
 
   // clean L1 cache lines
   __cpuc_flush_dcache_area(kaddr,size_b);
@@ -52,12 +52,12 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
   // clean L2 cache lines
   outer_cache.flush_range(paddr,paddr+size_b);
 
-#else // PLATFORM == JUNO
+#else // PLATFORM
 
   // clean cache lines to the PoC
   __flush_dcache_area(kaddr,(size_t)size_b);
 
-#endif // PLATFORM != JUNO
+#endif // PLATFORM
 
   // destroy kernel-space mapping
   kunmap(page);
@@ -77,7 +77,7 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   void * kaddr;
   unsigned size_b;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
   long unsigned int paddr;
 #endif
 
@@ -88,7 +88,7 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   kaddr = kaddr + offset_start;
   size_b = offset_end - offset_start;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
 
   /* extract the physical address, the L2 cache maintenance functions
      work on physical addresses */
@@ -101,12 +101,12 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   // clean L1 cache lines (if lines are not dirty, just invalidate)
   __cpuc_flush_dcache_area(kaddr,size_b);
 
-#else // PLATFORM == JUNO
+#else // PLATFORM
 
   // clean cache lines to the PoC (if lines are not dirty, just invalidate)
   __flush_dcache_area(kaddr,(size_t)size_b);
 
-#endif
+#endif // PLATFORM
 
   // destroy kernel-space mapping
   kunmap(page);

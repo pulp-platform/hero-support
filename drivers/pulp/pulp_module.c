@@ -64,11 +64,11 @@
 #include "pulp_dma.h"
 #include "pulp_mbox.h" 
 
-#if PLATFORM == JUNO
+#if PLATFORM == JUNO || PLATFORM == TE0808
   #include <linux/platform_device.h> /* for device tree stuff*/
   #include <linux/device.h>
   #include <linux/of_device.h>
-  #include <asm/compat.h>                /* for compat_ioctl */
+  #include <asm/compat.h>            /* for compat_ioctl */
 #endif
 
 /***************************************************************************************/
@@ -79,8 +79,8 @@ MODULE_DESCRIPTION("PULPonFPGA driver");
 
 /***************************************************************************************/
 
-// Device Tree (for Juno) {{{
-#if PLATFORM == JUNO
+// Device Tree (for Juno and ZynqMP) {{{
+#if PLATFORM == JUNO || PLATFORM == TE0808
   /***********************************************************************************
    *
    * ██████╗ ███████╗██╗   ██╗██╗ ██████╗███████╗    ████████╗██████╗ ███████╗███████╗
@@ -118,7 +118,7 @@ MODULE_DESCRIPTION("PULPonFPGA driver");
     printk(KERN_ALERT "PULP: Probing device.\n");
 
     intr_reg_irq = platform_get_irq(pdev,0);
-    if (intr_reg_irq <= 0) {
+    if (intr_reg_irq < 0) {
       printk(KERN_WARNING "PULP: Could not allocate IRQ resource.\n");
       return -ENODEV;
     }
@@ -162,13 +162,13 @@ static long pulp_ioctl  (struct file *filp, unsigned int cmd, unsigned long arg)
   static long pulp_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 #endif
 
-#if PLATFORM == JUNO
-  static irqreturn_t pulp_isr        (int irq, void *ptr);
+#if PLATFORM == JUNO || PLATFORM == TE0808
+  static irqreturn_t pulp_isr     (int irq, void *ptr);
 #else
   static irqreturn_t pulp_isr_eoc (int irq, void *ptr);
   static irqreturn_t pulp_isr_mbox(int irq, void *ptr);
   static irqreturn_t pulp_isr_rab (int irq, void *ptr);
-#endif // PLATFORM == JUNO
+#endif // PLATFORM
 
 // }}}
 
@@ -216,7 +216,7 @@ static int __init pulp_init(void)
 {
   int err;
   unsigned gpio;
-  #if PLATFORM != JUNO
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     unsigned mpcore_icdicfr3, mpcore_icdicfr4;
   #endif
 
@@ -266,12 +266,12 @@ static int __init pulp_init(void)
     (long unsigned int) my_dev.mbox);
   pulp_mbox_init(my_dev.mbox);
 
-  #if PLATFORM == JUNO 
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     my_dev.intr_reg = ioremap_nocache(INTR_REG_BASE_ADDR,INTR_REG_SIZE_B);
     printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.intr_reg);
 
-  #else // PLATFORM != JUNO 
+  #else // PLATFORM
     my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
     printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.slcr);
@@ -297,7 +297,7 @@ static int __init pulp_init(void)
     // make sure to enable automatic flow control on PULP -> Host UART
     iowrite32(0x20,(void *)((unsigned long)my_dev.uart0+MODEM_CTRL_REG0_OFFSET_B));
 
-  #endif // PLATFORM == JUNO
+  #endif // PLATFORM
 
   #if RAB_AX_LOG_EN == 1
     my_dev.rab_ar_log = ioremap_nocache(RAB_AR_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
@@ -308,7 +308,7 @@ static int __init pulp_init(void)
     printk(KERN_INFO "PULP: RAB AW log mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.rab_aw_log);
 
-    #if PLATFORM == JUNO
+    #if PLATFORM == JUNO //|| PLATFORM == TE0808
       my_dev.rab_cfg_log = ioremap_nocache(RAB_CFG_LOG_BASE_ADDR, RAB_CFG_LOG_SIZE_B);
       printk(KERN_INFO "PULP: RAB CFG log mapped to virtual kernel space @ %#lx.\n",
         (long unsigned int) my_dev.rab_cfg_log);
@@ -366,7 +366,7 @@ static int __init pulp_init(void)
    *
    *********************/
 
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
 
     // register the device to get the interrupt index
     err = platform_driver_register(&pulp_platform_driver);
@@ -382,7 +382,7 @@ static int __init pulp_init(void)
       goto fail_request_irq;
     }
 
-  #else // PLATFORM != JUNO
+  #else // PLATFORM
     // configure interrupt sensitivities: Zynq-7000 Technical Reference Manual, Section 7.2.4
     // read configuration
     mpcore_icdicfr3=ioread32((void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
@@ -462,7 +462,7 @@ static int __init pulp_init(void)
         goto fail_request_irq;
       }
 
-      #if PLATFORM == JUNO
+      #if PLATFORM == JUNO // || PLATFORM == TE0808
         // RAB CFG Log full
         err = request_irq(RAB_CFG_LOG_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
         if (err) {
@@ -472,14 +472,14 @@ static int __init pulp_init(void)
       #endif
     #endif // RAB_AX_LOG_EN == 1
 
-  #endif // PLATFORM != JUNO
+  #endif // PLATFORM
 
   /************************************
    *
    *  request DMA channels
    *
    ************************************/
-  #if PLATFORM != JUNO
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     err = pulp_dma_chan_req(&pulp_dma_chan[0],0);
     if (err) {
       printk(KERN_WARNING "PULP: Error requesting DMA channel.\n");
@@ -490,7 +490,7 @@ static int __init pulp_init(void)
       printk(KERN_WARNING "PULP: Error requesting DMA channel.\n");
       goto fail_request_dma;
     }
-  #endif // PLATFORM != JUNO
+  #endif // PLATFORM
 
   /************************************
    *
@@ -510,15 +510,15 @@ static int __init pulp_init(void)
    * error handling
    */
   fail_register_device:
-    #if PLATFORM != JUNO
+    #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
       pulp_dma_chan_clean(pulp_dma_chan[1]);
       pulp_dma_chan_clean(pulp_dma_chan[0]);
   fail_request_dma:
-    #endif // PLATFORM != JUNO
-    #if PLATFORM == JUNO
+    #endif // PLATFORM
+    #if PLATFORM == JUNO || PLATFORM == TE0808
       free_irq(intr_reg_irq,NULL);
       platform_driver_unregister(&pulp_platform_driver);
-    #else // PLATFORM != JUNO
+    #else // PLATFORM
       free_irq(END_OF_COMPUTATION_IRQ,NULL);
       free_irq(MBOX_IRQ,NULL);
       free_irq(RAB_MISS_IRQ,NULL);
@@ -528,9 +528,11 @@ static int __init pulp_init(void)
       #if RAB_AX_LOG_EN == 1
         free_irq(RAB_AR_LOG_FULL_IRQ,NULL);
         free_irq(RAB_AW_LOG_FULL_IRQ,NULL);
-        //free_irq(RAB_CFG_LOG_FULL_IRQ,NULL);
+        #if PLATFORM == JUNO
+        free_irq(RAB_CFG_LOG_FULL_IRQ,NULL);
+        #endif
       #endif
-    #endif // PLATFORM == JUNO
+    #endif // PLATFORM
   fail_request_irq:
     #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
       pulp_rab_prof_free();
@@ -541,17 +543,17 @@ static int __init pulp_init(void)
       pulp_rab_ax_log_free();
       iounmap(my_dev.rab_ar_log);
       iounmap(my_dev.rab_aw_log);
-      #if PLATFORM == JUNO
+      #if PLATFORM == JUNO //|| PLATFORM == TE0808
         iounmap(my_dev.rab_cfg_log);
       #endif
     #endif // RAB_AX_LOG_EN == 1
-    #if PLATFORM == JUNO
+    #if PLATFORM == JUNO || PLATFORM == TE0808
       iounmap(my_dev.intr_reg);
-    #else // PLATFORM != JUNO
+    #else // PLATFORM
       iounmap(my_dev.slcr);
       iounmap(my_dev.mpcore);
       iounmap(my_dev.uart0);
-    #endif // PLATFORM == JUNO
+    #endif // PLATFORM
     iounmap(my_dev.gpio);
     iounmap(my_dev.clusters);
     iounmap(my_dev.soc_periph);
@@ -586,10 +588,10 @@ static void __exit pulp_exit(void)
 
   printk(KERN_ALERT "PULP: Unloading device driver.\n");
   // undo __init pulp_init
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     free_irq(intr_reg_irq,NULL);
     platform_driver_unregister(&pulp_platform_driver);
-  #else // PLATFORM != JUNO
+  #else // PLATFORM
     pulp_dma_chan_clean(pulp_dma_chan[1]);
     pulp_dma_chan_clean(pulp_dma_chan[0]);
     free_irq(END_OF_COMPUTATION_IRQ,NULL);
@@ -601,9 +603,11 @@ static void __exit pulp_exit(void)
     #if RAB_AX_LOG_EN == 1
       free_irq(RAB_AR_LOG_FULL_IRQ,NULL);
       free_irq(RAB_AW_LOG_FULL_IRQ,NULL);
-      //free_irq(RAB_CFG_LOG_FULL_IRQ,NULL);
+      #if PLATFORM == JUNO
+      free_irq(RAB_CFG_LOG_FULL_IRQ,NULL);
+      #endif
     #endif 
-  #endif // PLATFORM == JUNO
+  #endif // PLATFORM
   #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
     pulp_rab_prof_free();
   #endif
@@ -613,17 +617,17 @@ static void __exit pulp_exit(void)
     pulp_rab_ax_log_free();
     iounmap(my_dev.rab_ar_log);
     iounmap(my_dev.rab_aw_log);
-    #if PLATFORM == JUNO
+    #if PLATFORM == JUNO //|| PLATFORM == TE0808
       iounmap(my_dev.rab_cfg_log);
     #endif
   #endif // RAB_AX_LOG_EN == 1
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     iounmap(my_dev.intr_reg);
-  #else // PLATFORM != JUNO
+  #else // PLATFORM
     iounmap(my_dev.slcr);
     iounmap(my_dev.mpcore);
     iounmap(my_dev.uart0);
-  #endif // PLATFORM == JUNO
+  #endif // PLATFORM
   iounmap(my_dev.gpio);
   iounmap(my_dev.clusters);
   iounmap(my_dev.soc_periph);
@@ -779,7 +783,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
     size_b = RAB_CONFIG_SIZE_B;
     strcpy(type,"RAB config");
   }
-  #if PLATFORM != JUNO
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     // Zynq System
     else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
                     + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B)) {
@@ -800,7 +804,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
       size_b = MPCORE_SIZE_B;
       strcpy(type,"Zynq MPCore");
     }
-  #endif // PLATFORM != JUNO
+  #endif // PLATFORM
   else {
     printk(KERN_INFO "PULP: Invalid VMA offset for mmap.\n");
     return -EINVAL;
@@ -848,7 +852,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
  * ╚═╝╚══════╝╚═╝  ╚═╝
  *
  ***********************************************************************************/
-#if PLATFORM == JUNO
+#if PLATFORM == JUNO || PLATFORM == TE0808
   irqreturn_t pulp_isr(int irq, void *ptr)
   {
     unsigned long intr_reg_value;
@@ -924,7 +928,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
     return IRQ_HANDLED;
   }
 
-#else // PLATFORM != JUNO
+#else // PLATFORM
   irqreturn_t pulp_isr_eoc(int irq, void *ptr)
   { 
     struct timeval time;
@@ -1008,7 +1012,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
     return IRQ_HANDLED;
   }
 
-#endif // PLATFORM == JUNO
+#endif // PLATFORM
 // }}}
 
 // ioctl {{{

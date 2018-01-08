@@ -19,8 +19,10 @@
 
 #include "pulp_host.h"    /* macros, struct definitions */
 
-#if PLATFORM == JUNO
+#if   PLATFORM == JUNO
   #include "juno.h"
+#elif PLATFORM == TE0808
+  #include "zynqmp.h"
 #else
   #include "zynq.h"
 #endif
@@ -39,7 +41,7 @@
 //#define PROFILE_RAB_MH_SIMPLE
 
 // macros
-#if PLATFORM == JUNO
+#if PLATFORM == JUNO || PLATFORM == TE0808
   #define IOWRITE_L(value, addr) ( iowrite64(value, addr) )
   #define IOREAD_L(addr)         ( ioread64(addr)         )
 #else
@@ -61,13 +63,13 @@ typedef struct {
   void *clusters;
   void *l3_mem;
   void *l2_mem;
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     void *intr_reg;
   #else
     void *slcr;
     void *mpcore;
     void *uart0;
-  #endif // PLATFORM == JUNO
+  #endif // PLATFORM
   #if RAB_AX_LOG_EN == 1
     void *rab_ar_log;
     void *rab_aw_log;
