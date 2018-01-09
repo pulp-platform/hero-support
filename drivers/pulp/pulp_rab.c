@@ -2273,10 +2273,10 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
   static int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
       const pgd_t* const pgd)
   {
-    unsigned      i_pmd;
-    unsigned long pmd_pa;
-    unsigned      pmd_va;
-    unsigned      ret;
+    unsigned i_pmd;
+    unsigned pmd_va;
+    unsigned ret;
+    pmd_t    pmd_pa;
 
     pmd_va = PGD_BASE_ADDR;
     for (i_pmd = 0; i_pmd < RAB_N_STATIC_2ND_LEVEL_SLICES; ++i_pmd) {
@@ -2288,14 +2288,14 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
 
       pmd_va = req->addr_end + 1;
 
-      pmd_pa = (unsigned long)(*(pgd + pgd_index(PGDIR_SIZE * i_pmd)));
+      pmd_pa.pmd = (pmdval_t)(pgd->pgd + pgd_index(PGDIR_SIZE * i_pmd));
 
       if (pmd_none(pmd_pa) || pmd_bad(pmd_pa))
         continue;
 
-      pmd_pa &= PAGE_MASK;
+      pmd_pa.pmd &= PAGE_MASK;
 
-      req->addr_offset = pmd_pa;
+      req->addr_offset = pmd_pa.pmd;
 
       ret = pulp_rab_slice_get(req);
       if (ret != 0) {
