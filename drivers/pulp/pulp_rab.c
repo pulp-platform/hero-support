@@ -2269,7 +2269,7 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
   return 0;
 }
 
-#if PLATFORM == JUNO
+#if PLATFORM == JUNO || PLATFORM == TE0808
   static int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
       const pgd_t* const pgd)
   {
@@ -2453,7 +2453,7 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
    * hierarchy in memory.
    */
   rab_soc_mh_is_ena = 1;
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     if (static_2nd_lvl_slices)
       retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
     else
