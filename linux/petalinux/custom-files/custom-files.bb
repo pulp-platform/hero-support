@@ -31,6 +31,9 @@ do_install() {
              install -d ${D}/etc/rcS.d
              install -m 0755 ${S}/etc/rcS.d/S45password ${D}/etc/rcS.d
 
+             install -d ${D}/etc/rc5.d
+             install -m 0755 ${S}/etc/rc5.d/S25time     ${D}/etc/rc5.d
+
              install -d ${D}/etc/ssh
              install -m 0644 ${S}/etc/ssh/ssh_host_dsa_key         ${D}/etc/ssh
              install -m 0644 ${S}/etc/ssh/ssh_host_dsa_key.pub     ${D}/etc/ssh
@@ -51,10 +54,12 @@ do_install() {
              install -m 0644 ${S}/home/root/.ssh/known_hosts     ${D}/home/root/.ssh
 
              install -m 0755 ${S}/mount_nfs.sh ${D}
+             install -m 0755 ${S}/sourceme.sh  ${D}
 }
 
 FILES_${PN} += "/etc/dropbear/dropbear_rsa_host_key \
             /etc/rcS.d/S45password \
+            /etc/rc5.d/S25time \
             /etc/ssh/ssh_host_dsa_key \
             /etc/ssh/ssh_host_dsa_key.pub \
             /etc/ssh/ssh_host_ecdsa_key \
@@ -68,4 +73,5 @@ FILES_${PN} += "/etc/dropbear/dropbear_rsa_host_key \
             /home/root/sourceme.sh \
             /home/root/.ssh/authorized_keys \
             /home/root/.ssh/known_hosts \
-            /mount_nfs.sh "
+            /mount_nfs.sh \
+            /sourceme.sh "
