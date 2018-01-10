@@ -297,7 +297,7 @@ int pulp_mmap(PulpDev *pulp)
     printf("RAB config memory mapped to virtual user space at %p.\n",pulp->rab_config.v_addr);
   }
 
-#if PLATFORM != JUNO // ZYNQ
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   // SLCR
   offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
     + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B; // start of SLCR
@@ -344,7 +344,7 @@ int pulp_munmap(PulpDev *pulp)
 
   // undo the memory mappings
   printf("Undo the memory mappings.\n");
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   status = munmap(pulp->mpcore.v_addr,pulp->mpcore.size);
   if (status) {
     printf("MUNMAP failed for MPCore.\n");
@@ -514,9 +514,11 @@ int pulp_clking_measure_freq(PulpDev *pulp)
   unsigned seconds = 1;
   unsigned limit = 0;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
    limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*1.61)*seconds);
-#else
+#elif PLATFORM == TE0808
+   limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*2.0125)*seconds);
+#else // PLATFORM == JUNO
    limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*1.61)*seconds);
 #endif
 
@@ -526,10 +528,14 @@ int pulp_clking_measure_freq(PulpDev *pulp)
   volatile unsigned k;
   int mes_freq_mhz;
 
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   if( access("/dev/ZYNQ_PMM", F_OK ) != -1 )
     zynq_pmm = 1;
   else
     zynq_pmm = 0;
+#else
+  zynq_pmm = 0;
+#endif
 
   // start clock counters
   if (zynq_pmm) {
@@ -563,12 +569,16 @@ int pulp_clking_measure_freq(PulpDev *pulp)
   }
   pulp_clk_counter = pulp_read32(pulp->clusters.v_addr,TIMER_GET_TIME_LO_OFFSET_B,'b');
 
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   if (zynq_pmm) {
     mes_freq_mhz = (int)((float)pulp_clk_counter/((float)(arm_clk_counter*ARM_PMU_CLK_DIV)/ARM_CLK_FREQ_MHZ));
   }
   else {
     mes_freq_mhz = (int)((float)pulp_clk_counter/seconds/1000000);
   }
+#else
+  mes_freq_mhz = (int)((float)pulp_clk_counter/seconds/1000000);
+#endif
 
   return mes_freq_mhz;
 }
@@ -594,6 +604,10 @@ int pulp_init(PulpDev *pulp)
 
   // enable mbox interrupts
   pulp_write32(pulp->mbox.v_addr,MBOX_IE_OFFSET_B,'b',0x6);
+
+  // check
+  if (DEBUG_LEVEL > 0)
+    printf("Mailbox interrupt enable register = %#x\n", pulp_read32(pulp->mbox.v_addr,MBOX_IE_OFFSET_B,'b'));
 
   // reset the l3_offset pointer
   pulp->l3_offset = 0;
@@ -1241,7 +1255,7 @@ int pulp_omp_offload_task(PulpDev *pulp, TaskDesc *task) {
 void pulp_reset(PulpDev *pulp, unsigned full)
 {
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   unsigned slcr_value;
 
   // FPGA reset control register
@@ -1281,7 +1295,7 @@ void pulp_reset(PulpDev *pulp, unsigned full)
 
     printf("%s %d\n",__FILE__,__LINE__);
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   }
   // temporary fix: global clk enable
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);

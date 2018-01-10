@@ -27,8 +27,15 @@
 
 #include <errno.h>
 
-#include "zynq.h"
 #include "pulp_host.h"
+
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  #include "zynq.h"
+#elif PLATFORM == TE0808
+  #include "zynqmp.h"
+#else // PLATFORM == JUNO
+  #include "juno.h"
+#endif // PLATFORM
 
 // type definitions
 typedef struct {
