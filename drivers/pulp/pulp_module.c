@@ -24,7 +24,7 @@
  * 
  * Author: Pirmin Vogel - vogelpi@iis.ee.ethz.ch
  * 
- * Purpose : Linux kernel-level driver for PULPonFPGA
+ * Purpose : Linux kernel-level driver for bigPULP
  *           RAB management for shared virtual memory between host and PULP
  * 
  * --=========================================================================--
@@ -75,7 +75,7 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Pirmin Vogel");
-MODULE_DESCRIPTION("PULPonFPGA driver");
+MODULE_DESCRIPTION("PULP driver");
 
 /***************************************************************************************/
 
@@ -106,7 +106,7 @@ MODULE_DESCRIPTION("PULPonFPGA driver");
   // connect to the device tree
   static struct of_device_id pulp_of_match[] = {
     {
-      .compatible = "pulp,pulpjuno",
+      .compatible = "pulp,bigpulp",
     }, { /* sentinel */}
   };
   
