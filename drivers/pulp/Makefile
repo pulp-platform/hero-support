@@ -15,15 +15,10 @@ ccflags-y += -I${PULP_INC_DIR1} -I${PULP_INC_DIR2}
 ccflags-y += -DPLATFORM=${PLATFORM}
 
 ifeq ($(KERNEL_ARCH),arm64)
-	# JUNO and ZynqMP require cache.o from kernel directory
-	pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o cache.o
+	# JUNO and ZynqMP require the stripped down pulp_cache.S
+	pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o pulp_cache.o
 else
 	pulp-objs := pulp_module.o pulp_mem.o pulp_rab.o pulp_dma.o pulp_mbox.o
-endif
-
-ifeq ($(KERNEL_ARCH),arm64)
-	# JUNO and ZynqMP require cache.o from kernel directory
-	COPY := ${shell cp ${KERNEL_DIR}/arch/arm64/mm/cache.o cache.o_shipped}
 endif
 
 all: modules

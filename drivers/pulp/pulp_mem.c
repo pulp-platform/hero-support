@@ -12,6 +12,8 @@
  * (http://www.pulp-platform.org), under the copyright of ETH Zurich and the
  * University of Bologna.
  */
+#include <asm/cacheflush.h>  /* __cpuc_flush_dcache_area, outer_cache.flush_range */
+
 #include "pulp_mem.h"
 
 /**

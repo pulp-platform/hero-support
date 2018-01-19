@@ -20,7 +20,6 @@
 #include <linux/slab.h>      /* kmalloc */
 #include <linux/mm.h>        /* vm_area_struct struct, page struct, PAGE_SHIFT, page_to_phys */
 #include <linux/highmem.h>   /* kmap, kunmap */
-#include <asm/cacheflush.h>  /* __cpuc_flush_dcache_area, outer_cache.flush_range */
 
 #include "pulp_module.h"
 
