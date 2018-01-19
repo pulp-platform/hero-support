@@ -13,6 +13,7 @@ PULP_INC_DIR2 := ${shell echo ${PULP_INC_DIR2}}
 ccflags-y := -I${ARM_INC_DIR1}
 ccflags-y += -I${PULP_INC_DIR1} -I${PULP_INC_DIR2}
 ccflags-y += -DPLATFORM=${PLATFORM}
+ccflags-y += -O2
 
 ifeq ($(KERNEL_ARCH),arm64)
 	# JUNO and ZynqMP require the stripped down pulp_cache.S
