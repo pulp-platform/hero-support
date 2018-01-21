@@ -1181,7 +1181,7 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
 }
 
 /**
- * Setup a DMA transfer using the Zynq PS DMA engine
+ * Setup a DMA transfer using the Host DMA engine
  *
  * @pulp      : pointer to the PulpDev structure
  * @addr_l3   : virtual address in host's L3
@@ -1210,7 +1210,7 @@ int pulp_dma_xfer(const PulpDev *pulp,
   request[2] = size_b;
 
   // make the request
-  ioctl(pulp->fd,PULP_IOCTL_DMAC_XFER,request);
+  ioctl(pulp->fd,PULP_IOCTL_DMA_XFER_ASYNC,request);
 
   return 0;
 }

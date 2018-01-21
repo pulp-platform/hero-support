@@ -1141,8 +1141,12 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     break;
 
-  // DMAC_XFER {{{
-  case PULP_IOCTL_DMAC_XFER: // setup a transfer using the PL330 DMAC inside Zynq
+  // DMA_XFER {{{
+  case PULP_IOCTL_DMA_XFER_SYNC:
+    printk(KERN_WARNING "PULP - DMA: IOCTL call not implemented.\n");
+    break;
+
+  case PULP_IOCTL_DMA_XFER_ASYNC: // setup a transfer using the host DMA engine
   
     // get transfer data from user space - arg already checked above
     byte = 0;
@@ -1280,18 +1284,18 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif
       
     break;
+
+  case PULP_IOCTL_DMA_XFER_WAIT:
+    printk(KERN_WARNING "PULP - DMA: IOCTL call not implemented.\n");
+    break;
   // }}}
 
   case PULP_IOCTL_RAB_MH_ENA:
-
     retval = pulp_rab_mh_ena(my_dev.rab_config, arg);
-
     break;
 
   case PULP_IOCTL_RAB_MH_DIS:
-   
     pulp_rab_mh_dis();
-
     break;
 
   case PULP_IOCTL_RAB_SOC_MH_ENA:
