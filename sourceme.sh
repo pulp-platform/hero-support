@@ -37,7 +37,7 @@ if [ "${PLATFORM}" -eq "4" ]; then
 
     # Linaro variables
     export LINARO_RELEASE=16.03
-    export OE_RELEASE=15.09
+    export OE_RELEASE=16.03
     export MANIFEST=latest
     export TYPE=oe
 
