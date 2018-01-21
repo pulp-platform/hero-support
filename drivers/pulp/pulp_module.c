@@ -62,7 +62,8 @@
 #include "pulp_mem.h"
 #include "pulp_rab.h"
 #include "pulp_dma.h"
-#include "pulp_mbox.h" 
+#include "pulp_mbox.h"
+#include "pulp_smmu.h"
 
 #if PLATFORM == JUNO || PLATFORM == TE0808
   #include <linux/platform_device.h> /* for device tree stuff*/
@@ -78,6 +79,19 @@ MODULE_AUTHOR("Pirmin Vogel");
 MODULE_DESCRIPTION("PULP driver");
 
 /***************************************************************************************/
+
+
+// static variables {{{
+static PulpDev my_dev;
+static struct class *my_class;
+
+static unsigned pulp_rab_ax_log_en = 0;
+static unsigned gpio_value         = 0xC0000000;
+
+// for DMA
+static struct dma_chan * pulp_dma_chan[2];
+static DmaCleanup pulp_dma_cleanup[2];
+// }}}
 
 // Device Tree (for Juno and ZynqMP) {{{
 #if PLATFORM == JUNO || PLATFORM == TE0808
@@ -100,9 +114,6 @@ MODULE_DESCRIPTION("PULP driver");
    *
    ***********************************************************************************/                                                                                 
   
-  // static variables
-  static int intr_reg_irq; 
-
   // connect to the device tree
   static struct of_device_id pulp_of_match[] = {
     {
@@ -112,13 +123,85 @@ MODULE_DESCRIPTION("PULP driver");
   
   MODULE_DEVICE_TABLE(of, pulp_of_match);
 
+#if PLATFORM == TE0808
+
+  /**
+   * Compare device name with string.
+   *
+   * This function compares the name of a device with a string provided in data.
+   * To protect the system from faulty device trees, the comparison is aborted
+   * if a NULL pointer would have to be derefenced.
+   *
+   * @param   dev  Pointer to device struct of interest
+   * @param   data Pointer to name of interest.
+   *
+   * @return  non-zero on success, 0 if the name does not match the string.
+   */
+  static int compare_dev_name(struct device *dev, void *data)
+  {
+    const char *name = data;
+
+    // make sure to not dereference NULL pointers - in case we start with device zero
+    if      ( dev->of_node == NULL ) {
+      if (DEBUG_LEVEL_OF > 0)
+        printk(KERN_INFO "PULP: No of_node for:\n - dev %p\n", dev);
+      return 0;
+    }
+    else if ( dev->of_node->name == NULL ) {
+      if (DEBUG_LEVEL_OF > 0)
+        printk(KERN_INFO "PULP: No of_node->name for:\n - dev %p\n - of_node %p", dev, dev->of_node);
+      return 0;
+    }
+    else
+      return sysfs_streq(name, dev->of_node->name);
+  }
+
+  /**
+   * Find a device by name in the device tree.
+   *
+   * @param   name Name of the device to search for
+   * @param   dev  Pointer to struct device pointer to fill
+   *
+   * @return  0 on success, -ENXIO if the device cannot be found.
+   */
+  static int find_dev(const char * name, struct device ** dev)
+  {
+    // search the device on the platform bus using the custom compare function
+    *dev = bus_find_device(&platform_bus_type, NULL, (void *)name, compare_dev_name);
+    if (dev == NULL)
+      return -ENODEV;
+
+    return 0;
+  }
+#endif
+
   // method definition
   static int pulp_probe(struct platform_device *pdev)
   {
+    int err;
+
     printk(KERN_ALERT "PULP: Probing device.\n");
 
-    intr_reg_irq = platform_get_irq(pdev,0);
-    if (intr_reg_irq < 0) {
+#if PLATFORM == TE0808
+    // Get struct device pointer
+    err = find_dev("pulp", &my_dev.dt_dev_ptr);
+    if (err) {
+      printk(KERN_WARNING "PULP: Could not get device struct pointer.\n");
+      return -ENODEV;
+    }
+
+    if (DEBUG_LEVEL_OF > 0) {
+      printk(KERN_INFO "PULP: &(pdev->dev)      = %p\n", &(pdev->dev));
+      printk(KERN_INFO "PULP: my_dev.dt_dev_ptr = %p\n", my_dev.dt_dev_ptr);
+    }
+#endif
+
+    // store device struct pointer
+    my_dev.dt_dev_ptr = &(pdev->dev);
+
+    // IRQ
+    my_dev.intr_reg_irq = platform_get_irq(pdev,0);
+    if (my_dev.intr_reg_irq <= 0) {
       printk(KERN_WARNING "PULP: Could not allocate IRQ resource.\n");
       return -ENODEV;
     }
@@ -184,19 +267,6 @@ struct file_operations pulp_fops = {
   .compat_ioctl = pulp_compat_ioctl,
 #endif
 };
-// }}}
-
-// static variables {{{
-static PulpDev my_dev;
-
-static struct class *my_class; 
-
-static unsigned pulp_rab_ax_log_en = 0;
-static unsigned gpio_value         = 0xC0000000;
-
-// for DMA
-static struct dma_chan * pulp_dma_chan[2];
-static DmaCleanup pulp_dma_cleanup[2];
 // }}}
 
 // methods definitions
@@ -266,12 +336,24 @@ static int __init pulp_init(void)
     (long unsigned int) my_dev.mbox);
   pulp_mbox_init(my_dev.mbox);
 
+  #if PLATFORM == TE0808
+    my_dev.smmu = ioremap_nocache(SMMU_BASE_ADDR, SMMU_SIZE_B);
+    printk(KERN_INFO "PULP: SMMU mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.smmu);
+    err = pulp_smmu_init(&my_dev);
+    if (err) {
+      printk(KERN_WARNING "PULP: Could not initialize SMMU.\n");
+      goto fail_smmu_init;
+    }
+  #endif // PLATFORM
+
   #if PLATFORM == JUNO || PLATFORM == TE0808
     my_dev.intr_reg = ioremap_nocache(INTR_REG_BASE_ADDR,INTR_REG_SIZE_B);
     printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.intr_reg);
+  #endif // PLATFORM
 
-  #else // PLATFORM
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
     printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.slcr);
@@ -296,7 +378,6 @@ static int __init pulp_init(void)
 
     // make sure to enable automatic flow control on PULP -> Host UART
     iowrite32(0x20,(void *)((unsigned long)my_dev.uart0+MODEM_CTRL_REG0_OFFSET_B));
-
   #endif // PLATFORM
 
   #if RAB_AX_LOG_EN == 1
@@ -365,7 +446,6 @@ static int __init pulp_init(void)
    * interrupts
    *
    *********************/
-
   #if PLATFORM == JUNO || PLATFORM == TE0808
 
     // register the device to get the interrupt index
@@ -376,7 +456,7 @@ static int __init pulp_init(void)
     }
 
     // request interrupts and install top-half handler
-    err = request_irq(intr_reg_irq, pulp_isr, 0 , "PULP", NULL);
+    err = request_irq(my_dev.intr_reg_irq, pulp_isr, 0 , "PULP", NULL);
     if (err) {
       printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
       goto fail_request_irq;
@@ -516,9 +596,10 @@ static int __init pulp_init(void)
   fail_request_dma:
     #endif // PLATFORM
     #if PLATFORM == JUNO || PLATFORM == TE0808
-      free_irq(intr_reg_irq,NULL);
+      free_irq(my_dev.intr_reg_irq,NULL);
       platform_driver_unregister(&pulp_platform_driver);
-    #else // PLATFORM
+    #endif // PLATFORM
+    #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
       free_irq(END_OF_COMPUTATION_IRQ,NULL);
       free_irq(MBOX_IRQ,NULL);
       free_irq(RAB_MISS_IRQ,NULL);
@@ -538,7 +619,6 @@ static int __init pulp_init(void)
       pulp_rab_prof_free();
     #endif
     iounmap(my_dev.rab_config);
-    iounmap(my_dev.mbox);
     #if RAB_AX_LOG_EN == 1
       pulp_rab_ax_log_free();
       iounmap(my_dev.rab_ar_log);
@@ -549,7 +629,8 @@ static int __init pulp_init(void)
     #endif // RAB_AX_LOG_EN == 1
     #if PLATFORM == JUNO || PLATFORM == TE0808
       iounmap(my_dev.intr_reg);
-    #else // PLATFORM
+    #endif // PLATFORM
+    #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
       iounmap(my_dev.slcr);
       iounmap(my_dev.mpcore);
       iounmap(my_dev.uart0);
@@ -559,6 +640,11 @@ static int __init pulp_init(void)
     iounmap(my_dev.soc_periph);
     iounmap(my_dev.l2_mem);
     iounmap(my_dev.l3_mem);
+  fail_smmu_init:
+    #if PLATFORM == TE0808
+      iounmap(my_dev.smmu);
+    #endif // PLATFORM
+    iounmap(my_dev.mbox);
   fail_ioremap:
     cdev_del(&my_dev.cdev);
   fail_create_device: 
@@ -589,9 +675,10 @@ static void __exit pulp_exit(void)
   printk(KERN_ALERT "PULP: Unloading device driver.\n");
   // undo __init pulp_init
   #if PLATFORM == JUNO || PLATFORM == TE0808
-    free_irq(intr_reg_irq,NULL);
+    free_irq(my_dev.intr_reg_irq,NULL);
     platform_driver_unregister(&pulp_platform_driver);
-  #else // PLATFORM
+  #endif // PLATFORM
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     pulp_dma_chan_clean(pulp_dma_chan[1]);
     pulp_dma_chan_clean(pulp_dma_chan[0]);
     free_irq(END_OF_COMPUTATION_IRQ,NULL);
@@ -612,7 +699,6 @@ static void __exit pulp_exit(void)
     pulp_rab_prof_free();
   #endif
   iounmap(my_dev.rab_config);
-  iounmap(my_dev.mbox);
   #if RAB_AX_LOG_EN == 1
     pulp_rab_ax_log_free();
     iounmap(my_dev.rab_ar_log);
@@ -623,7 +709,8 @@ static void __exit pulp_exit(void)
   #endif // RAB_AX_LOG_EN == 1
   #if PLATFORM == JUNO || PLATFORM == TE0808
     iounmap(my_dev.intr_reg);
-  #else // PLATFORM
+  #endif // PLATFORM
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     iounmap(my_dev.slcr);
     iounmap(my_dev.mpcore);
     iounmap(my_dev.uart0);
@@ -633,6 +720,10 @@ static void __exit pulp_exit(void)
   iounmap(my_dev.soc_periph);
   iounmap(my_dev.l2_mem);
   iounmap(my_dev.l3_mem);
+  iounmap(my_dev.mbox);
+  #if PLATFORM == TE0808
+    iounmap(my_dev.smmu);
+  #endif // PLATFORM
   cdev_del(&my_dev.cdev);
   device_destroy(my_class, my_dev.dev);
   class_destroy(my_class);
@@ -1304,6 +1395,14 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   case PULP_IOCTL_RAB_SOC_MH_DIS:
     retval = pulp_rab_soc_mh_dis(my_dev.rab_config);
+    break;
+
+  case PULP_IOCTL_SMMU_ENA:
+    retval = pulp_smmu_ena(&my_dev, arg & 1);
+    break;
+
+  case PULP_IOCTL_SMMU_DIS:
+    retval = pulp_smmu_dis(&my_dev);
     break;
 
   case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space

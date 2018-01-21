@@ -17,7 +17,21 @@
 
 #include "arm64.h"
 
+/*
+ * Independent parameters
+ */
 #define ARM_CLK_FREQ_MHZ 1200
 #define DRAM_SIZE_MB 2048
+
+// System Memory Management Unit
+#define SMMU_BASE_ADDR     0xFD800000
+#define SMMU_SIZE_B        0x20000
+#define SMMU_SMR_OFFSET_B  0x800
+#define SMMU_S2CR_OFFSET_B 0xC00
+
+#define SMMU_N_SMRS           48
+#define SMMU_N_BITS_STREAM_ID 14
+#define SMMU_STREAM_ID_HPC0   0x200
+#define SMMU_STREAM_ID_HP0    0xE80
 
 #endif // ZYNQMP_H___

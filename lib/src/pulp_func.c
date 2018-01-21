@@ -1180,6 +1180,18 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
   return err;
 }
 
+int pulp_smmu_enable(const PulpDev* pulp, const unsigned char coherent)
+{
+  // make the request
+  return ioctl(pulp->fd, PULP_IOCTL_SMMU_ENA, (unsigned) coherent);
+}
+
+int pulp_smmu_disable(const PulpDev *pulp)
+{
+  // make the request
+  return ioctl(pulp->fd,PULP_IOCTL_SMMU_DIS);
+}
+
 /**
  * Setup a DMA transfer using the Host DMA engine
  *

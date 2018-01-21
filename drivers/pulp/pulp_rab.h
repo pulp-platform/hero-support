@@ -25,7 +25,6 @@
 #include <linux/vmalloc.h>
 #include <linux/types.h>   /* uint32_t */
 
-
 #include "pulp_module.h"
 
 #include "pulp_host.h"
