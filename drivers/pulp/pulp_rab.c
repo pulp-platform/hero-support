@@ -202,7 +202,7 @@ int pulp_rab_release(void)
    */
   ret = pulp_rab_soc_mh_dis(pulp->rab_config);
   if (ret != 0 && ret != -EALREADY) {
-    printk(KERN_WARNING "PULP RAB: Failed to disable SoC RAB Miss Handler!\n");
+    printk(KERN_WARNING "PULP - RAB: Failed to disable SoC RAB Miss Handler!\n");
     return ret;
   }
 
