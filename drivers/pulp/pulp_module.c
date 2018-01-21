@@ -206,12 +206,37 @@ static DmaCleanup pulp_dma_cleanup[2];
       return -ENODEV;
     }
 
+#if PLATFORM == TE0808
+    // DMA Channels
+
+    // TX: Host -> PULP
+    pulp_dma_chan[0] = dma_request_slave_channel(my_dev.dt_dev_ptr, "tx_channel");
+    if (pulp_dma_chan[0] == NULL) {
+      printk(KERN_WARNING "PULP: Could not allocate TX DMA channel.\n");
+      return -ENODEV;
+    }
+
+    // RX: Host -> PULP
+    pulp_dma_chan[1] = dma_request_slave_channel(my_dev.dt_dev_ptr, "rx_channel");
+    if (pulp_dma_chan[1] == NULL) {
+      printk(KERN_WARNING "PULP: Could not allocate RX DMA channel.\n");
+      dma_release_channel(pulp_dma_chan[0]);
+      return -ENODEV;
+    }
+#endif
+
     return 0;
   }
 
   static int pulp_remove(struct platform_device *pdev)
   {
     printk(KERN_ALERT "PULP: Removing device.\n");
+
+#if PLATFORM == TE0808
+    // DMA Channels
+    dma_release_channel(pulp_dma_chan[0]);
+    dma_release_channel(pulp_dma_chan[1]);
+#endif
 
     return 0;
   }
