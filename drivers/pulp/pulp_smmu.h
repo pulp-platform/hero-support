@@ -24,10 +24,7 @@
 // type definitions
 typedef enum {
   READY = 0,
-  START = 1,
-  BUSY  = 2,
-  DONE  = 3,
-  ERROR = 4,
+  WAIT  = 1,
 } WorkerStatus;
 
 // methods declarations

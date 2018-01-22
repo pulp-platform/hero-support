@@ -29,9 +29,17 @@
 #define SMMU_SMR_OFFSET_B  0x800
 #define SMMU_S2CR_OFFSET_B 0xC00
 
+#define SMMU_CB_OFFSET_B        0x10000
+#define SMMU_CB_SIZE_B          0x1000
+#define SMMU_CB_SCTLR_OFFSET_B  0x0
+#define SMMU_CB_RESUME_OFFSET_B 0x8
+#define SMMU_CB_FSR_OFFSET_B    0x58
+
 #define SMMU_N_SMRS           48
 #define SMMU_N_BITS_STREAM_ID 14
 #define SMMU_STREAM_ID_HPC0   0x200
 #define SMMU_STREAM_ID_HP0    0xE80
+
+#define SMMU_SCTLR_CFIE       (1 << 6)
 
 #endif // ZYNQMP_H___

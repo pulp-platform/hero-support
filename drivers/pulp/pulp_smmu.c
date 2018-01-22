@@ -26,8 +26,11 @@
 
 // global variables {{{
 static struct iommu_domain * smmu_domain_ptr;
+static PulpDev * pulp;
 
 static int smr_ids[2];
+static unsigned int cbndx;
+static unsigned int sctlr;
 
 // for fault handler worker
 static char   smmu_fh_wq_name[11] = "SMMU_FH_WQ";
@@ -43,7 +46,6 @@ static struct mm_struct   *user_mm;
 // lock for synchronization of top and bottom half of fault handler
 DEFINE_SPINLOCK(smmu_fault_lock);
 static WorkerStatus  smmu_fault_status;
-static int           smmu_fault_ret;
 static unsigned long iova_faulty;
 
 // fault handler config
@@ -191,6 +193,7 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
 {
   int ret, i ,j;
   int data = 0; // arm_smmu_domain_set_attr requires 0 to set ARM_SMMU_DOMAIN_S1
+  unsigned offset, value;
   RabSliceReq rab_slice_req;
 
   /*
@@ -234,7 +237,7 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   }
 
   // initialize the workqueue
-  smmu_fault_ret    = 0;
+  pulp = pulp_ptr;
   smmu_fault_status = READY;
   INIT_WORK(&smmu_fh_w, (void *)pulp_smmu_handle_fault);
 
@@ -251,6 +254,19 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
     printk(KERN_WARNING "PULP - SMMU: Failed to attach IOMMU domain to device: %d.\n", ret);
     return ret;
   }
+
+  // get context bank ID for top/bottom half
+  offset = SMMU_S2CR_OFFSET_B + smr_ids[0]*4;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+  cbndx  = BF_GET(value, 0, 8);
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: cbndx = %i\n", cbndx);
+
+  // get the value of the SCTLR to restore in bottom half
+  offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_SCTLR_OFFSET_B;
+  sctlr = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: sctlr = %#x\n", sctlr);
 
   /*
    * enable RAB for bypassing
@@ -414,20 +430,19 @@ int pulp_smmu_dis(PulpDev *pulp_ptr)
  * On a translation fault, it is called in interrupt context and then schedules the
  * bottom half in process context.
  *
- * In the proof-of-concept implementation, it uses busy-waiting to synchronize with the
- * bottom half. Only if it returns 0 to the IOMMU API, the transcation is re-issued by the SMMU.
- *
  * @return  0 on success.
  */
 int pulp_smmu_fh_sched(struct iommu_domain *smmu_domain_ptr, struct device *pulp_dev_ptr,
                        unsigned long iova, int flags, void * smmu_token_ptr)
 {
   int ret = 0;
+  unsigned int offset;
+  unsigned int value = sctlr;
 
   if (DEBUG_LEVEL_SMMU_FH > 0)
     printk(KERN_INFO "PULP - SMMU: Handling fault. iova = %#lx, flags = %i.\n", iova, flags);
 
-  // prepare the job - only schedule one job at a time
+  // prepare the job - make sure it is safe to modify iova_faulty
   spin_lock(&smmu_fault_lock);
   while ( smmu_fault_status != READY ) {
     spin_unlock(&smmu_fault_lock);
@@ -439,29 +454,18 @@ int pulp_smmu_fh_sched(struct iommu_domain *smmu_domain_ptr, struct device *pulp
   }
   // pass iova
   iova_faulty       = iova;
-  smmu_fault_status = START;
+  smmu_fault_status = WAIT;
   spin_unlock(&smmu_fault_lock);
 
   // schedule the job
   queue_work(smmu_fh_wq, &smmu_fh_w);
 
-  if (DEBUG_LEVEL_SMMU_FH > 0)
-    udelay(1000);
-
-  // busy wait & sync with process context worker
-  spin_lock(&smmu_fault_lock);
-  while ( smmu_fault_status != DONE ) {
-    spin_unlock(&smmu_fault_lock);
-
-    // busy waiting
-    udelay(10);
-
-    spin_lock(&smmu_fault_lock);
-  }
-  // get return value
-  ret               = smmu_fault_ret;
-  smmu_fault_status = READY;
-  spin_unlock(&smmu_fault_lock);
+  // disable context fault interrupts
+  // The interrupt is asserted until the SS bit in FSR is cleared. This only happens when resuming
+  // or terminating the faulting transaction (performed by bottom half).
+  offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_SCTLR_OFFSET_B;
+  BIT_CLEAR(value, SMMU_SCTLR_CFIE);
+  iowrite32(value, (void *)((unsigned long)pulp->smmu + offset));
 
   return ret;
 }
@@ -479,6 +483,7 @@ void pulp_smmu_handle_fault(void)
 {
   int ret = 0;
   unsigned long vaddr, offset, flags, iova;
+  unsigned fsr, value;
   phys_addr_t paddr;
   size_t size;
   int prot;
@@ -486,15 +491,15 @@ void pulp_smmu_handle_fault(void)
   int write = 1;
   size = PAGE_SIZE;
 
+  // read fsr for later clearance
+  offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_FSR_OFFSET_B;
+  fsr = ioread32((void *)((unsigned long)pulp->smmu + offset));
+
   // sync with fault handler (interrupt context)
   spin_lock_irqsave(&smmu_fault_lock, flags);
   iova              = iova_faulty;
-  smmu_fault_status = BUSY;
+  smmu_fault_status = READY;
   spin_unlock_irqrestore(&smmu_fault_lock, flags); // release the spinlock
-
-  offset = (unsigned long)(iova) & BF_MASK_GEN(0, PAGE_SHIFT);
-  if (DEBUG_LEVEL_SMMU_FH > 0)
-    printk(KERN_INFO "PULP - SMMU: Faulty address = %#lx, offset = %#lx\n", iova, offset);
 
   // align address to page border / 4kB
   vaddr  = (unsigned long)(iova) & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned long)*8-PAGE_SHIFT);
@@ -534,16 +539,29 @@ void pulp_smmu_handle_fault(void)
   // map it
   ret = iommu_map(smmu_domain_ptr, vaddr, paddr, size, prot);
   if (ret) {
-    printk(KERN_WARNING "SMMU: Could not map %#lx to SMMU, ERROR = %i.\n", vaddr, ret);
+    printk(KERN_WARNING "PULP - SMMU: Could not map %#lx to SMMU, ERROR = %i.\n", vaddr, ret);
     goto pulp_smmu_handle_fault_error;
   }
 
   // sync with fault handler (interrupt context)
   pulp_smmu_handle_fault_error:
-    spin_lock_irqsave(&smmu_fault_lock, flags);
-    smmu_fault_ret    = ret;
-    smmu_fault_status = DONE;
-    spin_unlock_irqrestore(&smmu_fault_lock, flags); // release the spinlock
+
+    // clear FSR
+    offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_FSR_OFFSET_B;
+    value = fsr;
+    iowrite32(value, (void *)((unsigned long)pulp->smmu + offset));
+
+    // resume or terminate transaction
+    offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_RESUME_OFFSET_B;
+    if (ret)
+      value = 1; // terminate
+    else
+      value = 0; // retry
+    iowrite32(value, (void *)((unsigned long)pulp->smmu + offset));
+
+    // re-enable context fault interrupts
+    offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_SCTLR_OFFSET_B;
+    iowrite32(sctlr, (void *)((unsigned long)pulp->smmu + offset));
 
   return;
 }
