@@ -396,7 +396,7 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
     printk(KERN_INFO "PULP - SMMU: Writing %#x to MAIR1 of CB %i\n", value, cbndx);
 
   // configure CBAR
-  offset = SMMU_CBAR_OFFSET_B + cbndx*SMMU_CBAR_SIZE_B;
+  offset = SMMU_CBAR_OFFSET_B + cbndx*4;
   value = ioread32((void *)((unsigned long)pulp->smmu + offset));
 
   // set shareability - reserved: 0b00, outer shareable: 0b01, inner shareable: 0b10, non-shareable: 0b11

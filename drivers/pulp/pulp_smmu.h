@@ -20,6 +20,32 @@
 #include "pulp_module.h"
 
 // constants
+#define SMMU_SMR_OFFSET_B       0x800
+#define SMMU_S2CR_OFFSET_B      0xC00
+#define SMMU_CBAR_OFFSET_B      0x1000
+
+#define SMMU_CB_SCTLR_OFFSET_B  0x0
+#define SMMU_CB_RESUME_OFFSET_B 0x8
+#define SMMU_CB_MAIR0_OFFSET_B  0x38
+#define SMMU_CB_MAIR1_OFFSET_B  0x3C
+#define SMMU_CB_FSR_OFFSET_B    0x58
+
+#define SMMU_S2CR_SHCFG         8
+#define SMMU_S2CR_MTCFG         11
+#define SMMU_S2CR_MEMATTR       12
+#define SMMU_S2CR_TYPE          16
+#define SMMU_S2CR_NSCFG         18
+#define SMMU_S2CR_RACFG         20
+#define SMMU_S2CR_WACFG         22
+#define SMMU_S2CR_TRANSIENTCFG  28
+
+#define SMMU_CBAR_BPSHCFG       8
+
+#define SMMU_CB_FSR_TF          1
+
+#define SMMU_SCTLR_CFIE        (1 << 6)
+
+#define SMMU_N_BITS_STREAM_ID   14
 
 // type definitions
 typedef enum {
