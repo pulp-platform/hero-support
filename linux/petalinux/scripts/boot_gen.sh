@@ -14,4 +14,4 @@ cp ${VIVADO_EXPORT_PATH}/bigpulp_zux_top.bit ${IMAGE_PATH}/.
 
 # Go to image folder and generate
 cd ${IMAGE_PATH}
-petalinux-package --boot --fsbl zynqmp_fsbl.elf --fpga bigpulp_zux_top.bit --u-boot u-boot.elf --pmufw zynqmp_pmufw.elf --force
+petalinux-package --boot --fsbl zynqmp_fsbl.elf --fpga bigpulp_zux_top.bit --u-boot u-boot.elf --pmufw zynqmp_pmufw.elf --force --bif bootgen.bif
