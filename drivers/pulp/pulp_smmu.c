@@ -62,7 +62,85 @@ static size_t size = PAGE_SIZE;
 
 // init {{{
 /**
+ * Configure S2CR attributes.
+ *
+ * This function sets various attributes in the S2CR for the HPC0 and HP0 streams. For details,
+ * check ARM SMMU Architecture Specification 2.0 Sections 2.4, 9.4. and 9.6.23.
+ *
+ * Note: The CCI does not accept inner- or outer-shareable transactions on the Xilinx ZynqMPSoC.
+ * Thus, the shareability is set to 0b00 (default) in bypass mode. If the SMMU is not in bypass
+ * mode, the effective shareability is obtained from the page table and the CBAR.
+ *
+ * @param   pulp_ptr Pointer to PulpDev structure.
+ *
+ * @return  0 on success, a nonzero errno on errros.
+ */
+static int pulp_smmu_set_attr(PulpDev * pulp_ptr)
+{
+  unsigned int offset, value;
+
+  if ( (smr_ids[0] == SMMU_N_SMRS) || (smr_ids[1] == SMMU_N_SMRS) ) {
+    printk(KERN_WARNING "PULP - SMMU: SMR IDs invalid. Cannot set attributes.\n");
+    return -EINVAL;
+  }
+
+  // modify S2CR register for HPC0 stream
+  offset = SMMU_S2CR_OFFSET_B + smr_ids[0]*4;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+
+  // set shareability - default: 0b00, outer shareable: 0b01, inner shareable: 0b10
+  BF_SET(value, 0b00, SMMU_S2CR_SHCFG, 2);
+
+  // set MemAttr
+  BF_SET(value, 0b1, SMMU_S2CR_MTCFG, 1); // use MemAttr
+  BF_SET(value, 0b1111, SMMU_S2CR_MEMATTR, 4); // outer + inner write-back cacheable
+
+  // set NSCFG
+  BF_SET(value, 0b11, SMMU_S2CR_NSCFG, 2); // non-secure
+
+  // set RA/WA
+  BF_SET(value, 0b00, SMMU_S2CR_RACFG, 2); // default - take over from AxCACHE
+  BF_SET(value, 0b00, SMMU_S2CR_WACFG, 2); // default - take over from AxCACHE
+
+  // set transient hint
+  BF_SET(value, 0b10, SMMU_S2CR_TRANSIENTCFG, 2); // non-transient
+
+  iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[0]);
+
+  // modify S2CR register for HP0 stream
+  offset = SMMU_S2CR_OFFSET_B + smr_ids[1]*4;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+
+  // set shareability - default: 0b00, outer shareable: 0b01, inner shareable: 0b10
+  BF_SET(value, 0b00, SMMU_S2CR_SHCFG, 2);
+
+  // set MemAttr
+  BF_SET(value, 0b1, SMMU_S2CR_MTCFG, 1); // use MemAttr
+  BF_SET(value, 0b0101, SMMU_S2CR_MEMATTR, 4); // outer + inner non-cacheable
+
+  // set NSCFG
+  BF_SET(value, 0b11, SMMU_S2CR_NSCFG, 2); // non-secure
+
+  // set RA/WA
+  BF_SET(value, 0b00, SMMU_S2CR_RACFG, 2); // default - take over from AxCACHE?
+  BF_SET(value, 0b00, SMMU_S2CR_WACFG, 2); // default - take over from AxCACHE?
+
+  // set transient hint
+  BF_SET(value, 0b10, SMMU_S2CR_TRANSIENTCFG, 2); // non-transient
+
+  iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[1]);
+
+  return 0;
+}
+
+/**
  * Enable bypassing of SMMU.
+ *
+ * This function enables the bypassing for the HPC0 and HP0 streams.
  *
  * @param   pulp_ptr Pointer to PulpDev structure.
  *
@@ -70,26 +148,31 @@ static size_t size = PAGE_SIZE;
  */
 static int pulp_smmu_bypass(PulpDev * pulp_ptr)
 {
-  unsigned int offset, value, type;
-
-  type = 1; // bypass
+  unsigned int offset, value;
 
   if ( (smr_ids[0] == SMMU_N_SMRS) || (smr_ids[1] == SMMU_N_SMRS) ) {
     printk(KERN_WARNING "PULP - SMMU: SMR IDs invalid. Cannot enable bypassing.\n");
     return -EINVAL;
   }
 
-  // modify S2CR registers for HPC0 and HP0 streams
+  // modify S2CR register for HPC0 stream
   offset = SMMU_S2CR_OFFSET_B + smr_ids[0]*4;
   value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
-  BF_SET(value, type, 16, 2);
+
+  // set type
+  BF_SET(value, 0b01, SMMU_S2CR_TYPE, 2); // bypass
+
   iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
   if (DEBUG_LEVEL_SMMU > 2)
     printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[0]);
 
+  // modify S2CR register for HP0 stream
   offset = SMMU_S2CR_OFFSET_B + smr_ids[1]*4;
   value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
-  BF_SET(value, type, 16, 2);
+
+  // set type
+  BF_SET(value, 0b01, SMMU_S2CR_TYPE, 2); // bypass
+
   iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
   if (DEBUG_LEVEL_SMMU > 2)
     printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[1]);
@@ -157,6 +240,12 @@ int pulp_smmu_init(PulpDev * pulp_ptr)
   if ( !smr_ids_found[0] || !smr_ids_found[1] ) {
     printk(KERN_WARNING "PULP - SMMU: Could not identify SMRs. Check device tree parsing.\n");
     return -ENOENT;
+  }
+
+  // set attributes
+  ret = pulp_smmu_set_attr(pulp_ptr);
+  if (ret) {
+    return ret;
   }
 
   // enable bypassing
@@ -262,11 +351,59 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   if (DEBUG_LEVEL_SMMU > 2)
     printk(KERN_INFO "PULP - SMMU: cbndx = %i\n", cbndx);
 
+  offset = SMMU_S2CR_OFFSET_B + smr_ids[1]*4;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+  cbndx  = BF_GET(value, 0, 8);
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: cbndx = %i\n", cbndx);
+
   // get the value of the SCTLR to restore in bottom half
   offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_SCTLR_OFFSET_B;
   sctlr = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
   if (DEBUG_LEVEL_SMMU > 2)
     printk(KERN_INFO "PULP - SMMU: sctlr = %#x\n", sctlr);
+
+  /*
+   * configure SMMU attributes
+   *
+   * For details, check ARM SMMU Architecture Specification 2.0 Sections 2.4, 9.4. and 9.6.23.
+   *
+   * Note: The CCI does not accept inner- or outer-shareable transactions on the Xilinx ZynqMPSoC.
+   * The effective shareability is obtained from the page table + (MAIR0, MAIR1) and the CBAR if
+   * the SMMU is not in bypass mode.
+   *
+   * Besides setting these registers appropriately, also the kernel (io-pgtable-arm.c) needs to
+   * be patched: the PTEs in the I/O page table need to be allocated non-shareable instead of
+   * inner shareable.
+   */
+  // set attributes in S2CR
+  ret = pulp_smmu_set_attr(pulp_ptr);
+  if (ret) {
+    return ret;
+  }
+
+  // read and set attributes in MAIR0
+  offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_MAIR0_OFFSET_B;
+  value = ioread32((void *)((unsigned long)pulp->smmu + offset));
+  iowrite32(value, (void *)((unsigned long)pulp->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to MAIR0 of CB %i\n", value, cbndx);
+
+  // set same attributes in MAIR1
+  offset = SMMU_CB_OFFSET_B + cbndx*SMMU_CB_SIZE_B + SMMU_CB_MAIR1_OFFSET_B;
+  iowrite32(value, (void *)((unsigned long)pulp->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to MAIR1 of CB %i\n", value, cbndx);
+
+  // configure CBAR
+  offset = SMMU_CBAR_OFFSET_B + cbndx*SMMU_CBAR_SIZE_B;
+  value = ioread32((void *)((unsigned long)pulp->smmu + offset));
+
+  // set shareability - reserved: 0b00, outer shareable: 0b01, inner shareable: 0b10, non-shareable: 0b11
+  BF_SET(value, 0b11, SMMU_CBAR_BPSHCFG, 2);
+  iowrite32(value, (void *)((unsigned long)pulp->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to CBAR%i\n", value, cbndx);
 
   /*
    * enable RAB for bypassing
@@ -325,7 +462,7 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
     }
   }
 
-  if (DEBUG_LEVEL_SMMU_FH > 0) {
+  if (DEBUG_LEVEL_SMMU > 2) {
     pulp_rab_mapping_print(pulp_ptr->rab_config, 0);
   }
 
@@ -398,10 +535,15 @@ int pulp_smmu_dis(PulpDev *pulp_ptr)
   // free the domain
   iommu_domain_free(smmu_domain_ptr);
 
+  // re-set SMMU attribues
+  ret = pulp_smmu_set_attr(pulp_ptr);
+  if (ret) {
+    return ret;
+  }
+
   // re-enable SMMU bypass
   ret = pulp_smmu_bypass(pulp_ptr);
   if (ret) {
-    printk(KERN_WARNING "PULP - SMMU: Failed to enable SMMU bypassing.");
     return ret;
   }
 
@@ -439,7 +581,7 @@ int pulp_smmu_fh_sched(struct iommu_domain *smmu_domain_ptr, struct device *pulp
   unsigned int offset;
   unsigned int value = sctlr;
 
-  if (DEBUG_LEVEL_SMMU_FH > 0)
+  if (DEBUG_LEVEL_SMMU_FH > 1)
     printk(KERN_INFO "PULP - SMMU: Handling fault. iova = %#lx, flags = %i.\n", iova, flags);
 
   // prepare the job - make sure it is safe to modify iova_faulty
@@ -501,6 +643,13 @@ void pulp_smmu_handle_fault(void)
   smmu_fault_status = READY;
   spin_unlock_irqrestore(&smmu_fault_lock, flags); // release the spinlock
 
+  value = BF_GET(fsr, 2, 7);
+  if ( (value != 0) || (BF_GET(fsr, SMMU_CB_FSR_TF, 1) == 0) ) {
+    printk(KERN_WARNING "PULP - SMMU: Can only handle translation faults but got FSR %#x on address %#lx.\n",fsr , iova);
+    ret = -EFAULT;
+    goto pulp_smmu_handle_fault_error;
+  }
+
   // align address to page border / 4kB
   vaddr  = (unsigned long)(iova) & BF_MASK_GEN(PAGE_SHIFT,sizeof(unsigned long)*8-PAGE_SHIFT);
 
@@ -527,9 +676,8 @@ void pulp_smmu_handle_fault(void)
   iova_array[page_idx] = vaddr;
 
   // flush data caches
-  if (!coherent) {
+  if (!coherent)
     pulp_mem_cache_flush(pages_ptrs[page_idx], 0, size);
-  }
 
   page_idx++;
 
