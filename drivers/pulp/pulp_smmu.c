@@ -509,7 +509,8 @@ int pulp_smmu_dis(PulpDev *pulp_ptr)
    */
   for (i=N_PAGES-1; i>=0; i--) {
     if (iova_array[i] > 0) {
-      printk(KERN_INFO "PULP - SMMU: iova_array[%i] = %#lx\n", i, iova_array[i]);
+      if (DEBUG_LEVEL_SMMU_FH > 0)
+        printk(KERN_INFO "PULP - SMMU: iova_array[%i] = %#lx\n", i, iova_array[i]);
 
       // unmap the page
       iommu_unmap(smmu_domain_ptr, iova_array[i], size);
