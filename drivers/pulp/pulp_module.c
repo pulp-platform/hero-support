@@ -665,8 +665,8 @@ static int __init pulp_init(void)
     iounmap(my_dev.soc_periph);
     iounmap(my_dev.l2_mem);
     iounmap(my_dev.l3_mem);
-  fail_smmu_init:
     #if PLATFORM == TE0808
+  fail_smmu_init:
       iounmap(my_dev.smmu);
     #endif // PLATFORM
     iounmap(my_dev.mbox);
