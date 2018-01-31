@@ -396,13 +396,15 @@ static int __init pulp_init(void)
     my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
     printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.mpcore);
+  #endif // PLATFORM
 
-    my_dev.uart0 = ioremap_nocache(UART0_BASE_ADDR,UART0_SIZE_B);
-    printk(KERN_INFO "PULP: Zynq UART0 control register mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.uart0);
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
+    my_dev.uart = ioremap_nocache(HOST_UART_BASE_ADDR,HOST_UART_SIZE_B);
+    printk(KERN_INFO "PULP: Zynq UART control register mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.uart);
 
     // make sure to enable automatic flow control on PULP -> Host UART
-    iowrite32(0x20,(void *)((unsigned long)my_dev.uart0+MODEM_CTRL_REG0_OFFSET_B));
+    iowrite32(0x20,(void *)((unsigned long)my_dev.uart+MODEM_CTRL_REG0_OFFSET_B));
   #endif // PLATFORM
 
   #if RAB_AX_LOG_EN == 1
@@ -658,7 +660,9 @@ static int __init pulp_init(void)
     #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
       iounmap(my_dev.slcr);
       iounmap(my_dev.mpcore);
-      iounmap(my_dev.uart0);
+    #endif // PLATFORM
+    #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
+      iounmap(my_dev.uart);
     #endif // PLATFORM
     iounmap(my_dev.gpio);
     iounmap(my_dev.clusters);
@@ -738,7 +742,9 @@ static void __exit pulp_exit(void)
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     iounmap(my_dev.slcr);
     iounmap(my_dev.mpcore);
-    iounmap(my_dev.uart0);
+  #endif // PLATFORM
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
+    iounmap(my_dev.uart);
   #endif // PLATFORM
   iounmap(my_dev.gpio);
   iounmap(my_dev.clusters);

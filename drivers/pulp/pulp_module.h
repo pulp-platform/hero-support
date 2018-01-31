@@ -82,7 +82,9 @@ typedef struct {
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     void *slcr;
     void *mpcore;
-    void *uart0;
+  #endif // PLATFORM
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
+    void *uart;
   #endif // PLATFORM
   #if RAB_AX_LOG_EN == 1
     void *rab_ar_log;

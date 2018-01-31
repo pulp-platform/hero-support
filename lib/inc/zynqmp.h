@@ -34,4 +34,9 @@
 #define SMMU_STREAM_ID_HPC0 0x200
 #define SMMU_STREAM_ID_HP0  0xE80
 
+// UART1 Controller - PULP -> Host UART
+#define HOST_UART_BASE_ADDR      0xFF010000
+#define HOST_UART_SIZE_B         0x1000
+#define MODEM_CTRL_REG0_OFFSET_B 0x24
+
 #endif // ZYNQMP_H___
