@@ -4,8 +4,8 @@ NAME=uart
 # Cross compilation stuff
 PLATFORM      := ${shell echo ${PLATFORM}}
 
-ARCH          := ${shell echo ${ARCH}}
-CROSS_COMPILE := ${shell echo ${CROSS_COMPILE}}
+ARCH          := ${shell echo ${KERNEL_ARCH}}
+CROSS_COMPILE := ${shell echo ${KERNEL_CROSS_COMPILE}}
 
 CC=$(CROSS_COMPILE)gcc
 AR=$(CROSS_COMPILE)ar
