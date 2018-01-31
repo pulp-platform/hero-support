@@ -606,7 +606,7 @@ int pulp_init(PulpDev *pulp)
   pulp_write32(pulp->mbox.v_addr,MBOX_IE_OFFSET_B,'b',0x6);
 
   // check
-  if (DEBUG_LEVEL > 0)
+  if (DEBUG_LEVEL > 1)
     printf("Mailbox interrupt enable register = %#x\n", pulp_read32(pulp->mbox.v_addr,MBOX_IE_OFFSET_B,'b'));
 
   // reset the l3_offset pointer
@@ -1305,8 +1305,6 @@ void pulp_reset(PulpDev *pulp, unsigned full)
     pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);
     usleep(100000);
 
-    printf("%s %d\n",__FILE__,__LINE__);
-
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   }
   // temporary fix: global clk enable
@@ -1339,7 +1337,12 @@ int pulp_boot(PulpDev *pulp, const TaskDesc *task)
 }
 
 /**
- * Load binary to PULP. Not yet uses the Zynq PS DMA engine.
+ * Load binaries to PULP.
+ *
+ * This function loads the specified binaries to the start of the TCDM and the start of the L2
+ * memories inside PULP
+ *
+ * Not yet uses the host DMA engine.
  *
  * @pulp : pointer to the PulpDev structure
  * @name : pointer to the string containing the name of the
@@ -1348,83 +1351,170 @@ int pulp_boot(PulpDev *pulp, const TaskDesc *task)
 int pulp_load_bin(PulpDev *pulp, const char *name)
 {
   int i;
-  char * bin_name;
-  int append = 0;
+  char * bin_name_tcdm;
+  char * bin_name_l2;
 
-  // prepare binary name
-  if ( strlen(name) < 5)
-    append = 1;
-  else {
-    char * last_dot;
-    last_dot = strrchr(name, '.');
-    if ( (NULL == last_dot) || (strncmp(last_dot,".bin",4)) )
-      append = 1;
-  }
+  #define MAX_PATH_LENGTH 32
 
-  if (append) {
-    bin_name = (char *)malloc((strlen(name)+4+1)*sizeof(char));
-    if (!bin_name) {
-      printf("ERROR: Malloc failed for bin_name.\n");
-      return -ENOMEM;
-    }
-    strcpy(bin_name,name);
-    strcat(bin_name,".bin");
-  }
+  /*
+   * prepare binary name
+   */
+  // remove anything after the first dot
+  char * first_dot;
+  unsigned length;
+  first_dot = strchr(name, '.');
+  if (NULL == first_dot)
+    length = strlen(name);
   else
-    bin_name = (char*)name;
+    length = (unsigned)first_dot - (unsigned)name;
 
-  printf("Loading binary file: %s\n",bin_name);
+  // allocate memory for file names
+  bin_name_tcdm = (char *)malloc((length + 1 + 9 + MAX_PATH_LENGTH)*sizeof(char));
+  if (!bin_name_tcdm) {
+    printf("ERROR: Malloc failed for bin_name_tcdm.\n");
+    return -ENOMEM;
+  }
+  bin_name_l2 = (char *)malloc((length + 1 + 7 + MAX_PATH_LENGTH)*sizeof(char));
+  if (!bin_name_l2) {
+    printf("ERROR: Malloc failed for bin_name_l2.\n");
+    return -ENOMEM;
+  }
 
-  // load the binary
-  int fd;
-  size_t size_b;
+  // generate file names
+  strncpy(bin_name_tcdm, name, length);
+  bin_name_tcdm[length] = '\0';
+  strcat(bin_name_tcdm,".tcdm.bin");
+
+  strncpy(bin_name_l2, name, length);
+  bin_name_l2[length] = '\0';
+  strcat(bin_name_l2,".l2.bin");
+
+  /*
+   * load the binaries
+   */
+  int fd_tcdm, fd_l2;
+  size_t size_b_tcdm, size_b_l2;
   struct stat file_stats;
-  unsigned * bin;
+  unsigned * bin_tcdm, * bin_l2;
   unsigned status;
+  unsigned has_tcdm_bin = 0;
 
-  // open file and get size
-  fd = open(bin_name, O_RDONLY);
-  if (fd < 0) {
-    printf("ERROR: Could not open PULP binary.\n");
+  // TCDM
+  // open TCDM bin file and get size if it exists
+  if( access( bin_name_tcdm, F_OK ) != -1 ) {
+
+    has_tcdm_bin = 1;
+    fd_tcdm = open(bin_name_tcdm, O_RDONLY);
+    if (fd_tcdm < 0) {
+      printf("ERROR: Could not open PULP binary %s.\n", bin_name_tcdm);
+      return -ENOENT;
+    }
+    fstat(fd_tcdm, &file_stats);
+    size_b_tcdm = file_stats.st_size;
+
+    // memory map the binary, MAP_POPULATE makes sure there will be no page faults later on (DMA)
+    bin_tcdm = (unsigned *)mmap(NULL, size_b_tcdm, PROT_READ, MAP_SHARED | MAP_POPULATE, fd_tcdm, 0);
+    if (bin_tcdm  == MAP_FAILED) {
+      printf("MMAP failed for PULP binary %s.\n", bin_name_tcdm);
+      return -EIO;
+    }
+
+    // write binary to TCDM
+    if (DEBUG_LEVEL > 0)
+      printf("Loading binary file: %s, size = %d B\n", bin_name_tcdm, size_b_tcdm);
+
+    for (i=0; i<size_b_tcdm/4; i++)
+      pulp->clusters.v_addr[i] = bin_tcdm[i];
+  }
+
+  // L2
+  // open L2 bin file - alternatively, there is just one single binary .bin (legacy)
+  if( access( bin_name_l2, F_OK ) == -1 ) {
+    bin_name_l2[0] = '\0';
+    strncpy(bin_name_l2, name, length);
+    bin_name_l2[length] = '\0';
+    strcat(bin_name_l2,".bin");
+  }
+
+  // open TCDM bin file and get size
+  fd_l2 = open(bin_name_l2, O_RDONLY);
+  if (fd_l2 < 0) {
+    printf("ERROR: Could not open PULP binary %s.\n", bin_name_l2);
     return -ENOENT;
   }
-  fstat(fd, &file_stats);
-  size_b = file_stats.st_size;
+  fstat(fd_l2, &file_stats);
+  size_b_l2 = file_stats.st_size;
 
   // memory map the binary, MAP_POPULATE makes sure there will be no page faults later on (DMA)
-  bin = (unsigned *)mmap(NULL, size_b, PROT_READ, MAP_SHARED | MAP_POPULATE, fd, 0);
-  if (bin  == MAP_FAILED) {
-    printf("MMAP failed for PULP binary.\n");
+  bin_l2 = (unsigned *)mmap(NULL, size_b_l2, PROT_READ, MAP_SHARED | MAP_POPULATE, fd_l2, 0);
+  if (bin_l2  == MAP_FAILED) {
+    printf("MMAP failed for PULP binary %s.\n", bin_name_l2);
     return -EIO;
   }
 
   // write binary to L2
-  for (i=0; i<size_b/4; i++)
-    pulp->l2_mem.v_addr[i] = bin[i];
+  if (DEBUG_LEVEL > 0)
+    printf("Loading binary file: %s, size = %d B\n",bin_name_l2, size_b_l2);
 
+  for (i=0; i<size_b_l2/4; i++)
+    pulp->l2_mem.v_addr[i] = bin_l2[i];
+
+  /*
+   * check the binaries
+   */
   if (DEBUG_LEVEL > 0) {
     int j;
-    int n_failed = 0;
-    for (j=0; j<size_b/4; j++) {
-      if (pulp->l2_mem.v_addr[j] != bin[j]) {
+    int n_failed;
+
+    // TCDM
+    if (has_tcdm_bin) {
+      n_failed = 0;
+
+      for (j=0; j<size_b_tcdm/4; j++) {
+        if (pulp->clusters.v_addr[j] != bin_tcdm[j]) {
+          n_failed++;
+        }
+      }
+      if (n_failed)
+        printf("WARNING: PULP binary %s not successfully copied to TCDM. Failed for %i words.\n",
+          bin_name_tcdm, n_failed);
+      else
+        printf("PULP binary %s successfully copied to TCDM.\n", bin_name_tcdm);
+    }
+
+    // L2
+    n_failed = 0;
+    for (j=0; j<size_b_l2/4; j++) {
+      if (pulp->l2_mem.v_addr[j] != bin_l2[j]) {
         n_failed++;
       }
     }
     if (n_failed)
-      printf("WARNING: PULP binary not successfully copied to L2 memory. Failed for %i words.\n", n_failed);
+      printf("WARNING: PULP binary %s not successfully copied to L2. Failed for %i words.\n",
+        bin_name_l2, n_failed);
     else
-      printf("PULP binary successfully copied to L2 memory.\n");
+      printf("PULP binary %s successfully copied to L2.\n", bin_name_l2);
   }
 
-  // cleanup
-  status = munmap(bin, size_b);
+  /*
+   * cleanup
+   */
+  if (has_tcdm_bin) {
+    status = munmap(bin_tcdm, size_b_tcdm);
+    if (status) {
+      printf("MUNMAP failed for PULP binary.\n");
+    }
+    close(fd_tcdm);
+  }
+
+  status = munmap(bin_l2, size_b_l2);
   if (status) {
     printf("MUNMAP failed for PULP binary.\n");
   }
-  close(fd);
+  close(fd_l2);
 
-  if (append)
-    free(bin_name);
+  free(bin_name_tcdm);
+  free(bin_name_l2);
 
   return 0;
 }
