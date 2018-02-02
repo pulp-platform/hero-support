@@ -357,14 +357,16 @@ static int __init pulp_init(void)
    *
    **********/
   my_dev.mbox = ioremap_nocache(MBOX_H_BASE_ADDR, MBOX_SIZE_B*2);
-  printk(KERN_INFO "PULP: Mailbox mapped to virtual kernel space @ %#lx.\n",
-    (long unsigned int) my_dev.mbox);
+  if (DEBUG_LEVEL_PULP > 0)
+    printk(KERN_INFO "PULP: Mailbox mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.mbox);
   pulp_mbox_init(my_dev.mbox);
 
   #if PLATFORM == TE0808
     my_dev.smmu = ioremap_nocache(SMMU_BASE_ADDR, SMMU_SIZE_B);
-    printk(KERN_INFO "PULP: SMMU mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.smmu);
+    if (DEBUG_LEVEL_PULP > 0)
+      printk(KERN_INFO "PULP: SMMU mapped to virtual kernel space @ %#lx.\n",
+        (long unsigned int) my_dev.smmu);
     err = pulp_smmu_init(&my_dev);
     if (err) {
       printk(KERN_WARNING "PULP: Could not initialize SMMU.\n");
@@ -374,14 +376,16 @@ static int __init pulp_init(void)
 
   #if PLATFORM == JUNO || PLATFORM == TE0808
     my_dev.intr_reg = ioremap_nocache(INTR_REG_BASE_ADDR,INTR_REG_SIZE_B);
-    printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.intr_reg);
+    if (DEBUG_LEVEL_PULP > 0)
+      printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
+        (long unsigned int) my_dev.intr_reg);
   #endif // PLATFORM
 
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
-    printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.slcr);
+    if (DEBUG_LEVEL_PULP > 0)
+      printk(KERN_INFO "PULP: Zynq SLCR mapped to virtual kernel space @ %#lx.\n",
+        (long unsigned int) my_dev.slcr);
   
     // make sure to enable the PL clock
     if ( !BF_GET(ioread32((void *)((unsigned long)my_dev.slcr+SLCR_FPGA0_THR_STA_OFFSET_B)),16,1) ) {
@@ -394,14 +398,16 @@ static int __init pulp_init(void)
     }
    
     my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
-    printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.mpcore);
+    if (DEBUG_LEVEL_PULP > 0)
+      printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
+        (long unsigned int) my_dev.mpcore);
   #endif // PLATFORM
 
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
     my_dev.uart = ioremap_nocache(HOST_UART_BASE_ADDR,HOST_UART_SIZE_B);
-    printk(KERN_INFO "PULP: Zynq UART control register mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.uart);
+    if (DEBUG_LEVEL_PULP > 0)
+      printk(KERN_INFO "PULP: Zynq UART control register mapped to virtual kernel space @ %#lx.\n",
+        (long unsigned int) my_dev.uart);
 
     // make sure to enable automatic flow control on PULP -> Host UART
     iowrite32(0x20,(void *)((unsigned long)my_dev.uart+MODEM_CTRL_REG0_OFFSET_B));
@@ -409,23 +415,27 @@ static int __init pulp_init(void)
 
   #if RAB_AX_LOG_EN == 1
     my_dev.rab_ar_log = ioremap_nocache(RAB_AR_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
-    printk(KERN_INFO "PULP: RAB AR log mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.rab_ar_log);
+    if (DEBUG_LEVEL_PULP > 0)
+      printk(KERN_INFO "PULP: RAB AR log mapped to virtual kernel space @ %#lx.\n",
+        (long unsigned int) my_dev.rab_ar_log);
 
     my_dev.rab_aw_log = ioremap_nocache(RAB_AW_LOG_BASE_ADDR, RAB_AX_LOG_SIZE_B);
-    printk(KERN_INFO "PULP: RAB AW log mapped to virtual kernel space @ %#lx.\n",
-      (long unsigned int) my_dev.rab_aw_log);
+    if (DEBUG_LEVEL_PULP > 0)
+      printk(KERN_INFO "PULP: RAB AW log mapped to virtual kernel space @ %#lx.\n",
+        (long unsigned int) my_dev.rab_aw_log);
 
     #if PLATFORM == JUNO //|| PLATFORM == TE0808
       my_dev.rab_cfg_log = ioremap_nocache(RAB_CFG_LOG_BASE_ADDR, RAB_CFG_LOG_SIZE_B);
-      printk(KERN_INFO "PULP: RAB CFG log mapped to virtual kernel space @ %#lx.\n",
-        (long unsigned int) my_dev.rab_cfg_log);
+      if (DEBUG_LEVEL_PULP > 0)
+        printk(KERN_INFO "PULP: RAB CFG log mapped to virtual kernel space @ %#lx.\n",
+          (long unsigned int) my_dev.rab_cfg_log);
     #endif
   #endif // RAB_AX_LOG_EN == 1
 
   my_dev.gpio = ioremap_nocache(H_GPIO_BASE_ADDR, H_GPIO_SIZE_B);
-  printk(KERN_INFO "PULP: Host GPIO mapped to virtual kernel space @ %#lx.\n",
-    (long unsigned int) my_dev.gpio); 
+  if (DEBUG_LEVEL_PULP > 0)
+    printk(KERN_INFO "PULP: Host GPIO mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.gpio);
   
   // remove GPIO reset
   gpio = 0;
@@ -435,8 +445,9 @@ static int __init pulp_init(void)
   
   // RAB config  
   my_dev.rab_config = ioremap_nocache(RAB_CONFIG_BASE_ADDR, RAB_CONFIG_SIZE_B);
-  printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",
-    (long unsigned int) my_dev.rab_config); 
+  if (DEBUG_LEVEL_PULP > 0)
+    printk(KERN_INFO "PULP: RAB config mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.rab_config);
   err = pulp_rab_init(&my_dev);
   if (err) {
     printk(KERN_WARNING "PULP: RAB initialization failed.\n");
@@ -445,18 +456,21 @@ static int __init pulp_init(void)
 
   // PULP timer used for RAB performance monitoring
   my_dev.clusters = ioremap_nocache(CLUSTERS_H_BASE_ADDR, CLUSTERS_SIZE_B);
-  printk(KERN_INFO "PULP: Clusters mapped to virtual kernel space @ %#lx.\n",
-    (long unsigned int) my_dev.clusters); 
+  if (DEBUG_LEVEL_PULP > 0)
+    printk(KERN_INFO "PULP: Clusters mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.clusters);
   
   // actually not needed - handled in user space
   my_dev.soc_periph = ioremap_nocache(SOC_PERIPHERALS_H_BASE_ADDR, SOC_PERIPHERALS_SIZE_B);
-  printk(KERN_INFO "PULP: SoC peripherals mapped to virtual kernel space @ %#lx.\n",
-    (long unsigned int) my_dev.soc_periph); 
+  if (DEBUG_LEVEL_PULP > 0)
+    printk(KERN_INFO "PULP: SoC peripherals mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.soc_periph);
   
   // actually not needed - handled in user space
   my_dev.l2_mem = ioremap_nocache(L2_MEM_H_BASE_ADDR, L2_MEM_SIZE_B);
-  printk(KERN_INFO "PULP: L2 memory mapped to virtual kernel space @ %#lx.\n",
-    (long unsigned int) my_dev.l2_mem); 
+  if (DEBUG_LEVEL_PULP > 0)
+    printk(KERN_INFO "PULP: L2 memory mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.l2_mem);
 
   // for profiling
   my_dev.l3_mem = ioremap_nocache(L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B);
@@ -465,8 +479,9 @@ static int __init pulp_init(void)
     err = EPERM;
     goto fail_ioremap;
   }
-  printk(KERN_INFO "PULP: Shared L3 memory (DRAM) mapped to virtual kernel space @ %#lx.\n",
-    (long unsigned int) my_dev.l3_mem);
+  if (DEBUG_LEVEL_PULP > 0)
+    printk(KERN_INFO "PULP: Shared L3 memory (DRAM) mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.l3_mem);
  
   /*********************
    *

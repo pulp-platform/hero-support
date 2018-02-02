@@ -847,7 +847,8 @@ void pulp_rab_l2_init(void *rab_config)
       }
     }
   }
-  printk(KERN_INFO "PULP - RAB L2: Initialized VRAMs to 0.\n");
+  if (DEBUG_LEVEL_RAB > 0)
+    printk(KERN_INFO "PULP - RAB L2: Initialized VRAMs to 0.\n");
 
   return;
 }
