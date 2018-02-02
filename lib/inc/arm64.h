@@ -12,16 +12,11 @@
  * (http://www.pulp-platform.org), under the copyright of ETH Zurich and the
  * University of Bologna.
  */
-#ifndef JUNO_H___
-#define JUNO_H___
+#ifndef ARM64_H___
+#define ARM64_H___
 
-#include "arm64.h"
+#ifndef CONFIG_COMPAT
+#define CONFIG_COMPAT
+#endif
 
-#define ARM_CLK_FREQ_MHZ 1100 // A57 overdrive
-#define DRAM_SIZE_MB 8192
-
-// io{read,write}64 macros - not defined in the kernel sources
-#define ioread64(p)    ({ u64 __v = le64_to_cpu((__force __le64)__raw_readq(p)); __iormb(); __v; })
-#define iowrite64(v,p) ({ __iowmb(); __raw_writeq((__force u64)cpu_to_le64(v), p); })
-
-#endif // JUNO_H___
+#endif // ARM64_H___

@@ -18,13 +18,12 @@
 #include <linux/module.h>  /* Needed by all modules */
 #include <linux/kernel.h>  /* KERN_ALERT, container_of */
 #include <linux/mm.h>      /* vm_area_struct struct, page struct, PAGE_SHIFT, pageo_phys */
-#include <linux/pagemap.h> /* page_cache_release() */
+#include <linux/pagemap.h> /* page_put() */
 #include <linux/slab.h>    /* kmalloc() */
 #include <asm/io.h>        /* ioremap, iounmap, iowrite32 */
 #include <linux/delay.h>   /* udelay */
 #include <linux/vmalloc.h>
 #include <linux/types.h>   /* uint32_t */
-
 
 #include "pulp_module.h"
 

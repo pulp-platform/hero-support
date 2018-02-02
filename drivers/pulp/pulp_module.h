@@ -15,21 +15,27 @@
 #ifndef _PULP_MODULE_H_
 #define _PULP_MODULE_H_
 
-#include <linux/cdev.h>		/* cdev struct */
+#include <linux/cdev.h>   /* cdev struct */
+#include <linux/device.h> /* device struct */
 
 #include "pulp_host.h"    /* macros, struct definitions */
 
-#if PLATFORM == JUNO
+#if   PLATFORM == JUNO
   #include "juno.h"
+#elif PLATFORM == TE0808
+  #include "zynqmp.h"
 #else
   #include "zynq.h"
 #endif
 
 #define DEBUG_LEVEL_PULP    0
+#define DEBUG_LEVEL_OF      0
 #define DEBUG_LEVEL_MEM     0
 #define DEBUG_LEVEL_RAB     0
 #define DEBUG_LEVEL_RAB_STR 0
 #define DEBUG_LEVEL_RAB_MH  0
+#define DEBUG_LEVEL_SMMU    0
+#define DEBUG_LEVEL_SMMU_FH 0
 #define DEBUG_LEVEL_DMA     0
 #define DEBUG_LEVEL_MBOX    0
 
@@ -39,7 +45,7 @@
 //#define PROFILE_RAB_MH_SIMPLE
 
 // macros
-#if PLATFORM == JUNO
+#if PLATFORM == JUNO || PLATFORM == TE0808
   #define IOWRITE_L(value, addr) ( iowrite64(value, addr) )
   #define IOREAD_L(addr)         ( ioread64(addr)         )
 #else
@@ -54,6 +60,12 @@ typedef struct {
   struct cdev cdev;
   int minor;
   int major;
+  #if PLATFORM == JUNO || PLATFORM == TE0808
+    // device tree
+    struct device * dt_dev_ptr;
+    int intr_reg_irq;
+  #endif
+  // virtual address pointers for ioremap_nocache()
   void *mbox;
   void *rab_config;
   void *gpio;
@@ -61,13 +73,19 @@ typedef struct {
   void *clusters;
   void *l3_mem;
   void *l2_mem;
-  #if PLATFORM == JUNO
+  #if PLATFORM == TE0808
+    void *smmu;
+  #endif // PLATFORM
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     void *intr_reg;
-  #else
+  #endif // PLATFORM
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     void *slcr;
     void *mpcore;
-    void *uart0;
-  #endif // PLATFORM == JUNO
+  #endif // PLATFORM
+  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
+    void *uart;
+  #endif // PLATFORM
   #if RAB_AX_LOG_EN == 1
     void *rab_ar_log;
     void *rab_aw_log;

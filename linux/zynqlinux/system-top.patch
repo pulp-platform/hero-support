@@ -1,0 +1,18 @@
+--- system-top.dts	2018-02-02 09:49:14.632782817 +0100
++++ system-top_patched.dts	2018-02-02 09:50:38.181889536 +0100
+@@ -16,8 +16,8 @@
+ 	};
+ 	aliases {
+ 		ethernet0 = &gem0;
+-		serial0 = &uart0;
+-		serial1 = &uart1;
++		serial0 = &uart1;
++		serial1 = &uart0;
+ 		spi0 = &qspi;
+ 	};
+ 	memory {
+@@ -27,3 +27,4 @@
+ 	cpus {
+ 	};
+ };
++/include/ "pulp.dtsi"

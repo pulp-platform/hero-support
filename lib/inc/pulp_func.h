@@ -27,8 +27,15 @@
 
 #include <errno.h>
 
-#include "zynq.h"
 #include "pulp_host.h"
+
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  #include "zynq.h"
+#elif PLATFORM == TE0808
+  #include "zynqmp.h"
+#else // PLATFORM == JUNO
+  #include "juno.h"
+#endif // PLATFORM
 
 // type definitions
 typedef struct {
@@ -147,6 +154,9 @@ int pulp_rab_soc_mh_enable(const PulpDev* pulp, const unsigned static_2nd_lvl_sl
 int pulp_rab_soc_mh_disable(const PulpDev* pulp);
 
 int pulp_rab_ax_log_read(const PulpDev* pulp);
+
+int pulp_smmu_enable(const PulpDev* pulp, const unsigned char coherent);
+int pulp_smmu_disable(const PulpDev *pulp);
 
 int pulp_dma_xfer(const PulpDev *pulp,
                   unsigned addr_l3, unsigned addr_pulp, unsigned size_b,

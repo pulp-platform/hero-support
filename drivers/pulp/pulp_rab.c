@@ -202,7 +202,7 @@ int pulp_rab_release(void)
    */
   ret = pulp_rab_soc_mh_dis(pulp->rab_config);
   if (ret != 0 && ret != -EALREADY) {
-    printk(KERN_WARNING "PULP RAB: Failed to disable SoC RAB Miss Handler!\n");
+    printk(KERN_WARNING "PULP - RAB: Failed to disable SoC RAB Miss Handler!\n");
     return ret;
   }
 
@@ -477,7 +477,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
         // unlock
         if ( !PageReserved(pages_old[i]) )
           SetPageDirty(pages_old[i]);
-        page_cache_release(pages_old[i]);
+        put_page(pages_old[i]);
       }
     }
     // lower reference counter
@@ -1009,7 +1009,7 @@ int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int e
     // unlock
     if ( !PageReserved(page_old) )
       SetPageDirty(page_old);
-    page_cache_release(page_old);
+    put_page(page_old);
 
     // reset page_ptr
     l2.set[set_num].entry[entry_num].page_ptr = NULL;
@@ -2269,14 +2269,14 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
   return 0;
 }
 
-#if PLATFORM == JUNO
+#if PLATFORM == JUNO || PLATFORM == TE0808
   static int soc_mh_ena_static_2nd_level(void* const rab_config, RabSliceReq* const req,
       const pgd_t* const pgd)
   {
-    unsigned      i_pmd;
-    unsigned long pmd_pa;
-    unsigned      pmd_va;
-    unsigned      ret;
+    unsigned i_pmd;
+    unsigned pmd_va;
+    unsigned ret;
+    pmd_t    pmd_pa;
 
     pmd_va = PGD_BASE_ADDR;
     for (i_pmd = 0; i_pmd < RAB_N_STATIC_2ND_LEVEL_SLICES; ++i_pmd) {
@@ -2288,14 +2288,14 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
 
       pmd_va = req->addr_end + 1;
 
-      pmd_pa = (unsigned long)(*(pgd + pgd_index(PGDIR_SIZE * i_pmd)));
+      pmd_pa.pmd = (pmdval_t)(pgd->pgd + pgd_index(PGDIR_SIZE * i_pmd));
 
       if (pmd_none(pmd_pa) || pmd_bad(pmd_pa))
         continue;
 
-      pmd_pa &= PAGE_MASK;
+      pmd_pa.pmd &= PAGE_MASK;
 
-      req->addr_offset = pmd_pa;
+      req->addr_offset = pmd_pa.pmd;
 
       ret = pulp_rab_slice_get(req);
       if (ret != 0) {
@@ -2321,7 +2321,7 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
 
 static unsigned static_2nd_lvl_slices_are_supported(void)
 {
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     return 1;
   #else
     return 0;
@@ -2436,7 +2436,7 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
    *    of N depends on whether first- or second-level slices are mapped statically).
    */
   rab_n_slices_reserved_for_host = 1;
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     rab_n_slices_reserved_for_host += (static_2nd_lvl_slices ? RAB_N_STATIC_2ND_LEVEL_SLICES : 1);
   #else
     rab_n_slices_reserved_for_host += 1;
@@ -2453,7 +2453,7 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
    * hierarchy in memory.
    */
   rab_soc_mh_is_ena = 1;
-  #if PLATFORM == JUNO
+  #if PLATFORM == JUNO || PLATFORM == TE0808
     if (static_2nd_lvl_slices)
       retval = soc_mh_ena_static_2nd_level(rab_config, &rab_slice_req, pgd);
     else
@@ -2794,10 +2794,10 @@ void pulp_rab_handle_miss(unsigned unused)
       // try read/write mode first - fall back to read only
       write = 1;
       down_read(&user_task->mm->mmap_sem);
-      result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
+      result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
       if ( result == -EFAULT ) {
         write = 0;
-        result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
+        result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
       }
       up_read(&user_task->mm->mmap_sem);
       //current->mm = user_task->mm;

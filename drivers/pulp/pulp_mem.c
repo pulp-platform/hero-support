@@ -12,6 +12,8 @@
  * (http://www.pulp-platform.org), under the copyright of ETH Zurich and the
  * University of Bologna.
  */
+#include <asm/cacheflush.h>  /* __cpuc_flush_dcache_area, outer_cache.flush_range */
+
 #include "pulp_mem.h"
 
 /**
@@ -28,7 +30,7 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
   void * kaddr;
   unsigned size_b;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
   long unsigned int paddr;
 #endif
 
@@ -39,7 +41,7 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
   kaddr = kaddr + offset_start;
   size_b = offset_end - offset_start;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
 
   // clean L1 cache lines
   __cpuc_flush_dcache_area(kaddr,size_b);
@@ -52,12 +54,12 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
   // clean L2 cache lines
   outer_cache.flush_range(paddr,paddr+size_b);
 
-#else // PLATFORM == JUNO
+#else // PLATFORM
 
   // clean cache lines to the PoC
   __flush_dcache_area(kaddr,(size_t)size_b);
 
-#endif // PLATFORM != JUNO
+#endif // PLATFORM
 
   // destroy kernel-space mapping
   kunmap(page);
@@ -77,7 +79,7 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   void * kaddr;
   unsigned size_b;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
   long unsigned int paddr;
 #endif
 
@@ -88,7 +90,7 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   kaddr = kaddr + offset_start;
   size_b = offset_end - offset_start;
 
-#if PLATFORM != JUNO
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
 
   /* extract the physical address, the L2 cache maintenance functions
      work on physical addresses */
@@ -101,12 +103,12 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   // clean L1 cache lines (if lines are not dirty, just invalidate)
   __cpuc_flush_dcache_area(kaddr,size_b);
 
-#else // PLATFORM == JUNO
+#else // PLATFORM
 
   // clean cache lines to the PoC (if lines are not dirty, just invalidate)
   __flush_dcache_area(kaddr,(size_t)size_b);
 
-#endif
+#endif // PLATFORM
 
   // destroy kernel-space mapping
   kunmap(page);
@@ -155,9 +157,7 @@ int pulp_mem_get_user_pages(struct page *** pages, unsigned addr_start, unsigned
   start = (unsigned long)(addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT));
 
   // get pointers to user-space buffers and lock them into memory
-  down_read(&current->mm->mmap_sem);
-  result = get_user_pages(current, current->mm, start, n_pages, write, 0, *pages, NULL);
-  up_read(&current->mm->mmap_sem);
+  result = get_user_pages_fast(start, (int)n_pages, (int)write, *pages);
   if (result != n_pages) {
     printk(KERN_WARNING "PULP - MEM: Could not get requested user-space virtual addresses.\n");
     printk(KERN_WARNING "Requested %d pages starting at v_addr %#x\n",n_pages,addr_start);

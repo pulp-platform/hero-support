@@ -541,7 +541,7 @@ void smmu_fault_handler_worker(void)
 
   // get pointer to user-space buffer and lock it into memory, get a single page
   down_read(&user_task->mm->mmap_sem);
-  ret = get_user_pages_remote(user_task, user_task->mm, vaddr, 1, write, force, &pages_ptrs[page_idx], NULL);
+  ret = get_user_pages_remote(user_task, user_task->mm, vaddr, 1, write ? FOLL_WRITE : 0, &pages_ptrs[page_idx], NULL);
   up_read(&user_task->mm->mmap_sem);
   if ( ret != 1 ) {
     printk(KERN_WARNING "SMMU_IF: Could not get requested user-space virtual address %#lx.\n", iova);
