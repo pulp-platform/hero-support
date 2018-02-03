@@ -40,24 +40,6 @@
 
 #define DEBUG_LEVEL 0
 
-// mailbox communication
-#define PULP_READY 0x1
-#define PULP_START 0x2
-#define PULP_BUSY  0x3
-#define PULP_DONE  0x4
-#define PULP_STOP  0xF
-
-#define HOST_READY 0x1000
-#define HOST_DONE  0x3000
-
-#define MBOX_N_BITS_REQ_TYPE   4  // number of MSBs to specify the type
-#define RAB_UPDATE_N_BITS_ELEM 8  // number of bits to specify the mask of elements to be updated
-#define RAB_UPDATE_N_BITS_TYPE 2  // number of bits to specify the update type
-
-#define TO_RUNTIME 0x10000000 // bypass PULP driver
-#define RAB_UPDATE 0x20000000 // handled by PULP driver
-#define RAB_SWITCH 0x30000000 // handled by PULP driver
-
 /*
  * Macros
  */
@@ -489,8 +471,6 @@
 #else
   #define N_CORES_TIMER N_CORES
 #endif
-
-#define MBOX_BASE_ADDR 0x1A121000  // Interface 1
 
 /*
  * Host memory map
