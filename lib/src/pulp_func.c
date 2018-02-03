@@ -34,7 +34,7 @@
 int pulp_reserve_v_addr(PulpDev *pulp)
 {
   pulp->pulp_res_v_addr.size = PULP_SIZE_B;
-  pulp->pulp_res_v_addr.v_addr = mmap((int *)PULP_BASE_REMOTE_ADDR,pulp->pulp_res_v_addr.size,
+  pulp->pulp_res_v_addr.v_addr = mmap((int *)ARCHI_CLUSTER_GLOBAL_ADDR(0),pulp->pulp_res_v_addr.size,
                                       PROT_NONE,MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,-1,0);
   if (pulp->pulp_res_v_addr.v_addr == MAP_FAILED) {
     printf("MMAP failed to reserve virtual addresses overlapping with physical address map of PULP.\n");
