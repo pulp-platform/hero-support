@@ -1184,7 +1184,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
     switch(rab_slice_req->addr_start) {
 
     case MBOX_H_BASE_ADDR:
-      rab_slice_req->addr_offset = MBOX_BASE_ADDR - MBOX_SIZE_B; // Interface 0
+      rab_slice_req->addr_offset = MAILBOX_BASE_ADDR - MBOX_SIZE_B; // Interface 0
       break;
 
     case L2_MEM_H_BASE_ADDR:
@@ -1192,7 +1192,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
       break;
 
     case PULP_H_BASE_ADDR:
-      rab_slice_req->addr_offset = PULP_BASE_REMOTE_ADDR;
+      rab_slice_req->addr_offset = ARCHI_CLUSTER_GLOBAL_ADDR(0);
       break;
 
     default: // L3_MEM_BASE_ADDR - port 1
