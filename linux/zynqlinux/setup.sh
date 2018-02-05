@@ -39,7 +39,7 @@ if [ ! -d "linux-xlnx" ]; then
   mv generate_dtb.sh    linux-xlnx/.
   mv kernel-config      linux-xlnx/.
   mv system-top.patch   linux-xlnx/.
-  mv pulp.dts           linux-xlnx/.
+  mv pulp.dtsi          linux-xlnx/.
 fi
 
 # U-Boot sources
