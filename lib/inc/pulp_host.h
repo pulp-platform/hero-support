@@ -190,6 +190,8 @@
 #define CLKING_CONFIG_REG_23_OFFSET_B 0x25C
 #define CLKING_STATUS_REG_OFFSET_B    0x4
 
+#define L2_MEM_BASE_ADDR     0x1C000000 // Address at which PULP sees the L2 SPM
+
 #define L3_MEM_BASE_ADDR     0x80000000 // Address at which PULP sees the contiguous L3
 
 #define PGD_BASE_ADDR        0x20000000 // Address at which PULP sees the top-level page table of
