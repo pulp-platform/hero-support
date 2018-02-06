@@ -63,7 +63,9 @@
 #include "pulp_rab.h"
 #include "pulp_dma.h"
 #include "pulp_mbox.h"
-#include "pulp_smmu.h"
+#if PLATFORM == TE0808
+  #include "pulp_smmu.h"
+#endif
 
 #if PLATFORM == JUNO || PLATFORM == TE0808
   #include <linux/platform_device.h> /* for device tree stuff*/
@@ -1444,11 +1446,15 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     break;
 
   case PULP_IOCTL_SMMU_ENA:
-    retval = pulp_smmu_ena(&my_dev, arg & 1);
+    #if PLATFORM == TE0808
+      retval = pulp_smmu_ena(&my_dev, arg & 1);
+    #endif
     break;
 
   case PULP_IOCTL_SMMU_DIS:
-    retval = pulp_smmu_dis(&my_dev);
+    #if PLATFORM == TE0808
+      retval = pulp_smmu_dis(&my_dev);
+    #endif
     break;
 
   case PULP_IOCTL_INFO_PASS: // pass info from user to kernel space
