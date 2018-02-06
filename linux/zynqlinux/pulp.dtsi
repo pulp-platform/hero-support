@@ -2,15 +2,15 @@
 
   /* new nodes */
   reserved-memory {
-    #address-cells = <2>;
-    #size-cells = <2>;
+    #address-cells = <1>;
+    #size-cells = <1>;
     ranges;
 
     /* contiguous L3 memory for PULP: last 128MiB of first DRAM section */
     pulp_reserved: pulp_l3_mem@38000000 {
       compatible = "pulp,bigpulp";
       no-map;
-      reg = <0x00000000 0x38000000 0x00000000 0x8000000>;
+      reg = <0x38000000 0x8000000>;
     };
   };
 
