@@ -2277,7 +2277,20 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
     unsigned i_pmd;
     unsigned pmd_va;
     unsigned ret;
-    pmd_t    pmd_pa;
+    pmd_t    pmd;
+
+    #if DEBUG_LEVEL_RAB_MH > 0
+      unsigned long long entry_pa, entry_kva, pmd_stat;
+
+      for (i_pmd = 0; i_pmd < PTRS_PER_PGD; ++i_pmd) {
+        entry_pa  = (unsigned long long) ((unsigned long long *)__pa(pgd) + pgd_index(PGDIR_SIZE * i_pmd));
+        entry_kva = (unsigned long long) ((unsigned long long *)pgd + pgd_index(PGDIR_SIZE * i_pmd));
+        pmd_stat  = (unsigned long long)*((unsigned long long *)entry_kva);
+        if (pmd_stat & 0x3)
+          printk(KERN_INFO "PGD Entry %d @ pa = %#llx (kva = %#llx): PMD @ pa %#llx (+ status)\n",
+            i_pmd, entry_pa, entry_kva, pmd_stat);
+      }
+    #endif
 
     pmd_va = PGD_BASE_ADDR;
     for (i_pmd = 0; i_pmd < RAB_N_STATIC_2ND_LEVEL_SLICES; ++i_pmd) {
@@ -2289,14 +2302,15 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
 
       pmd_va = req->addr_end + 1;
 
-      pmd_pa.pmd = (pmdval_t)(pgd->pgd + pgd_index(PGDIR_SIZE * i_pmd));
+      // dereference incremented kva to get pa of pmd
+      pmd.pmd = (pmdval_t)*((unsigned long *)pgd + pgd_index(PGDIR_SIZE * i_pmd));
 
-      if (pmd_none(pmd_pa) || pmd_bad(pmd_pa))
+      if (pmd_none(pmd) || pmd_bad(pmd))
         continue;
 
-      pmd_pa.pmd &= PAGE_MASK;
+      pmd.pmd &= PAGE_MASK;
 
-      req->addr_offset = pmd_pa.pmd;
+      req->addr_offset = pmd_val(pmd);
 
       ret = pulp_rab_slice_get(req);
       if (ret != 0) {
