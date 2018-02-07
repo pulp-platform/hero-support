@@ -79,6 +79,7 @@ typedef enum {
   svm_stripe  = 0x2, // SVM, use striping (L1 only), might fail - use with caution
   svm_mh      = 0x3, // SVM, use miss handling
   copy_tryx   = 0x4, // no SVM, copy-based sharing using contiguous L3 memory, but let PULP do the tryx()
+  svm_smmu    = 0x5, // SVM, use SMMU instead of RAB
   custom      = 0xF, // do not touch (custom marshalling)
 } ShMemType;
 

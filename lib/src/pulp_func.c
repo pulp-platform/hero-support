@@ -1688,6 +1688,10 @@ int pulp_offload_get_pass_type(const TaskDesc *task, ElemPassType **pass_type) {
           (*pass_type)[i] = ref_copy; // the runtime maps ref_copy_tryx to ref_copy
           break;
 
+        case svm_smmu:
+          (*pass_type)[i] = ref_svm_mh; // the miss handling is performed by the SMMU
+          break;
+
         case custom:
           (*pass_type)[i] = ref_custom;
           break;
