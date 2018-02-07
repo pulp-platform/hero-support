@@ -146,7 +146,7 @@ typedef struct {
 typedef struct {
   unsigned char flags; 
   unsigned      pfn_v; 
-  unsigned      pfn_p; 
+  unsigned      pfn_p;    // the HW supports PFN widths up to 32 bit, (max 44-bit physical address witdh)
   struct page * page_ptr;   
 } L2Entry;
 
