@@ -517,11 +517,13 @@ int pulp_smmu_dis(PulpDev *pulp_ptr)
 
       iova_array[i] = 0;
 
+      // cache invalidation (in case of prefetching/speculation...)
+      if (!coherent)
+        pulp_mem_cache_inv(pages_ptrs[i], 0, PAGE_SIZE);
+
       // unpin user-space memory
       if ( !PageReserved(pages_ptrs[i]) )
         SetPageDirty(pages_ptrs[i]);
-
-      // clean up and free the pages struct
       put_page(pages_ptrs[i]);
     }
   }

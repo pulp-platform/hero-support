@@ -422,7 +422,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 {
   int i;
   unsigned char page_ptr_idx_old, page_idx_start_old, page_idx_end_old;
-  unsigned char port, flags_drv;
+  unsigned char port, flags_drv, flags_hw;
   unsigned mapping, slice, entry;
 
   struct page ** pages_old;
@@ -431,6 +431,7 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
   mapping   = rab_slice_req->rab_mapping;
   slice     = rab_slice_req->rab_slice;
   flags_drv = rab_slice_req->flags_drv;
+  flags_hw  = rab_slice_req->flags_hw;
 
   if (!pulp_rab_slice_is_managed_by_host(rab_slice_req)) {
     printk(KERN_WARNING "PULP - RAB: Dropping request to free slice not managed by host.\n");
@@ -471,10 +472,11 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
           printk(KERN_INFO "PULP - RAB L1: Port %d, Mapping %d, Slice %d: Unlocking Page %d.\n",
             port, mapping, slice, i);
         }
-        //// invalidate caches --- invalidates entire pages only --- really needed?
-        //if ( !BIT_GET(flags_hw, RAB_FLAGS_HW_CC) )
-        //  pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
-        // unlock
+        // cache invalidation (in case of prefetching/speculation...)
+        if ( !BIT_GET(flags_hw, RAB_FLAGS_HW_CC) )
+          pulp_mem_cache_inv(pages_old[i],0,PAGE_SIZE);
+
+        // unpin user-space memory
         if ( !PageReserved(pages_old[i]) )
           SetPageDirty(pages_old[i]);
         put_page(pages_old[i]);
@@ -1003,11 +1005,11 @@ int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int e
   page_old = l2.set[set_num].entry[entry_num].page_ptr;
 
   if (page_old) {
-    //// invalidate caches --- really needed?
-    //if ( !(data & 0x8) )
-    //  pulp_mem_cache_inv(page_old,0,PAGE_SIZE);
+    // cache invalidation (in case of prefetching/speculation...)
+    if ( !(data & 0x8) )
+      pulp_mem_cache_inv(page_old,0,PAGE_SIZE);
 
-    // unlock
+    // unpin user-space memory
     if ( !PageReserved(page_old) )
       SetPageDirty(page_old);
     put_page(page_old);
