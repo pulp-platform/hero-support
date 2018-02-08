@@ -74,6 +74,7 @@ typedef struct {
   void *l3_mem;
   void *l2_mem;
   #if PLATFORM == TE0808
+    void *cci;
     void *smmu;
   #endif // PLATFORM
   #if PLATFORM == JUNO || PLATFORM == TE0808

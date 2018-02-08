@@ -23,6 +23,12 @@
 #define ARM_CLK_FREQ_MHZ 1200
 #define DRAM_SIZE_MB 2048
 
+// Cache-coherent interconnect CCI-400
+#define CCI_BASE_ADDR        0xFD6E0000
+#define CCI_SIZE_B           0xE000
+
+#define CCI_SHOR_S0_OFFSET_B 0x1004
+
 // System Memory Management Unit
 #define SMMU_BASE_ADDR      0xFD800000
 #define SMMU_SIZE_B         0x20000

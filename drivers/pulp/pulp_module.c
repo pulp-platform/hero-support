@@ -365,6 +365,23 @@ static int __init pulp_init(void)
   pulp_mbox_init(my_dev.mbox);
 
   #if PLATFORM == TE0808
+    my_dev.cci = ioremap_nocache(CCI_BASE_ADDR, CCI_SIZE_B);
+    if (DEBUG_LEVEL_PULP > 0)
+      printk(KERN_INFO "PULP: CCI mapped to virtual kernel space @ %#lx.\n",
+        (long unsigned int) my_dev.cci);
+
+    /*
+     * Make sure to enable AxDOMAIN shareability overriding on Slave 0 (HPC0/1 PL ports).
+     *
+     * Note: The CCI does not accept any shareable transactions from the SMMU. Thus, we
+     * must force the SMMU to inject non-shareable transactions into CCI only. To enable
+     * coherency, we then must configure the CCI to force the transactions coming from
+     * the HPC0/1 ports to be shareable.
+     *
+     * This requires non-secure access to CCI registers being enabled.
+     */
+    iowrite32(0x3,(void *)((unsigned long)my_dev.cci+CCI_SHOR_S0_OFFSET_B));
+
     my_dev.smmu = ioremap_nocache(SMMU_BASE_ADDR, SMMU_SIZE_B);
     if (DEBUG_LEVEL_PULP > 0)
       printk(KERN_INFO "PULP: SMMU mapped to virtual kernel space @ %#lx.\n",
@@ -689,6 +706,7 @@ static int __init pulp_init(void)
     #if PLATFORM == TE0808
   fail_smmu_init:
       iounmap(my_dev.smmu);
+      iounmap(my_dev.cci);
     #endif // PLATFORM
     iounmap(my_dev.mbox);
   fail_ioremap:
@@ -771,6 +789,7 @@ static void __exit pulp_exit(void)
   iounmap(my_dev.mbox);
   #if PLATFORM == TE0808
     iounmap(my_dev.smmu);
+    iounmap(my_dev.cci);
   #endif // PLATFORM
   cdev_del(&my_dev.cdev);
   device_destroy(my_class, my_dev.dev);
