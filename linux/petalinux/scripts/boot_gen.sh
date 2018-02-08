@@ -2,12 +2,16 @@
 
 # Generate the BOOT.BIN to be placed on the SD card.
 
-# Copy U-Boot and ARM Trusted Firmware for TE0808 board
+# Copy U-Boot and PMU firmware for TE0808 board
 if [ $BOARD == te0808 ]; then
   echo "Copying prebuilt U-Boot and PMU firwmare images for TE0808"
   cp ${PREBUILT_PATH}/os/petalinux/default/u-boot.elf                ${IMAGE_PATH}/.
   cp ${PREBUILT_PATH}/software/te0808_2es2_tebf0808/zynqmp_pmufw.elf ${IMAGE_PATH}/.
 fi
+
+# Copy the patched ARM Trusted Firmware
+cp ../../components/ext_sources/arm-trusted-firmware/build/zynqmp/release/bl31/bl31.elf ${IMAGE_PATH}/.
+cp ../../components/ext_sources/arm-trusted-firmware/build/zynqmp/release/bl31.bin      ${IMAGE_PATH}/.
 
 # Copy bitstream
 cp ${VIVADO_EXPORT_PATH}/bigpulp_zux_top.bit ${IMAGE_PATH}/.
