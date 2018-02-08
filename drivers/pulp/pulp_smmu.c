@@ -98,9 +98,9 @@ static int pulp_smmu_set_attr(PulpDev * pulp_ptr)
   // set NSCFG
   BF_SET(value, 0b11, SMMU_S2CR_NSCFG, 2); // non-secure
 
-  // set RA/WA
-  BF_SET(value, 0b00, SMMU_S2CR_RACFG, 2); // default - take over from AxCACHE
-  BF_SET(value, 0b00, SMMU_S2CR_WACFG, 2); // default - take over from AxCACHE
+  // set RA/WA - default (take over from AxCACHE): 0b00, allocate: 0b10, no allocate: 0b01
+  BF_SET(value, 0b00, SMMU_S2CR_RACFG, 2);
+  BF_SET(value, 0b00, SMMU_S2CR_WACFG, 2);
 
   // set transient hint
   BF_SET(value, 0b10, SMMU_S2CR_TRANSIENTCFG, 2); // non-transient
@@ -123,9 +123,9 @@ static int pulp_smmu_set_attr(PulpDev * pulp_ptr)
   // set NSCFG
   BF_SET(value, 0b11, SMMU_S2CR_NSCFG, 2); // non-secure
 
-  // set RA/WA
-  BF_SET(value, 0b00, SMMU_S2CR_RACFG, 2); // default - take over from AxCACHE?
-  BF_SET(value, 0b00, SMMU_S2CR_WACFG, 2); // default - take over from AxCACHE?
+  // set RA/WA - default (take over from AxCACHE): 0b00, allocate: 0b10, no allocate: 0b01
+  BF_SET(value, 0b00, SMMU_S2CR_RACFG, 2);
+  BF_SET(value, 0b00, SMMU_S2CR_WACFG, 2);
 
   // set transient hint
   BF_SET(value, 0b10, SMMU_S2CR_TRANSIENTCFG, 2); // non-transient
