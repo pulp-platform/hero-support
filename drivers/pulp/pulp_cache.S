@@ -1,9 +1,30 @@
 /*
+ * This file is part of the PULP device driver.
+ * It is based on arch/arm64/include/asm/assembler.h, arch/arm64/mm/cache.S.
+ *
+ * Copyright (C) 1996-2000 Russell King
+ * Copyright (C) 2001 Deep Blue Solutions Ltd.
+ * Copyright (C) 2012 ARM Ltd.
+ * Copyright (C) 2018 ETH Zurich, University of Bologna
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*
  * Custom cache maintenance
  *
- * This is a simplified version of arch/arm64/mm/cache.S and
- * arch/arm64/include/asm/assembler.h based on Linux 4.9 to avoid linker
- * issues due to the alternatives runtime patching framework.
+ * This is a simplified version of arch/arm64/include/asm/assembler.h and
+ * arch/arm64/mm/cache.S based on Linux 4.9 to avoid linker issues due to the
+ * alternatives runtime patching framework.
  *
  * This file just contains the macros and assembly sequences absolutely
  * needed by the PULP driver.
@@ -24,7 +45,6 @@
  * ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚═╝     ╚═╝╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝
  *
  **********************************************************************************/
-
 /*
  * read_ctr - read CTR_EL0. If the system has mismatched
  * cache line sizes, provide the system wide safe value
