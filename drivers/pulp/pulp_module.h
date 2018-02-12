@@ -60,11 +60,9 @@ typedef struct {
   struct cdev cdev;
   int minor;
   int major;
-  #if PLATFORM == JUNO || PLATFORM == TE0808
-    // device tree
-    struct device * dt_dev_ptr;
-    int intr_reg_irq;
-  #endif
+  // device tree
+  struct device * dt_dev_ptr;
+  int intr_reg_irq;
   // virtual address pointers for ioremap_nocache()
   void *mbox;
   void *rab_config;
@@ -77,12 +75,9 @@ typedef struct {
     void *cci;
     void *smmu;
   #endif // PLATFORM
-  #if PLATFORM == JUNO || PLATFORM == TE0808
-    void *intr_reg;
-  #endif // PLATFORM
+  void *intr_reg;
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     void *slcr;
-    void *mpcore;
   #endif // PLATFORM
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
     void *uart;

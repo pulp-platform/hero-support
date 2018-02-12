@@ -67,10 +67,10 @@
   #include "pulp_smmu.h"
 #endif
 
+#include <linux/platform_device.h> /* for device tree stuff*/
+#include <linux/device.h>
+#include <linux/of_device.h>
 #if PLATFORM == JUNO || PLATFORM == TE0808
-  #include <linux/platform_device.h> /* for device tree stuff*/
-  #include <linux/device.h>
-  #include <linux/of_device.h>
   #include <asm/compat.h>            /* for compat_ioctl */
 #endif
 
@@ -95,35 +95,30 @@ static struct dma_chan * pulp_dma_chan[2];
 static DmaCleanup pulp_dma_cleanup[2];
 // }}}
 
-// Device Tree (for Juno and ZynqMP) {{{
-#if PLATFORM == JUNO || PLATFORM == TE0808
-  /***********************************************************************************
-   *
-   * ██████╗ ███████╗██╗   ██╗██╗ ██████╗███████╗    ████████╗██████╗ ███████╗███████╗
-   * ██╔══██╗██╔════╝██║   ██║██║██╔════╝██╔════╝    ╚══██╔══╝██╔══██╗██╔════╝██╔════╝
-   * ██║  ██║█████╗  ██║   ██║██║██║     █████╗         ██║   ██████╔╝█████╗  █████╗  
-   * ██║  ██║██╔══╝  ╚██╗ ██╔╝██║██║     ██╔══╝         ██║   ██╔══██╗██╔══╝  ██╔══╝  
-   * ██████╔╝███████╗ ╚████╔╝ ██║╚██████╗███████╗       ██║   ██║  ██║███████╗███████╗
-   * ╚═════╝ ╚══════╝  ╚═══╝  ╚═╝ ╚═════╝╚══════╝       ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝
-   *
-   * On JUNO, the IRQ is allocated through the device tree at boot time. In order to
-   * register the interrupt service routine, request_irq() needs the interrupt index
-   * reserved at boot time instead of the physical IRQ. This can be obtained through 
-   * the device tree. The addresses we still "pass" through the header files. 
-   *
-   * On ZYNQ, a simplified IRQ allocation is used. The interrupt index corresponds to
-   * the physical IRQ known at compile time. The device tree is not needed.
-   *
-   ***********************************************************************************/                                                                                 
-  
-  // connect to the device tree
-  static struct of_device_id pulp_of_match[] = {
-    {
-      .compatible = "pulp,bigpulp",
-    }, { /* sentinel */}
-  };
-  
-  MODULE_DEVICE_TABLE(of, pulp_of_match);
+// Device Tree {{{
+/***********************************************************************************
+ *
+ * ██████╗ ███████╗██╗   ██╗██╗ ██████╗███████╗    ████████╗██████╗ ███████╗███████╗
+ * ██╔══██╗██╔════╝██║   ██║██║██╔════╝██╔════╝    ╚══██╔══╝██╔══██╗██╔════╝██╔════╝
+ * ██║  ██║█████╗  ██║   ██║██║██║     █████╗         ██║   ██████╔╝█████╗  █████╗
+ * ██║  ██║██╔══╝  ╚██╗ ██╔╝██║██║     ██╔══╝         ██║   ██╔══██╗██╔══╝  ██╔══╝
+ * ██████╔╝███████╗ ╚████╔╝ ██║╚██████╗███████╗       ██║   ██║  ██║███████╗███████╗
+ * ╚═════╝ ╚══════╝  ╚═══╝  ╚═╝ ╚═════╝╚══════╝       ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝
+ *
+ * The IRQ is allocated through the device tree at boot time. In order to
+ * register the interrupt service routine, request_irq() needs the interrupt index
+ * reserved at boot time instead of the physical IRQ. This can be obtained through
+ * the device tree. The addresses we still "pass" through the header files.
+ *
+ ***********************************************************************************/
+// connect to the device tree
+static struct of_device_id pulp_of_match[] = {
+  {
+    .compatible = "pulp,bigpulp",
+  }, { /* sentinel */}
+};
+
+MODULE_DEVICE_TABLE(of, pulp_of_match);
 
 #if PLATFORM == TE0808
 
@@ -177,85 +172,86 @@ static DmaCleanup pulp_dma_cleanup[2];
   }
 #endif
 
-  // method definition
-  static int pulp_probe(struct platform_device *pdev)
-  {
-    int err;
-
-    printk(KERN_ALERT "PULP: Probing device.\n");
-
+// method definition
+static int pulp_probe(struct platform_device *pdev)
+{
 #if PLATFORM == TE0808
-    // Get struct device pointer
-    err = find_dev("pulp", &my_dev.dt_dev_ptr);
-    if (err) {
-      printk(KERN_WARNING "PULP: Could not get device struct pointer.\n");
-      return -ENODEV;
-    }
-
-    if (DEBUG_LEVEL_OF > 0) {
-      printk(KERN_INFO "PULP: &(pdev->dev)      = %p\n", &(pdev->dev));
-      printk(KERN_INFO "PULP: my_dev.dt_dev_ptr = %p\n", my_dev.dt_dev_ptr);
-    }
+  int err;
 #endif
 
-    // store device struct pointer
-    my_dev.dt_dev_ptr = &(pdev->dev);
-
-    // IRQ
-    my_dev.intr_reg_irq = platform_get_irq(pdev,0);
-    if (my_dev.intr_reg_irq <= 0) {
-      printk(KERN_WARNING "PULP: Could not allocate IRQ resource.\n");
-      return -ENODEV;
-    }
+  printk(KERN_ALERT "PULP: Probing device.\n");
 
 #if PLATFORM == TE0808
-    // DMA Channels
-
-    // TX: Host -> PULP
-    pulp_dma_chan[0] = dma_request_slave_channel(my_dev.dt_dev_ptr, "tx_channel");
-    if (pulp_dma_chan[0] == NULL) {
-      printk(KERN_WARNING "PULP: Could not allocate TX DMA channel.\n");
-      return -ENODEV;
-    }
-
-    // RX: Host -> PULP
-    pulp_dma_chan[1] = dma_request_slave_channel(my_dev.dt_dev_ptr, "rx_channel");
-    if (pulp_dma_chan[1] == NULL) {
-      printk(KERN_WARNING "PULP: Could not allocate RX DMA channel.\n");
-      dma_release_channel(pulp_dma_chan[0]);
-      return -ENODEV;
-    }
-#endif
-
-    return 0;
+  // Get struct device pointer
+  err = find_dev("pulp", &my_dev.dt_dev_ptr);
+  if (err) {
+    printk(KERN_WARNING "PULP: Could not get device struct pointer.\n");
+    return -ENODEV;
   }
 
-  static int pulp_remove(struct platform_device *pdev)
-  {
-    printk(KERN_ALERT "PULP: Removing device.\n");
+  if (DEBUG_LEVEL_OF > 0) {
+    printk(KERN_INFO "PULP: &(pdev->dev)      = %p\n", &(pdev->dev));
+    printk(KERN_INFO "PULP: my_dev.dt_dev_ptr = %p\n", my_dev.dt_dev_ptr);
+  }
+#endif
+
+  // store device struct pointer
+  my_dev.dt_dev_ptr = &(pdev->dev);
+
+  // IRQ
+  my_dev.intr_reg_irq = platform_get_irq(pdev,0);
+  if (my_dev.intr_reg_irq <= 0) {
+    printk(KERN_WARNING "PULP: Could not allocate IRQ resource.\n");
+    return -ENODEV;
+  }
 
 #if PLATFORM == TE0808
-    // DMA Channels
+  // DMA Channels
+
+  // TX: Host -> PULP
+  pulp_dma_chan[0] = dma_request_slave_channel(my_dev.dt_dev_ptr, "tx_channel");
+  if (pulp_dma_chan[0] == NULL) {
+    printk(KERN_WARNING "PULP: Could not allocate TX DMA channel.\n");
+    return -ENODEV;
+  }
+
+  // RX: Host -> PULP
+  pulp_dma_chan[1] = dma_request_slave_channel(my_dev.dt_dev_ptr, "rx_channel");
+  if (pulp_dma_chan[1] == NULL) {
+    printk(KERN_WARNING "PULP: Could not allocate RX DMA channel.\n");
     dma_release_channel(pulp_dma_chan[0]);
-    dma_release_channel(pulp_dma_chan[1]);
+    return -ENODEV;
+  }
 #endif
 
-    return 0;
-  }
+  return 0;
+}
 
-  // (un-)register to/from the device tree
-  static struct platform_driver pulp_platform_driver = {
-    .probe  = pulp_probe,
-    .remove = pulp_remove,
-    .driver = {
-      .name = "pulp",
-      .owner = THIS_MODULE,
-      .of_match_table = pulp_of_match,
-      },
-  };
+static int pulp_remove(struct platform_device *pdev)
+{
+  printk(KERN_ALERT "PULP: Removing device.\n");
+
+#if PLATFORM == TE0808
+  // DMA Channels
+  dma_release_channel(pulp_dma_chan[0]);
+  dma_release_channel(pulp_dma_chan[1]);
+#endif
+
+  return 0;
+}
+
+// (un-)register to/from the device tree
+static struct platform_driver pulp_platform_driver = {
+  .probe  = pulp_probe,
+  .remove = pulp_remove,
+  .driver = {
+    .name = "pulp",
+    .owner = THIS_MODULE,
+    .of_match_table = pulp_of_match,
+    },
+};
 
 /***************************************************************************************/
-#endif
 // }}}
 
 // VM_RESERVERD for mmap
@@ -272,13 +268,7 @@ static long pulp_ioctl  (struct file *filp, unsigned int cmd, unsigned long arg)
   static long pulp_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 #endif
 
-#if PLATFORM == JUNO || PLATFORM == TE0808
-  static irqreturn_t pulp_isr     (int irq, void *ptr);
-#else
-  static irqreturn_t pulp_isr_eoc (int irq, void *ptr);
-  static irqreturn_t pulp_isr_mbox(int irq, void *ptr);
-  static irqreturn_t pulp_isr_rab (int irq, void *ptr);
-#endif // PLATFORM
+static irqreturn_t pulp_isr(int irq, void *ptr);
 
 // }}}
 
@@ -313,9 +303,6 @@ static int __init pulp_init(void)
 {
   int err;
   unsigned gpio;
-  #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
-    unsigned mpcore_icdicfr3, mpcore_icdicfr4;
-  #endif
 
   printk(KERN_ALERT "PULP: Loading device driver.\n");
 
@@ -393,12 +380,10 @@ static int __init pulp_init(void)
     }
   #endif // PLATFORM
 
-  #if PLATFORM == JUNO || PLATFORM == TE0808
-    my_dev.intr_reg = ioremap_nocache(INTR_REG_BASE_ADDR,INTR_REG_SIZE_B);
-    if (DEBUG_LEVEL_PULP > 0)
-      printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
-        (long unsigned int) my_dev.intr_reg);
-  #endif // PLATFORM
+  my_dev.intr_reg = ioremap_nocache(INTR_REG_BASE_ADDR,INTR_REG_SIZE_B);
+  if (DEBUG_LEVEL_PULP > 0)
+    printk(KERN_INFO "PULP: Interrupt register mapped to virtual kernel space @ %#lx.\n",
+      (long unsigned int) my_dev.intr_reg);
 
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     my_dev.slcr = ioremap_nocache(SLCR_BASE_ADDR,SLCR_SIZE_B);
@@ -415,11 +400,6 @@ static int __init pulp_init(void)
         goto fail_ioremap;
       }
     }
-   
-    my_dev.mpcore = ioremap_nocache(MPCORE_BASE_ADDR,MPCORE_SIZE_B);
-    if (DEBUG_LEVEL_PULP > 0)
-      printk(KERN_INFO "PULP: Zynq MPCore register mapped to virtual kernel space @ %#lx.\n",
-        (long unsigned int) my_dev.mpcore);
   #endif // PLATFORM
 
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
@@ -507,113 +487,19 @@ static int __init pulp_init(void)
    * interrupts
    *
    *********************/
-  #if PLATFORM == JUNO || PLATFORM == TE0808
+  // register the device to get the interrupt index
+  err = platform_driver_register(&pulp_platform_driver);
+  if (err) {
+    printk(KERN_WARNING "PULP: Error registering platform driver: %d\n",err);
+    goto fail_request_irq;
+  }
 
-    // register the device to get the interrupt index
-    err = platform_driver_register(&pulp_platform_driver);
-    if (err) {
-      printk(KERN_WARNING "PULP: Error registering platform driver: %d\n",err);
-      goto fail_request_irq;
-    }
-
-    // request interrupts and install top-half handler
-    err = request_irq(my_dev.intr_reg_irq, pulp_isr, 0 , "PULP", NULL);
-    if (err) {
-      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-      goto fail_request_irq;
-    }
-
-  #else // PLATFORM
-    // configure interrupt sensitivities: Zynq-7000 Technical Reference Manual, Section 7.2.4
-    // read configuration
-    mpcore_icdicfr3=ioread32((void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
-    mpcore_icdicfr4=ioread32((void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B));
-     
-    // configure rising-edge active for 61-66 (-68 if RAB_AX_LOG_EN == 1)
-    mpcore_icdicfr3 &= 0x03FFFFFF; // delete bits 31 - 26
-    mpcore_icdicfr3 |= 0xFC000000; // set bits 31 - 26: 11 11 11
-    
-    #if RAB_AX_LOG_EN == 1
-      mpcore_icdicfr4 &= 0xFFFFFC00; // delete bits 9 - 0
-      mpcore_icdicfr4 |= 0x000003FF; // set bits 9 - 0: 11 11 11 11 11
-    #else
-      mpcore_icdicfr4 &= 0xFFFFFFC0; // delete bits 5 - 0
-      mpcore_icdicfr4 |= 0x0000003F; // set bits 5 - 0: 11 11 11
-    #endif
-       
-    // write configuration
-    iowrite32(mpcore_icdicfr3,(void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR3_OFFSET_B));
-    iowrite32(mpcore_icdicfr4,(void *)((unsigned long)my_dev.mpcore+MPCORE_ICDICFR4_OFFSET_B));
-    
-    // request interrupts and install handlers
-    // eoc
-    err = request_irq(END_OF_COMPUTATION_IRQ, pulp_isr_eoc, 0, "PULP", NULL);
-    if (err) {
-      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-      goto fail_request_irq;
-    }
-    
-    // mailbox
-    err = request_irq(MBOX_IRQ, pulp_isr_mbox, 0, "PULP", NULL);
-    if (err) {
-      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-      goto fail_request_irq;
-    }
-      
-    // RAB miss
-    err = request_irq(RAB_MISS_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-    if (err) {
-      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-      goto fail_request_irq;
-    }
-    
-    // RAB multi
-    err = request_irq(RAB_MULTI_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-    if (err) {
-      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-      goto fail_request_irq;
-    }
-    
-    // RAB prot
-    err = request_irq(RAB_PROT_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-    if (err) {
-      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-      goto fail_request_irq;
-    }
-
-    // RAB mhr full
-    err = request_irq(RAB_MHR_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-    if (err) {
-      printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-      goto fail_request_irq;
-    }
-
-    #if RAB_AX_LOG_EN == 1
-      // RAB AR Log full
-      err = request_irq(RAB_AR_LOG_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-      if (err) {
-        printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-        goto fail_request_irq;
-      }
-
-      // RAB AW Log full
-      err = request_irq(RAB_AW_LOG_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-      if (err) {
-        printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-        goto fail_request_irq;
-      }
-
-      #if PLATFORM == JUNO // || PLATFORM == TE0808
-        // RAB CFG Log full
-        err = request_irq(RAB_CFG_LOG_FULL_IRQ, pulp_isr_rab, 0, "PULP", NULL);
-        if (err) {
-          printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
-          goto fail_request_irq;
-        }
-      #endif
-    #endif // RAB_AX_LOG_EN == 1
-
-  #endif // PLATFORM
+  // request interrupts and install top-half handler
+  err = request_irq(my_dev.intr_reg_irq, pulp_isr, 0 , "PULP", NULL);
+  if (err) {
+    printk(KERN_WARNING "PULP: Error requesting IRQ.\n");
+    goto fail_request_irq;
+  }
 
   /************************************
    *
@@ -656,25 +542,8 @@ static int __init pulp_init(void)
       pulp_dma_chan_clean(pulp_dma_chan[0]);
   fail_request_dma:
     #endif // PLATFORM
-    #if PLATFORM == JUNO || PLATFORM == TE0808
-      free_irq(my_dev.intr_reg_irq,NULL);
-      platform_driver_unregister(&pulp_platform_driver);
-    #endif // PLATFORM
-    #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
-      free_irq(END_OF_COMPUTATION_IRQ,NULL);
-      free_irq(MBOX_IRQ,NULL);
-      free_irq(RAB_MISS_IRQ,NULL);
-      free_irq(RAB_MULTI_IRQ,NULL);
-      free_irq(RAB_PROT_IRQ,NULL);
-      free_irq(RAB_MHR_FULL_IRQ,NULL);
-      #if RAB_AX_LOG_EN == 1
-        free_irq(RAB_AR_LOG_FULL_IRQ,NULL);
-        free_irq(RAB_AW_LOG_FULL_IRQ,NULL);
-        #if PLATFORM == JUNO
-        free_irq(RAB_CFG_LOG_FULL_IRQ,NULL);
-        #endif
-      #endif
-    #endif // PLATFORM
+    free_irq(my_dev.intr_reg_irq,NULL);
+    platform_driver_unregister(&pulp_platform_driver);
   fail_request_irq:
     #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
       pulp_rab_prof_free();
@@ -688,12 +557,9 @@ static int __init pulp_init(void)
         iounmap(my_dev.rab_cfg_log);
       #endif
     #endif // RAB_AX_LOG_EN == 1
-    #if PLATFORM == JUNO || PLATFORM == TE0808
-      iounmap(my_dev.intr_reg);
-    #endif // PLATFORM
+    iounmap(my_dev.intr_reg);
     #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
       iounmap(my_dev.slcr);
-      iounmap(my_dev.mpcore);
     #endif // PLATFORM
     #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
       iounmap(my_dev.uart);
@@ -738,26 +604,11 @@ static void __exit pulp_exit(void)
 
   printk(KERN_ALERT "PULP: Unloading device driver.\n");
   // undo __init pulp_init
-  #if PLATFORM == JUNO || PLATFORM == TE0808
-    free_irq(my_dev.intr_reg_irq,NULL);
-    platform_driver_unregister(&pulp_platform_driver);
-  #endif // PLATFORM
+  free_irq(my_dev.intr_reg_irq,NULL);
+  platform_driver_unregister(&pulp_platform_driver);
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     pulp_dma_chan_clean(pulp_dma_chan[1]);
     pulp_dma_chan_clean(pulp_dma_chan[0]);
-    free_irq(END_OF_COMPUTATION_IRQ,NULL);
-    free_irq(MBOX_IRQ,NULL);
-    free_irq(RAB_MISS_IRQ,NULL);
-    free_irq(RAB_MULTI_IRQ,NULL);
-    free_irq(RAB_PROT_IRQ,NULL);
-    free_irq(RAB_MHR_FULL_IRQ,NULL);
-    #if RAB_AX_LOG_EN == 1
-      free_irq(RAB_AR_LOG_FULL_IRQ,NULL);
-      free_irq(RAB_AW_LOG_FULL_IRQ,NULL);
-      #if PLATFORM == JUNO
-      free_irq(RAB_CFG_LOG_FULL_IRQ,NULL);
-      #endif
-    #endif 
   #endif // PLATFORM
   #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
     pulp_rab_prof_free();
@@ -771,12 +622,9 @@ static void __exit pulp_exit(void)
       iounmap(my_dev.rab_cfg_log);
     #endif
   #endif // RAB_AX_LOG_EN == 1
-  #if PLATFORM == JUNO || PLATFORM == TE0808
-    iounmap(my_dev.intr_reg);
-  #endif // PLATFORM
+  iounmap(my_dev.intr_reg);
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
     iounmap(my_dev.slcr);
-    iounmap(my_dev.mpcore);
   #endif // PLATFORM
   #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX || PLATFORM == TE0808
     iounmap(my_dev.uart);
@@ -1010,167 +858,78 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
  * ╚═╝╚══════╝╚═╝  ╚═╝
  *
  ***********************************************************************************/
-#if PLATFORM == JUNO || PLATFORM == TE0808
-  irqreturn_t pulp_isr(int irq, void *ptr)
-  {
-    unsigned long intr_reg_value;
-    struct timeval time;
-    int i;
-    unsigned rab_mh;
+irqreturn_t pulp_isr(int irq, void *ptr)
+{
+  unsigned long intr_reg_value;
+  struct timeval time;
+  int i;
+  unsigned rab_mh;
 
-    // read and clear the interrupt register
-    intr_reg_value = ioread64((void *)(unsigned long)my_dev.intr_reg);
-    //printk(KERN_INFO "PULP: Interrupt status %#lx \n",intr_reg_value);  
+  // read and clear the interrupt register
+  intr_reg_value = IOREAD_L((void *)(unsigned long)my_dev.intr_reg);
+  //printk(KERN_INFO "PULP: Interrupt status %#lx \n",intr_reg_value);
 
-   /*********************
-    *
-    * top-half handler
-    *
-    *********************/
-    do_gettimeofday(&time);
+ /*********************
+  *
+  * top-half handler
+  *
+  *********************/
+  do_gettimeofday(&time);
 
-    if ( BF_GET(intr_reg_value,INTR_MBOX,1) ) { // mailbox
-      pulp_mbox_intr(my_dev.mbox);
-    }
-    if ( BF_GET(intr_reg_value,INTR_RAB_MISS,1) ) { // RAB miss
-
-      rab_mh = pulp_rab_mh_sched();
-
-      if ( (DEBUG_LEVEL_RAB_MH > 1) && (rab_mh == 1) ) {
-        if ( printk_ratelimit() ) {
-          printk(KERN_INFO "PULP: RAB miss interrupt handled at %02li:%02li:%02li.\n",
-            (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-        
-          // for debugging
-          pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
-        }
-      }
-    }
-    if ( BF_GET(intr_reg_value,INTR_RAB_MHR_FULL,1) ) { // RAB mhr full
-      printk(KERN_ALERT "PULP: RAB mhr full interrupt received at %02li:%02li:%02li.\n",
-        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-    } 
-    if ( BF_GET(intr_reg_value,INTR_RAB_MULTI,1) ) { // RAB multi
-      printk(KERN_ALERT "PULP: RAB multi interrupt received at %02li:%02li:%02li.\n",
-        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-    }
-    if ( BF_GET(intr_reg_value,INTR_RAB_PROT,1) ) { // RAB prot
-      printk(KERN_ALERT "PULP: RAB prot interrupt received at %02li:%02li:%02li.\n",
-        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-    } 
-    if ( BF_GET(intr_reg_value, INTR_EOC_0, INTR_EOC_N-INTR_EOC_0+1) ) { // EOC
-      for (i=0; i<N_CLUSTERS; i++) {
-        if ( BF_GET(intr_reg_value, INTR_EOC_0+i, 1) ) {
-          printk(KERN_INFO "PULP: End of Computation Cluster %i at %02li:%02li:%02li.\n",
-            i, (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-        }
-      }
-
-      #if RAB_AX_LOG_EN == 1
-        if (pulp_rab_ax_log_en)
-          pulp_rab_ax_log_read(gpio_value, 1);
-      #endif
-
-    }
-    #if RAB_AX_LOG_EN == 1
-      if ( BF_GET(intr_reg_value, INTR_RAB_AR_LOG_FULL, 1)
-        || BF_GET(intr_reg_value, INTR_RAB_AW_LOG_FULL, 1)
-        || BF_GET(intr_reg_value, INTR_RAB_CFG_LOG_FULL, 1) ) {
-        printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
-          (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-        
-        pulp_rab_ax_log_read(gpio_value, 1);
-      }
-    #endif   
-  
-    return IRQ_HANDLED;
+  if ( BF_GET(intr_reg_value,INTR_MBOX,1) ) { // mailbox
+    pulp_mbox_intr(my_dev.mbox);
   }
+  if ( BF_GET(intr_reg_value,INTR_RAB_MISS,1) ) { // RAB miss
 
-#else // PLATFORM
-  irqreturn_t pulp_isr_eoc(int irq, void *ptr)
-  { 
-    struct timeval time;
+    rab_mh = pulp_rab_mh_sched();
 
-    // do something
-    do_gettimeofday(&time);
-    printk(KERN_INFO "PULP: End of Computation: %02li:%02li:%02li.\n",
-           (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+    if ( (DEBUG_LEVEL_RAB_MH > 1) && (rab_mh == 1) ) {
+      if ( printk_ratelimit() ) {
+        printk(KERN_INFO "PULP: RAB miss interrupt handled at %02li:%02li:%02li.\n",
+          (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
 
+        // for debugging
+        pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
+      }
+    }
+  }
+  if ( BF_GET(intr_reg_value,INTR_RAB_MHR_FULL,1) ) { // RAB mhr full
+    printk(KERN_ALERT "PULP: RAB mhr full interrupt received at %02li:%02li:%02li.\n",
+      (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+  }
+  if ( BF_GET(intr_reg_value,INTR_RAB_MULTI,1) ) { // RAB multi
+    printk(KERN_ALERT "PULP: RAB multi interrupt received at %02li:%02li:%02li.\n",
+      (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+  }
+  if ( BF_GET(intr_reg_value,INTR_RAB_PROT,1) ) { // RAB prot
+    printk(KERN_ALERT "PULP: RAB prot interrupt received at %02li:%02li:%02li.\n",
+      (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+  }
+  if ( BF_GET(intr_reg_value, INTR_EOC_0, INTR_EOC_N-INTR_EOC_0+1) ) { // EOC
+    for (i=0; i<N_CLUSTERS; i++) {
+      if ( BF_GET(intr_reg_value, INTR_EOC_0+i, 1) ) {
+        printk(KERN_INFO "PULP: End of Computation Cluster %i at %02li:%02li:%02li.\n",
+          i, (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
+      }
+    }
     #if RAB_AX_LOG_EN == 1
       if (pulp_rab_ax_log_en)
         pulp_rab_ax_log_read(gpio_value, 1);
     #endif
-   
-    // interrupt is just a pulse, no need to clear it
-    return IRQ_HANDLED;
   }
-   
-  irqreturn_t pulp_isr_mbox(int irq, void *ptr)
-  {
-    pulp_mbox_intr(my_dev.mbox);
-  
-    return IRQ_HANDLED;
-  }
-  
-  irqreturn_t pulp_isr_rab(int irq, void *ptr)
-  { 
-    struct timeval time;
-    char rab_interrupt_type[12];
-    unsigned rab_mh;
+  #if RAB_AX_LOG_EN == 1
+    if ( BF_GET(intr_reg_value, INTR_RAB_AR_LOG_FULL, 1)
+      || BF_GET(intr_reg_value, INTR_RAB_AW_LOG_FULL, 1)
+      || BF_GET(intr_reg_value, INTR_RAB_CFG_LOG_FULL, 1) ) {
+      printk(KERN_INFO "PULP: RAB AX log full interrupt received at %02li:%02li:%02li.\n",
+        (time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
 
-    // detect RAB interrupt type
-    if (RAB_MISS_IRQ == irq)
-      strcpy(rab_interrupt_type,"miss");
-    else if (RAB_MULTI_IRQ == irq)
-      strcpy(rab_interrupt_type,"multi");
-    else if (RAB_PROT_IRQ == irq)
-      strcpy(rab_interrupt_type,"prot");
-    else // RAB_MHR_FULL_IRQ == irq
-      strcpy(rab_interrupt_type,"mhr full");
-  
-    if (RAB_MISS_IRQ == irq) {
-      rab_mh = pulp_rab_mh_sched();
+      pulp_rab_ax_log_read(gpio_value, 1);
     }
-  
-    #if RAB_AX_LOG_EN == 1
-      if ( ( RAB_AR_LOG_FULL_IRQ == irq ) || 
-           ( RAB_AW_LOG_FULL_IRQ == irq ) ) { //|| 
-           //( RAB_CFG_LOG_FULL_IRQ == irq ) ) {
-        strcpy(rab_interrupt_type,"AX log full");
-          
-        pulp_rab_ax_log_read(gpio_value, 1);
-      }
-    #endif 
+  #endif
 
-    if ( (DEBUG_LEVEL_RAB_MH > 1) || 
-         ( (RAB_MISS_IRQ == irq) && (0 == rab_mh) ) ||
-         ( RAB_MULTI_IRQ == irq || RAB_PROT_IRQ == irq ) ||
-         ( RAB_MHR_FULL_IRQ == irq ) ||
-         ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
-         ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {// ||
-         //( (RAB_CFG_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ) {
-      do_gettimeofday(&time);
-
-      if ( printk_ratelimit() ) {
-        printk(KERN_INFO "PULP: RAB %s interrupt handled at %02li:%02li:%02li.\n",
-               rab_interrupt_type,(time.tv_sec / 3600) % 24, (time.tv_sec / 60) % 60, time.tv_sec % 60);
-      }
-      // for debugging
-      //if ( ( (RAB_AR_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
-      //     ( (RAB_AW_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) ||
-      //     ( (RAB_CFG_LOG_FULL_IRQ == irq) && (RAB_AX_LOG_EN == 1) ) )
-      //  pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
-
-      if (RAB_MULTI_IRQ == irq){
-        pulp_rab_mapping_print(my_dev.rab_config,0xAAAA);
-        pulp_rab_l2_print_valid_entries(1);
-      }
-    }
-  
-    return IRQ_HANDLED;
-  }
-
-#endif // PLATFORM
+  return IRQ_HANDLED;
+}
 // }}}
 
 // ioctl {{{

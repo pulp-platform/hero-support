@@ -224,6 +224,20 @@
 #define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
 #define RAB_MH_META_FIFO_OFFSET_B 0x8
 
+#define INTR_REG_SIZE_B 0x1000
+
+#define INTR_EOC_0              0
+#define INTR_EOC_N   N_CLUSTERS-1 // max 15
+
+#define INTR_MBOX              16
+#define INTR_RAB_MISS          17
+#define INTR_RAB_MULTI         18
+#define INTR_RAB_PROT          19
+#define INTR_RAB_MHR_FULL      20
+#define INTR_RAB_AR_LOG_FULL   21
+#define INTR_RAB_AW_LOG_FULL   22
+#define INTR_RAB_CFG_LOG_FULL  23
+
 #define PULP_SIZE_B     0x10000000
 #define CLUSTER_SIZE_MB 4
 
@@ -266,18 +280,7 @@
   #define H_GPIO_BASE_ADDR     0x51000000
   #define CLKING_BASE_ADDR     0x51010000
   #define RAB_CONFIG_BASE_ADDR 0x51030000
-  //#define INTR_REG_BASE_ADDR   0x51050000 // not yet used on ZYNQ
-
-  // IRQs
-  #define END_OF_COMPUTATION_IRQ 61
-  #define MBOX_IRQ               62
-  #define RAB_MISS_IRQ           63
-  #define RAB_MULTI_IRQ          64
-  #define RAB_PROT_IRQ           65
-  #define RAB_MHR_FULL_IRQ       66
-  #define RAB_AR_LOG_FULL_IRQ    67
-  #define RAB_AW_LOG_FULL_IRQ    68
-  // #define RAB_CFG_LOG_FULL_IRQ TODO (also in HW)
+  #define INTR_REG_BASE_ADDR   0x51050000
 
   #if PLATFORM == ZEDBOARD
 
@@ -347,23 +350,10 @@
   #define RAB_AW_LOG_BASE_ADDR  0x6E200000
   #define RAB_CFG_LOG_BASE_ADDR 0x6E300000
 
-  #define INTR_REG_SIZE_B       0x1000
   #define RAB_AX_LOG_SIZE_B     0xC0000   // size of BRAM, 786 KiB = 64 Ki entries
   #define RAB_CFG_LOG_SIZE_B    0x30000   // size of BRAM, 196 KiB = 16 Ki entries
   #define RAB_AX_LOG_BUF_SIZE_B 0x6000000 // size of buffer in driver, 96 MiB = 8 Mi entries
   #define RAB_AX_LOG_PRINT_FORMAT 0       // 0 = DEBUG, 1 = MATLAB
-
-  #define INTR_EOC_0              0
-  #define INTR_EOC_N   N_CLUSTERS-1 // max 15
-
-  #define INTR_MBOX              16
-  #define INTR_RAB_MISS          17
-  #define INTR_RAB_MULTI         18
-  #define INTR_RAB_PROT          19
-  #define INTR_RAB_MHR_FULL      20
-  #define INTR_RAB_AR_LOG_FULL   21
-  #define INTR_RAB_AW_LOG_FULL   22
-  #define INTR_RAB_CFG_LOG_FULL  23
 
   #define PULP_DEFAULT_FREQ_MHZ 25
   #define CLKING_INPUT_FREQ_MHZ 100
@@ -399,23 +389,10 @@
   #define RAB_AW_LOG_BASE_ADDR  0xAE200000
   #define RAB_CFG_LOG_BASE_ADDR 0xAE300000
 
-  #define INTR_REG_SIZE_B       0x1000
   #define RAB_AX_LOG_SIZE_B     0xC0000   // size of BRAM, 786 KiB = 64 Ki entries
   #define RAB_CFG_LOG_SIZE_B    0x30000   // size of BRAM, 196 KiB = 16 Ki entries
   #define RAB_AX_LOG_BUF_SIZE_B 0x6000000 // size of buffer in driver, 96 MiB = 8 Mi entries
   #define RAB_AX_LOG_PRINT_FORMAT 0       // 0 = DEBUG, 1 = MATLAB
-
-  #define INTR_EOC_0              0
-  #define INTR_EOC_N   N_CLUSTERS-1 // max 15
-
-  #define INTR_MBOX              16
-  #define INTR_RAB_MISS          17
-  #define INTR_RAB_MULTI         18
-  #define INTR_RAB_PROT          19
-  #define INTR_RAB_MHR_FULL      20
-  #define INTR_RAB_AR_LOG_FULL   21
-  #define INTR_RAB_AW_LOG_FULL   22
-  #define INTR_RAB_CFG_LOG_FULL  23
 
   #define PULP_DEFAULT_FREQ_MHZ 50
   #define CLKING_INPUT_FREQ_MHZ 100
