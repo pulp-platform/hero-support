@@ -104,7 +104,7 @@ static unsigned rab_n_slices_reserved_for_host;
   #endif
 
   #ifdef PROFILE_RAB_MH
-    static unsigned n_cyc_response_tmp[N_CORES_TIMER];
+    static unsigned n_cyc_response_tmp;
 
     static unsigned n_cyc_schedule = 0; // per miss
 
@@ -2647,12 +2647,8 @@ unsigned pulp_rab_mh_sched(void)
 {
   if (rab_mh) {
     #ifdef PROFILE_RAB_MH
-      int i;
-      // read PE timers
-      for (i=0; i<N_CORES_TIMER; i++) {
-        n_cyc_response_tmp[i] = ioread32((void *)((unsigned long)(pulp->clusters)
-          +TIMER_GET_TIME_LO_OFFSET_B+(i+1)*PE_TIMER_OFFSET_B));
-      }
+      // read timer
+      n_cyc_response_tmp = ioread32((void *)((unsigned long)(pulp->clusters)+TIMER_GET_TIME_LO_OFFSET_B));
     #endif
     schedule_work(&rab_mh_w);
   }
@@ -2747,13 +2743,12 @@ void pulp_rab_handle_miss(unsigned unused)
     }
 
     #ifdef PROFILE_RAB_MH
-      // read the PE timer
-      n_cyc_schedule = ioread32((void *)((unsigned long)(pulp->clusters)
-        +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
+      // read the timer
+      n_cyc_schedule = ioread32((void *)((unsigned long)(pulp->clusters)+TIMER_GET_TIME_LO_OFFSET_B));
       n_cyc_tot_schedule += n_cyc_schedule;
 
       // save resp_tmp
-      n_cyc_response = n_cyc_response_tmp[id_pe];
+      n_cyc_response = n_cyc_response_tmp;
       n_cyc_tot_response += n_cyc_response;
 
       n_misses++;
@@ -2960,9 +2955,8 @@ void pulp_rab_handle_miss(unsigned unused)
      */
 
 #ifdef PROFILE_RAB_MH
-    // read the PE timer
-    n_cyc_update = ioread32((void *)((unsigned long)(pulp->clusters)
-      +TIMER_GET_TIME_LO_OFFSET_B+(id_pe+1)*PE_TIMER_OFFSET_B));
+    // read the timer
+    n_cyc_update = ioread32((void *)((unsigned long)(pulp->clusters)+TIMER_GET_TIME_LO_OFFSET_B));
     n_cyc_tot_update += n_cyc_update;
 
     // write the counter values to the buffers
