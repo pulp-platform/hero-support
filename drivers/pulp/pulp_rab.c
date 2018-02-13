@@ -3,7 +3,8 @@
  *
  * Copyright (C) 2018 ETH Zurich, University of Bologna
  *
- * Author: Pirmin Vogel <vogelpi@iis.ee.ethz.ch>
+ * Authors: Pirmin Vogel <vogelpi@iis.ee.ethz.ch>
+ *          Andreas Kurth <akurth@iis.ee.ethz.ch>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
