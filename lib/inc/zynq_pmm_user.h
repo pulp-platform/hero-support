@@ -24,9 +24,18 @@
 #include <unistd.h>
 #include <math.h>
 
-#include "zynq.h"
+/*
+ * Constants
+ */
+#define N_ARM_CORES 2
 
-// function prototypes
+#define ZYNQ_PMM_PROC_N_CHARS_MAX 1000
+
+#define ARM_PMU_CLK_DIV 64 // clock divider for clock cycle counter
+
+/*
+ * Method declarations
+ */
 int zynq_pmm_open(int *fd);
 void zynq_pmm_close(int *fd);
 
