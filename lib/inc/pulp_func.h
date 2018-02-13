@@ -54,6 +54,10 @@
   #define PULP_CHIP CHIP_BIGPULP
 #endif
 
+#if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
+  #include "zynq_pmm_user.h"
+#endif
+
 /*
  * Debug flags
  */
