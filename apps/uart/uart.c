@@ -1,9 +1,11 @@
-#include <asm/termios.h>
+#include <fcntl.h>    // open()
+#include <unistd.h>   // write()
+#include <string.h>
+#include <asm/ioctls.h>
+#include <asm/termbits.h>
+#include <sys/ioctl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 #include <errno.h>
 
