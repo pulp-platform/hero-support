@@ -1,16 +1,21 @@
-/* Copyright (C) 2017 ETH Zurich, University of Bologna
- * All rights reserved.
+/*
+ * This file is part of the PULP user-space runtime library.
  *
- * This code is under development and not yet released to the public.
- * Until it is released, the code is under the copyright of ETH Zurich and
- * the University of Bologna, and may contain confidential and/or unpublished 
- * work. Any reuse/redistribution is strictly forbidden without written
- * permission from ETH Zurich.
+ * Copyright 2018 ETH Zurich, University of Bologna
  *
- * Bug fixes and contributions will eventually be released under the
- * SolderPad open hardware license in the context of the PULP platform
- * (http://www.pulp-platform.org), under the copyright of ETH Zurich and the
- * University of Bologna.
+ * Author: Pirmin Vogel <vogelpi@iis.ee.ethz.ch>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 #ifndef PULP_FUNC_H__
 #define PULP_FUNC_H__
