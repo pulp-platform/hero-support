@@ -29,8 +29,18 @@
 
 #include "pulp_module.h"
 
-#include "pulp_host.h"
+/*
+ * Macros
+ */
+#define MBOX_GET_REQ_TYPE(type, request) \
+  ( type = BF_GET(request, 32-MBOX_N_BITS_REQ_TYPE, \
+         MBOX_N_BITS_REQ_TYPE) << (32-MBOX_N_BITS_REQ_TYPE) )
+#define MBOX_GET_N_WORDS(n_words, request) \
+  ( n_words = BF_GET(request, 0, 32-MBOX_N_BITS_REQ_TYPE) )
 
+/*
+ * Method declarations
+ */
 void pulp_mbox_init(void *mbox);
 void pulp_mbox_clear(void);
 void pulp_mbox_intr(void *mbox);

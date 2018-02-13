@@ -1159,9 +1159,9 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
   RAB_GET_FLAGS_HW(rab_slice_req->flags_hw, request[0]);
   RAB_GET_PORT(rab_slice_req->rab_port, request[0]);
   RAB_GET_LVL(rab_lvl, request[0]);
-  RAB_GET_OFFLOAD_ID(rab_slice_req->rab_mapping, request[0]);
   RAB_GET_DATE_EXP(rab_slice_req->date_exp, request[0]);
   RAB_GET_DATE_CUR(rab_slice_req->date_cur, request[0]);
+  rab_slice_req->rab_mapping = 0;
 
   rab_slice_req->addr_start = request[1];
   size_b = request[2];
@@ -1192,7 +1192,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
     switch(rab_slice_req->addr_start) {
 
     case MBOX_H_BASE_ADDR:
-      rab_slice_req->addr_offset = MAILBOX_BASE_ADDR - MBOX_SIZE_B; // Interface 0
+      rab_slice_req->addr_offset = MBOX_BASE_ADDR - MBOX_SIZE_B; // Interface 0
       break;
 
     case L2_MEM_H_BASE_ADDR:
@@ -1200,7 +1200,7 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
       break;
 
     case PULP_H_BASE_ADDR:
-      rab_slice_req->addr_offset = ARCHI_CLUSTER_GLOBAL_ADDR(0);
+      rab_slice_req->addr_offset = PULP_BASE_ADDR;
       break;
 
     default: // L3_MEM_BASE_ADDR - port 1

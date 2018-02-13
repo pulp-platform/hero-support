@@ -13,14 +13,13 @@
  * University of Bologna.
  */
 #include "pulp_func.h"
-#include "pulp_host.h"
 
 #include <errno.h>
 #include <stdio.h>      // fclose(), fopen(), printf(), sprintf()
 #include <stdlib.h>     // free(), malloc()
 #include <sys/ioctl.h>  // ioctl()
 #include <time.h>       // struct tm, localtime(), time(), time_t
-#include <sys/stat.h>     // fstat()
+#include <sys/stat.h>   // fstat()
 
 //printf("%s %d\n",__FILE__,__LINE__);
 
@@ -312,21 +311,6 @@ int pulp_mmap(PulpDev *pulp)
   else if (DEBUG_LEVEL > 0) {
     printf("Zynq SLCR memory mapped to virtual user space at %p.\n",pulp->slcr.v_addr);
   }
-
-  // MPCore
-  offset = CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B
-    + L3_MEM_SIZE_B + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B; // start of MPCore
-  pulp->mpcore.size = MPCORE_SIZE_B;
-
-  pulp->mpcore.v_addr = mmap(NULL,pulp->mpcore.size,
-                             PROT_READ | PROT_WRITE,MAP_SHARED,pulp->fd,offset);
-  if (pulp->mpcore.v_addr == MAP_FAILED) {
-    printf("MMAP failed for shared L3 memory.\n");
-    return -EIO;
-  }
-  else if (DEBUG_LEVEL > 0) {
-    printf("Zynq MPCore memory mapped to virtual user space at %p.\n",pulp->mpcore.v_addr);
-  }
 #endif
 
   return 0;
@@ -345,10 +329,6 @@ int pulp_munmap(PulpDev *pulp)
   // undo the memory mappings
   printf("Undo the memory mappings.\n");
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
-  status = munmap(pulp->mpcore.v_addr,pulp->mpcore.size);
-  if (status) {
-    printf("MUNMAP failed for MPCore.\n");
-  }
   status = munmap(pulp->slcr.v_addr,pulp->slcr.size);
   if (status) {
     printf("MUNMAP failed for SLCR.\n");
@@ -2246,6 +2226,7 @@ int pulp_offload_in(PulpDev *pulp, TaskDesc *task)
   return 0;
 }
 
+#ifdef OLD_APPS
 /**
  * Start offload execution on PULP.
  *
@@ -2299,7 +2280,6 @@ int pulp_offload_wait(const PulpDev *pulp, const TaskDesc *task)
   return 0;
 }
 
-//
 int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 {
   // similar to pulp_offload_out() but without RAB setup
@@ -2477,6 +2457,7 @@ int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask)
 
   return 0;
 }
+#endif // OLD_APPS
 
 /****************************************************************************************/
 

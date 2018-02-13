@@ -459,8 +459,8 @@ static int __init pulp_init(void)
     goto fail_ioremap;
   }
 
-  // PULP timer used for RAB performance monitoring
-  my_dev.clusters = ioremap_nocache(CLUSTERS_H_BASE_ADDR, CLUSTERS_SIZE_B);
+  // PULP timer used for RAB profiling
+  my_dev.clusters = ioremap_nocache(PULP_H_BASE_ADDR, CLUSTERS_SIZE_B);
   if (DEBUG_LEVEL_PULP > 0)
     printk(KERN_INFO "PULP: Clusters mapped to virtual kernel space @ %#lx.\n",
       (long unsigned int) my_dev.clusters);
@@ -735,7 +735,7 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   // PULP internals
   if (off < CLUSTERS_SIZE_B) {
     // Clusters
-    base_addr = CLUSTERS_H_BASE_ADDR;
+    base_addr = PULP_H_BASE_ADDR;
     size_b = CLUSTERS_SIZE_B;
     strcpy(type,"Clusters");
   }
@@ -805,16 +805,6 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
         - H_GPIO_SIZE_B - CLKING_SIZE_B - RAB_CONFIG_SIZE_B;
       size_b = SLCR_SIZE_B;
       strcpy(type,"Zynq SLCR");
-    }
-    else if (off < (CLUSTERS_SIZE_B + SOC_PERIPHERALS_SIZE_B + MBOX_SIZE_B + L2_MEM_SIZE_B + L3_MEM_SIZE_B 
-                    + H_GPIO_SIZE_B + CLKING_SIZE_B + RAB_CONFIG_SIZE_B + SLCR_SIZE_B 
-                    + MPCORE_SIZE_B)) {
-      // Zynq MPCore
-      base_addr = MPCORE_BASE_ADDR;
-      off = off - CLUSTERS_SIZE_B - SOC_PERIPHERALS_SIZE_B - MBOX_SIZE_B - L2_MEM_SIZE_B - L3_MEM_SIZE_B 
-        - H_GPIO_SIZE_B - CLKING_SIZE_B - RAB_CONFIG_SIZE_B - SLCR_SIZE_B;
-      size_b = MPCORE_SIZE_B;
-      strcpy(type,"Zynq MPCore");
     }
   #endif // PLATFORM
   else {

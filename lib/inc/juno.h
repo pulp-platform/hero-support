@@ -17,7 +17,7 @@
 
 #include "arm64.h"
 
-#define ARM_CLK_FREQ_MHZ 1100 // A57 overdrive
+// DRAM
 #define DRAM_SIZE_MB 8192
 
 // io{read,write}64 macros - not defined in the kernel sources

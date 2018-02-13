@@ -17,10 +17,7 @@
 
 #include "arm64.h"
 
-/*
- * Independent parameters
- */
-#define ARM_CLK_FREQ_MHZ 1200
+// DRAM
 #define DRAM_SIZE_MB 2048
 
 // Cache-coherent interconnect CCI-400

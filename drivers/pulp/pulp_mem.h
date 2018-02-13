@@ -29,9 +29,7 @@
 
 #include "pulp_module.h"
 
-#include "pulp_host.h"
-
-// funtions
+// methods
 void pulp_mem_cache_flush(struct page * page, unsigned offset_start, unsigned offset_end);
 void pulp_mem_cache_inv(struct page * page, unsigned offset_start, unsigned offset_end);
 unsigned  pulp_mem_get_num_pages(unsigned addr_start, unsigned size_b);
