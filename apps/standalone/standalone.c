@@ -1,6 +1,5 @@
 #include <stdlib.h>
 
-#include "pulp_host.h"
 #include "pulp_func.h"
 
 int main(int argc, char *argv[]) {
