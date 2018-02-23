@@ -30,7 +30,7 @@
  * 
  * Author: Pirmin Vogel - vogelpi@iis.ee.ethz.ch
  * 
- * Purpose : Linux kernel-level driver for bigPULP
+ * Purpose : Linux kernel-level driver for PULP
  *           RAB management for shared virtual memory between host and PULP
  * 
  * --=========================================================================--
@@ -606,7 +606,18 @@ module_init(pulp_init);
  ***********************************************************************************/
 static void __exit pulp_exit(void)
 {
+  unsigned gpio;
+
   pulp_mbox_clear();
+
+  // reset PULP
+  gpio = 0;
+  iowrite32(gpio,(void *)((unsigned long)my_dev.gpio+0x8));
+
+  // disable the reset
+  BIT_SET(gpio,BF_MASK_GEN(GPIO_RST_N,1));
+  BIT_SET(gpio,BF_MASK_GEN(GPIO_CLK_EN,1));
+  iowrite32(gpio,(void *)((unsigned long)my_dev.gpio+0x8));
 
   printk(KERN_ALERT "PULP: Unloading device driver.\n");
   // undo __init pulp_init
@@ -821,9 +832,11 @@ int pulp_mmap(struct file *filp, struct vm_area_struct *vma)
   vma->vm_flags |= VM_IO | VM_RESERVED;
   vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
-  printk(KERN_INFO
-    "PULP: %s memory mapped. \nPhysical address = %#lx, user-space virtual address = %#lx, vsize = %#lx.\n",
-    type, physical << PAGE_SHIFT, vma->vm_start, vsize);
+  if (DEBUG_LEVEL_PULP > 0) {
+    printk(KERN_INFO
+      "PULP: %s memory mapped. \nPhysical address = %#lx, user-space virtual address = %#lx, vsize = %#lx.\n",
+      type, physical << PAGE_SHIFT, vma->vm_start, vsize);
+  }
   
   if (vsize > psize)
     return -EINVAL; /*  spans too high */

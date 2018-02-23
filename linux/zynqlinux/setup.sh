@@ -65,7 +65,7 @@ if [ ! -d "buildroot" ]; then
   git clone git://git.buildroot.net/buildroot.git
 
   # checkout tag
-  cd linux-xlnx
+  cd buildroot
   git checkout tags/${BUILDROOT_TAG}
   cd ..
 
