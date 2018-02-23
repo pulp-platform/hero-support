@@ -606,7 +606,18 @@ module_init(pulp_init);
  ***********************************************************************************/
 static void __exit pulp_exit(void)
 {
+  unsigned gpio;
+
   pulp_mbox_clear();
+
+  // reset PULP
+  gpio = 0;
+  iowrite32(gpio,(void *)((unsigned long)my_dev.gpio+0x8));
+
+  // disable the reset
+  BIT_SET(gpio,BF_MASK_GEN(GPIO_RST_N,1));
+  BIT_SET(gpio,BF_MASK_GEN(GPIO_CLK_EN,1));
+  iowrite32(gpio,(void *)((unsigned long)my_dev.gpio+0x8));
 
   printk(KERN_ALERT "PULP: Unloading device driver.\n");
   // undo __init pulp_init
