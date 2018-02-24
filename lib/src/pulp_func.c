@@ -499,12 +499,28 @@ int pulp_clking_measure_freq(PulpDev *pulp)
   unsigned seconds = 1;
   unsigned limit = 0;
 
+  unsigned arm_clk_freq_mhz = ARM_CLK_FREQ_MHZ;
+  FILE *fp;
+  char arm_clk_freq_khz_string[20];
+
+  // if possible get host clock frequency from sysfs
+  if( access("/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq", F_OK ) != -1 ) {
+
+    if((fp = fopen("/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq", "r")) == NULL)
+      printf("ERROR: Could not open sysfs.\n");
+    else if ( fgets(arm_clk_freq_khz_string, 20, fp) != NULL)
+      arm_clk_freq_mhz = (strtoul(arm_clk_freq_khz_string, NULL, 10)+1)/1000;
+
+    fclose(fp);
+  }
+  pulp->host_clk_freq_mhz = arm_clk_freq_mhz;
+
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
-   limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*1.61)*seconds);
+   limit = (unsigned)((float)(arm_clk_freq_mhz*100000*1.61)*seconds);
 #elif PLATFORM == TE0808
-   limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*2.0125)*seconds);
+   limit = (unsigned)((float)(arm_clk_freq_mhz*100000*2.33)*seconds);
 #else // PLATFORM == JUNO
-   limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*1.61)*seconds);
+   limit = (unsigned)((float)(arm_clk_freq_mhz*100000*1.61)*seconds);
 #endif
 
   unsigned pulp_clk_counter, arm_clk_counter;
@@ -556,7 +572,7 @@ int pulp_clking_measure_freq(PulpDev *pulp)
 
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   if (zynq_pmm) {
-    mes_freq_mhz = (int)((float)pulp_clk_counter/((float)(arm_clk_counter*ARM_PMU_CLK_DIV)/ARM_CLK_FREQ_MHZ));
+    mes_freq_mhz = (int)((float)pulp_clk_counter/((float)(arm_clk_counter*ARM_PMU_CLK_DIV)/arm_clk_freq_mhz));
   }
   else {
     mes_freq_mhz = (int)((float)pulp_clk_counter/seconds/1000000);
@@ -564,6 +580,8 @@ int pulp_clking_measure_freq(PulpDev *pulp)
 #else
   mes_freq_mhz = (int)((float)pulp_clk_counter/seconds/1000000);
 #endif
+
+  pulp->pulp_clk_freq_mhz = mes_freq_mhz;
 
   return mes_freq_mhz;
 }

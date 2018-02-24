@@ -438,6 +438,8 @@ typedef struct {
   unsigned int cluster_sel;       // cluster select
   unsigned int rab_ax_log_en;     // enable RAB AR/AW logger
   unsigned int intr_rab_miss_dis; // disable RAB miss interrupt to host
+  unsigned int host_clk_freq_mhz;
+  unsigned int pulp_clk_freq_mhz;
 } PulpDev;
 
 // striping informationg structure
