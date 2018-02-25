@@ -59,6 +59,13 @@ typedef enum {
   WAIT  = 1,
 } WorkerStatus;
 
+typedef struct SmmuPage SmmuPage;
+struct SmmuPage {
+  unsigned long     iova;
+  struct page *     page_ptr;
+  struct SmmuPage * previous;
+};
+
 // methods declarations
 int pulp_smmu_init(PulpDev * pulp_ptr);
 

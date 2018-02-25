@@ -57,11 +57,10 @@ static unsigned long iova_faulty;
 // fault handler config
 static unsigned coherent;
 
-// very simple managment structures
-#define N_PAGES 256
-static unsigned long iova_array[N_PAGES];
-static struct page  *pages_ptrs[N_PAGES];
-static unsigned int  page_idx = 0;
+// managment structures
+static unsigned int      smmu_page_count;
+static struct SmmuPage   smmu_page;
+static struct SmmuPage * smmu_page_ptr;
 
 static size_t size = PAGE_SIZE;
 //}}}
@@ -292,11 +291,11 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   RabSliceReq rab_slice_req;
 
   /*
-   * init iova array
+   * init smmu_page structure
    */
-  for (i=N_PAGES-1; i>=0; i--) {
-    iova_array[i] = 0;
-  }
+  smmu_page_ptr = &smmu_page;
+  smmu_page_ptr->previous = NULL;
+  smmu_page_count = 0;
 
   /*
    * prepare RAB for bypassing
@@ -489,7 +488,8 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
  */
 int pulp_smmu_dis(PulpDev *pulp_ptr)
 {
-  int ret, i;
+  int ret;
+  struct SmmuPage * smmu_page_old_ptr;
 
   /*
    * disable RAB bypassing
@@ -513,27 +513,32 @@ int pulp_smmu_dis(PulpDev *pulp_ptr)
   /*
    * unmap shared pages from I/O page table
    */
-  for (i=N_PAGES-1; i>=0; i--) {
-    if (iova_array[i] > 0) {
-      if (DEBUG_LEVEL_SMMU_FH > 0)
-        printk(KERN_INFO "PULP - SMMU: iova_array[%i] = %#lx\n", i, iova_array[i]);
+  printk(KERN_INFO "PULP - SMMU: Mapped totally %d pages to IOVA space.\n", smmu_page_count);
+  while (smmu_page_ptr->previous != NULL) {
 
-      // unmap the page
-      iommu_unmap(smmu_domain_ptr, iova_array[i], size);
+    // delete empty smmu_page
+    smmu_page_old_ptr = smmu_page_ptr;
+    smmu_page_ptr     = smmu_page_old_ptr->previous;
+    kfree(smmu_page_old_ptr);
 
-      iova_array[i] = 0;
+    if (DEBUG_LEVEL_SMMU_FH > 0)
+      printk(KERN_INFO "PULP - SMMU: iova = %#lx\n", smmu_page_ptr->iova);
 
-      // cache invalidation (in case of prefetching/speculation...)
-      if (!coherent)
-        pulp_mem_cache_inv(pages_ptrs[i], 0, PAGE_SIZE);
+    // unmap the page
+    iommu_unmap(smmu_domain_ptr, smmu_page_ptr->iova, size);
 
-      // unpin user-space memory
-      if ( !PageReserved(pages_ptrs[i]) )
-        SetPageDirty(pages_ptrs[i]);
-      put_page(pages_ptrs[i]);
-    }
+    // cache invalidation (in case of prefetching/speculation...)
+    if (!coherent)
+      pulp_mem_cache_inv(smmu_page_ptr->page_ptr, 0, PAGE_SIZE);
+
+    // unpin user-space memory
+    if ( !PageReserved(smmu_page_ptr->page_ptr) )
+      SetPageDirty(smmu_page_ptr->page_ptr);
+    put_page(smmu_page_ptr->page_ptr);
+
+    // decrement index
+    smmu_page_count--;
   }
-  page_idx = 0;
 
   /*
    * disable smmu_domain
@@ -638,6 +643,7 @@ void pulp_smmu_handle_fault(void)
   phys_addr_t paddr;
   size_t size;
   int prot;
+  struct SmmuPage * smmu_page_new_ptr;
 
   int write = 1;
   size = PAGE_SIZE;
@@ -668,7 +674,7 @@ void pulp_smmu_handle_fault(void)
 
   // get pointer to user-space buffer and lock it into memory, get a single page
   down_read(&user_task->mm->mmap_sem);
-  ret = get_user_pages_remote(user_task, user_task->mm, vaddr, 1, write ? FOLL_WRITE : 0, &pages_ptrs[page_idx], NULL);
+  ret = get_user_pages_remote(user_task, user_task->mm, vaddr, 1, write ? FOLL_WRITE : 0, &smmu_page_ptr->page_ptr, NULL);
   up_read(&user_task->mm->mmap_sem);
   if ( ret != 1 ) {
     printk(KERN_WARNING "PULP - SMMU: Could not get requested user-space virtual address %#lx.\n", iova);
@@ -677,18 +683,26 @@ void pulp_smmu_handle_fault(void)
   }
 
   // virtual-to-physical address translation
-  paddr = (phys_addr_t)page_to_phys(pages_ptrs[page_idx]);
+  paddr = (phys_addr_t)page_to_phys(smmu_page_ptr->page_ptr);
 
   if (DEBUG_LEVEL_SMMU_FH > 0)
     printk(KERN_INFO "PULP - SMMU: Physical address = %#lx\n",(long unsigned)paddr);
 
-  iova_array[page_idx] = vaddr;
+  smmu_page_ptr->iova = vaddr;
 
   // flush data caches
   if (!coherent)
-    pulp_mem_cache_flush(pages_ptrs[page_idx], 0, size);
+    pulp_mem_cache_flush(smmu_page_ptr->page_ptr, 0, size);
 
-  page_idx++;
+  smmu_page_new_ptr = (struct SmmuPage *)kmalloc((size_t)sizeof(SmmuPage), GFP_KERNEL);
+  if (smmu_page_new_ptr == NULL) {
+    printk(KERN_WARNING "PULP - SMMU: Memory allocation failed.\n");
+    ret = -ENOMEM;
+    goto pulp_smmu_handle_fault_error;
+  }
+  smmu_page_new_ptr->previous = smmu_page_ptr;
+  smmu_page_ptr               = smmu_page_new_ptr;
+  smmu_page_count++;
 
   // prepare mapping
   prot = IOMMU_READ | (write ? IOMMU_WRITE : 0) | (coherent ? IOMMU_CACHE : 0);
