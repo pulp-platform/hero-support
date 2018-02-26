@@ -74,18 +74,28 @@
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
 
   #if PLATFORM == ZEDBOARD
+    #define RAB_AX_LOG_EN  0
     #define L3_MEM_SIZE_MB 16
 
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
-    #define L3_MEM_SIZE_MB 128
+    #define RAB_AX_LOG_EN         1
+    #define RAB_AX_LOG_BUF_SIZE_B 0x600000
+
+    #define L3_MEM_SIZE_MB        128
 
   #endif // PLATFORM
 
 #elif PLATFORM == JUNO
-  #define L3_MEM_SIZE_MB   128
+  #define RAB_AX_LOG_EN         1
+  #define RAB_AX_LOG_BUF_SIZE_B 0x6000000
+
+  #define L3_MEM_SIZE_MB        128
 
 #else // TE0808
-  #define L3_MEM_SIZE_MB   128
+  #define RAB_AX_LOG_EN         1
+  #define RAB_AX_LOG_BUF_SIZE_B 0x6000000
+
+  #define L3_MEM_SIZE_MB        128
 
 #endif // PLATFORM
 
