@@ -349,6 +349,17 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
     return ret;
   }
 
+  // map contiguous L3 memory for bypassing
+  ret = iommu_map(smmu_domain_ptr, L3_MEM_H_BASE_ADDR, L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B, IOMMU_READ | IOMMU_WRITE);
+  if (ret) {
+    printk(KERN_WARNING "PULP - SMMU: Could not map contiguous L3 memory to SMMU, ERROR = %i.\n", ret);
+    return ret;
+  }
+  if (DEBUG_LEVEL_SMMU > 2) {
+    printk(KERN_INFO "PULP - SMMU: Mapped contiguous L3 memory to SMMU: iova = %#lx, size = %#x.\n",
+      (unsigned long)L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B);
+  }
+
   // get context bank ID for top/bottom half
   offset = SMMU_S2CR_OFFSET_B + smr_ids[0]*4;
   value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
