@@ -1071,7 +1071,7 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
     }
     char lt_str[20];
     sprintf(lt_str, "%04d-%02d-%02d_%02d-%02d-%02d",
-        lt->tm_year+1900, lt->tm_mon, lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);
+        lt->tm_year+1900, lt->tm_mon+1, lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);
     char filename[64];
     sprintf(filename, "rab_ax_log_%s.txt", lt_str);
 
