@@ -66,7 +66,9 @@
 /*
  * Debug flags
  */
-#define DEBUG_LEVEL 0
+#ifndef DEBUG_LEVEL
+  #define DEBUG_LEVEL 0
+#endif
 
 /*
  * Host memory map - Part 1 -- see Vivado block diagram
