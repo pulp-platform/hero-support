@@ -216,8 +216,7 @@
 #define CLKING_STATUS_REG_OFFSET_B    0x4
 
 #if   PLATFORM == ZEDBOARD || PLATFORM == MINI_ITX || PLATFORM == ZC706
-  //#define ARM_CLK_FREQ_MHZ 666
-  #define ARM_CLK_FREQ_MHZ 333  // benchmarking
+  #define ARM_CLK_FREQ_MHZ 666
 #elif PLATFORM == TE0808
   #define ARM_CLK_FREQ_MHZ 1200
 #else // JUNO
