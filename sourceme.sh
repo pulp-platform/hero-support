@@ -131,6 +131,7 @@ else
     	export WORKSPACE_DIR=/scratch/vogelpi/zedboard
     elif [ "${PLATFORM}" -eq "2" ]; then
         export WORKSPACE_DIR=/scratch/vogelpi/zc706
+        export PULP_CURRENT_CONFIG="system=bigpulp-z-7045:platform=hsa:nb_cluster=1"
     else
     	export WORKSPACE_DIR=/scratch/vogelpi/mini-itx
     fi
