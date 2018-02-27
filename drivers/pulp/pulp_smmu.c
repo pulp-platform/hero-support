@@ -478,6 +478,10 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
     }
   }
 
+  // also route accesses to the contiguous L3 memory through HPC0
+  if (coherent)
+    iowrite32(0xf, (void *)((unsigned long)pulp->rab_config+0x20*RAB_L1_N_SLICES_PORT_0+0x38));
+
   if (DEBUG_LEVEL_SMMU > 2) {
     pulp_rab_mapping_print(pulp_ptr->rab_config, 0);
   }
