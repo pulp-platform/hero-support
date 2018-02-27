@@ -153,6 +153,7 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   rab_mh_date = 0;
   rab_mh_acp = 0;
   rab_mh_lvl = 0;
+  rab_n_slices_reserved_for_host = RAB_L1_N_SLICES_PORT_1;
 
   // By default, the SoC does not handle RAB misses.
   pulp_rab_soc_mh_dis(pulp->rab_config);
@@ -232,7 +233,7 @@ int pulp_rab_release(void)
     pulp_rab_free_striped(pulp->rab_config, i);
   }
 
-  pulp_rab_free(pulp->rab_config, 0);
+  pulp_rab_free(pulp->rab_config, RAB_MAX_DATE-1);
 
   #ifdef PROFILE_RAB_MH_SIMPLE
     printk(KERN_INFO "PROFILE_RAB_MH_SIMPLE: n_misses = %d, n_first_misses = %d, n_schedule = %d\n",

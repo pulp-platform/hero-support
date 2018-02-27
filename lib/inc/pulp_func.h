@@ -74,18 +74,28 @@
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI_ITX
 
   #if PLATFORM == ZEDBOARD
+    #define RAB_AX_LOG_EN  0
     #define L3_MEM_SIZE_MB 16
 
   #elif PLATFORM == ZC706 || PLATFORM == MINI_ITX
-    #define L3_MEM_SIZE_MB 128
+    #define RAB_AX_LOG_EN         1
+    #define RAB_AX_LOG_BUF_SIZE_B 0x600000
+
+    #define L3_MEM_SIZE_MB        128
 
   #endif // PLATFORM
 
 #elif PLATFORM == JUNO
-  #define L3_MEM_SIZE_MB   128
+  #define RAB_AX_LOG_EN         1
+  #define RAB_AX_LOG_BUF_SIZE_B 0x6000000
+
+  #define L3_MEM_SIZE_MB        128
 
 #else // TE0808
-  #define L3_MEM_SIZE_MB   128
+  #define RAB_AX_LOG_EN         1
+  #define RAB_AX_LOG_BUF_SIZE_B 0x6000000
+
+  #define L3_MEM_SIZE_MB        128
 
 #endif // PLATFORM
 
@@ -206,8 +216,7 @@
 #define CLKING_STATUS_REG_OFFSET_B    0x4
 
 #if   PLATFORM == ZEDBOARD || PLATFORM == MINI_ITX || PLATFORM == ZC706
-  //#define ARM_CLK_FREQ_MHZ 666
-  #define ARM_CLK_FREQ_MHZ 333  // benchmarking
+  #define ARM_CLK_FREQ_MHZ 666
 #elif PLATFORM == TE0808
   #define ARM_CLK_FREQ_MHZ 1200
 #else // JUNO
@@ -438,6 +447,8 @@ typedef struct {
   unsigned int cluster_sel;       // cluster select
   unsigned int rab_ax_log_en;     // enable RAB AR/AW logger
   unsigned int intr_rab_miss_dis; // disable RAB miss interrupt to host
+  unsigned int host_clk_freq_mhz;
+  unsigned int pulp_clk_freq_mhz;
 } PulpDev;
 
 // striping informationg structure

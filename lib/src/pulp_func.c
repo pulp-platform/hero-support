@@ -386,6 +386,11 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
 {
   unsigned status;
   int timeout;
+
+  // set default clk values in pulp struct
+  pulp->pulp_clk_freq_mhz = PULP_DEFAULT_FREQ_MHZ;
+  pulp->host_clk_freq_mhz = ARM_CLK_FREQ_MHZ;
+
   int freq_mhz = des_freq_mhz - (des_freq_mhz % 5);
   if(freq_mhz <= 0)
     freq_mhz = 5;
@@ -432,6 +437,7 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
     }
     if ( status ) {
       printf("ERROR: Clock manager not locked, cannot start reconfiguration.\n");
+      pulp->pulp_clk_freq_mhz = PULP_DEFAULT_FREQ_MHZ;
       return -EBUSY;
     }
   }
@@ -452,6 +458,7 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
     }
     if ( status ) {
       printf("ERROR: Clock manager not locked, clock reconfiguration failed.\n");
+      pulp->pulp_clk_freq_mhz = PULP_DEFAULT_FREQ_MHZ;
       return -EBUSY;
     }
   }
@@ -483,6 +490,8 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   //system(cmd);
 #endif
 
+  pulp->pulp_clk_freq_mhz = freq_mhz;
+
   return freq_mhz;
 }
 
@@ -499,12 +508,29 @@ int pulp_clking_measure_freq(PulpDev *pulp)
   unsigned seconds = 1;
   unsigned limit = 0;
 
+  unsigned arm_clk_freq_mhz = ARM_CLK_FREQ_MHZ;
+  FILE *fp;
+  char arm_clk_freq_khz_string[20];
+  float deviation;
+
+  // if possible get host clock frequency from sysfs
+  if( access("/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq", F_OK ) != -1 ) {
+
+    if((fp = fopen("/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_cur_freq", "r")) == NULL)
+      printf("ERROR: Could not open sysfs.\n");
+    else if ( fgets(arm_clk_freq_khz_string, 20, fp) != NULL)
+      arm_clk_freq_mhz = (strtoul(arm_clk_freq_khz_string, NULL, 10)+1)/1000;
+
+    fclose(fp);
+  }
+  pulp->host_clk_freq_mhz = arm_clk_freq_mhz;
+
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
-   limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*1.61)*seconds);
+   limit = (unsigned)((float)(arm_clk_freq_mhz*100000*1.61)*seconds);
 #elif PLATFORM == TE0808
-   limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*2.0125)*seconds);
+   limit = (unsigned)((float)(arm_clk_freq_mhz*100000*2.33)*seconds);
 #else // PLATFORM == JUNO
-   limit = (unsigned)((float)(ARM_CLK_FREQ_MHZ*100000*1.61)*seconds);
+   limit = (unsigned)((float)(arm_clk_freq_mhz*100000*1.61)*seconds);
 #endif
 
   unsigned pulp_clk_counter, arm_clk_counter;
@@ -556,7 +582,7 @@ int pulp_clking_measure_freq(PulpDev *pulp)
 
 #if PLATFORM == ZEDBOARD || PLATFORM == ZC706 || PLATFORM == MINI-ITX
   if (zynq_pmm) {
-    mes_freq_mhz = (int)((float)pulp_clk_counter/((float)(arm_clk_counter*ARM_PMU_CLK_DIV)/ARM_CLK_FREQ_MHZ));
+    mes_freq_mhz = (int)((float)pulp_clk_counter/((float)(arm_clk_counter*ARM_PMU_CLK_DIV)/arm_clk_freq_mhz));
   }
   else {
     mes_freq_mhz = (int)((float)pulp_clk_counter/seconds/1000000);
@@ -564,6 +590,14 @@ int pulp_clking_measure_freq(PulpDev *pulp)
 #else
   mes_freq_mhz = (int)((float)pulp_clk_counter/seconds/1000000);
 #endif
+
+  // How far away is the measured frequency from the configured one?
+  deviation = (float)pulp->pulp_clk_freq_mhz - (float)mes_freq_mhz;
+  if (deviation < 0)
+    deviation = -deviation;
+  if (deviation/(float)pulp->pulp_clk_freq_mhz > 0.2)
+    printf("WARNING: Clock configuration probably failed. Configured for %d MHz, measured %d MHz.\n",
+      pulp->pulp_clk_freq_mhz, mes_freq_mhz);
 
   return mes_freq_mhz;
 }
@@ -1053,7 +1087,7 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
     }
     char lt_str[20];
     sprintf(lt_str, "%04d-%02d-%02d_%02d-%02d-%02d",
-        lt->tm_year+1900, lt->tm_mon, lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);
+        lt->tm_year+1900, lt->tm_mon+1, lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);
     char filename[64];
     sprintf(filename, "rab_ax_log_%s.txt", lt_str);
 

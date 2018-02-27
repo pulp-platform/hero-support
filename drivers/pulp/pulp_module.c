@@ -1259,6 +1259,9 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     gpio_value = request[0];
 
+    BIT_SET(gpio_value,BF_MASK_GEN(GPIO_RST_N,1));
+    BIT_SET(gpio_value,BF_MASK_GEN(GPIO_CLK_EN,1));
+
     pulp_rab_ax_log_en = (gpio_value >> GPIO_RAB_AX_LOG_EN) & 0x1;
 
     break;
