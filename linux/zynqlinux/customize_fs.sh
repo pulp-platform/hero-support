@@ -36,6 +36,9 @@ else
     # Move content of files_to_add to unpacked file system
     cp -r  files_to_add/. tmp_mnt/.
 
+    # Make sure there are no backup files corrupting `/etc/init.d`.
+    rm -f tmp_mnt/etc/init.d/*~
+
     # Repack the root file system
     sh -c 'cd tmp_mnt/ && find . | cpio -H newc -o' | gzip -9 > custom_rootfs.cpio.gz
 
