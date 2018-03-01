@@ -129,10 +129,13 @@ else
     # system workspace directory - on CentOS machine
     if   [ "${PLATFORM}" -eq "1" ]; then
     	export WORKSPACE_DIR=/scratch/vogelpi/zedboard
+        export PULP_CURRENT_CONFIG="system=bigpulp:platform=hsa:nb_cluster=1"
     elif [ "${PLATFORM}" -eq "2" ]; then
         export WORKSPACE_DIR=/scratch/vogelpi/zc706
+        export PULP_CURRENT_CONFIG="system=bigpulp-z-7045:platform=hsa:nb_cluster=1"
     else
     	export WORKSPACE_DIR=/scratch/vogelpi/mini-itx
+        export PULP_CURRENT_CONFIG="system=bigpulp-zux:platform=hsa:nb_cluster=1"
     fi
 
     # directory containing the kernel sources
