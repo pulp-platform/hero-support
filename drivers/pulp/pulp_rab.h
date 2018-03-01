@@ -343,6 +343,7 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping);
 void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping);
 
 void pulp_rab_l2_init(void *rab_config);
+void pulp_rab_l2_clear_hw(void *rab_config, unsigned char port);
 int  pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, char enable_replace);
 int  pulp_rab_l2_check_availability(L2Entry *tlb_entry, char port);
 int  pulp_rab_l2_invalidate_all_entries(void *rab_config, char port);

@@ -217,22 +217,25 @@ int pulp_rab_release(void)
   // disable the host RAB miss handler
   pulp_rab_mh_dis();
 
-  // free RAB slices managed by SoC
+  // free RAB slices (L1 TLB) managed by SoC
   for (i = rab_n_slices_host; i < RAB_L1_N_SLICES_PORT_1; i++) {
     offset = 0x20*(RAB_L1_N_SLICES_PORT_0 + i);
     iowrite32(0, (void *)((unsigned long)pulp->rab_config+offset+0x38));
   }
 
-  /* Free RAB slices managed by host and reset management structures.
+  /* Free RAB entries managed by host and SoC and reset driver management
+   * structures.
    *
    * L1-striped mappings and statically allocated mappings/mappings created
    * by the host miss handler are freed separately through the _free and
    * _free_striped functions, respectively.
+   *
+   * Mappings in the L2 TLB created both by the host and the SoC are freed
+   * through a call to the pulp_rab_free function.
    */
   for (i = 0; i < RAB_L1_N_MAPPINGS_PORT_1; i++) {
     pulp_rab_free_striped(pulp->rab_config, i);
   }
-
   pulp_rab_free(pulp->rab_config, RAB_MAX_DATE-1);
 
   #ifdef PROFILE_RAB_MH_SIMPLE
@@ -840,29 +843,43 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
  */
 void pulp_rab_l2_init(void *rab_config)
 {
-  unsigned int i_port, i_set, i_entry, offset;
+  unsigned char i_port;
   for (i_port = 0; i_port < RAB_N_PORTS; ++i_port) {
-    if (RAB_L2_EN_ON_PORT[i_port]) {
-      for (i_set = 0; i_set < RAB_L2_N_SETS; ++i_set) {
-        for (i_entry = 0; i_entry < RAB_L2_N_ENTRIES_PER_SET; ++i_entry) {
-          // Clear VA RAM. No need to clear PA RAM.
-          offset = ((i_port+1)*0x4000) + (i_set*RAB_L2_N_ENTRIES_PER_SET*4) + (i_entry*4);
-          iowrite32(0, (void *)((unsigned long)rab_config + offset));
-          l2.set[i_set].entry[i_entry].flags = 0;
-          l2.set[i_set].entry[i_entry].pfn_p = 0;
-          l2.set[i_set].entry[i_entry].pfn_v = 0;
-        }
-        l2.set[i_set].next_entry_idx = 0;
-        l2.set[i_set].is_full = 0;
-      }
-    }
+    pulp_rab_l2_clear_hw(rab_config, i_port);
   }
+
   if (DEBUG_LEVEL_RAB > 0)
     printk(KERN_INFO "PULP - RAB L2: Initialized VRAMs to 0.\n");
-
-  return;
 }
 // }}}
+
+// l2_clear_hw {{{
+/**
+ * Clear L2 TLB HW and struct of a given RAB port.
+ *
+ * @rab_config: kernel virtual address of the RAB configuration port.
+ * @port:       Port number of area to clear
+ */
+void pulp_rab_l2_clear_hw(void *rab_config, unsigned char port)
+{
+  unsigned int i_set, i_entry, offset;
+  if (RAB_L2_EN_ON_PORT[port]) {
+    for (i_set = 0; i_set < RAB_L2_N_SETS; ++i_set) {
+      for (i_entry = 0; i_entry < RAB_L2_N_ENTRIES_PER_SET; ++i_entry) {
+        // Clear VA RAM. No need to clear PA RAM.
+        offset = ((port+1)*0x4000) + (i_set*RAB_L2_N_ENTRIES_PER_SET*4) + (i_entry*4);
+        iowrite32(0, (void *)((unsigned long)rab_config + offset));
+        l2.set[i_set].entry[i_entry].flags = 0;
+        l2.set[i_set].entry[i_entry].pfn_p = 0;
+        l2.set[i_set].entry[i_entry].pfn_v = 0;
+      }
+      l2.set[i_set].next_entry_idx = 0;
+      l2.set[i_set].is_full = 0;
+    }
+  }
+}
+// }}}
+
 
 // l2_setup_entry {{{
 /**
@@ -978,6 +995,9 @@ int pulp_rab_l2_invalidate_all_entries(void *rab_config, char port)
     }
     l2.set[set_num].next_entry_idx = 0;
   }
+
+  //Clear HW, even if struct has no entries.
+  pulp_rab_l2_clear_hw(rab_config, port);
 
   return 0;
 }
