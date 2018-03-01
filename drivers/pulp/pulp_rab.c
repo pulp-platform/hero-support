@@ -217,22 +217,25 @@ int pulp_rab_release(void)
   // disable the host RAB miss handler
   pulp_rab_mh_dis();
 
-  // free RAB slices managed by SoC
+  // free RAB slices (L1 TLB) managed by SoC
   for (i = rab_n_slices_host; i < RAB_L1_N_SLICES_PORT_1; i++) {
     offset = 0x20*(RAB_L1_N_SLICES_PORT_0 + i);
     iowrite32(0, (void *)((unsigned long)pulp->rab_config+offset+0x38));
   }
 
-  /* Free RAB slices managed by host and reset management structures.
+  /* Free RAB entries managed by host and SoC and reset driver management
+   * structures.
    *
    * L1-striped mappings and statically allocated mappings/mappings created
    * by the host miss handler are freed separately through the _free and
    * _free_striped functions, respectively.
+   *
+   * Mappings in the L2 TLB created both by the host and the SoC are freed
+   * through a call to the pulp_rab_free function.
    */
   for (i = 0; i < RAB_L1_N_MAPPINGS_PORT_1; i++) {
     pulp_rab_free_striped(pulp->rab_config, i);
   }
-
   pulp_rab_free(pulp->rab_config, RAB_MAX_DATE-1);
 
   #ifdef PROFILE_RAB_MH_SIMPLE
