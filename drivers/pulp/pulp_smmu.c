@@ -139,6 +139,33 @@ static int pulp_smmu_set_attr(PulpDev * pulp_ptr)
   if (DEBUG_LEVEL_SMMU > 2)
     printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[1]);
 
+#ifdef PULP_SMMU_GLOBAL_BYPASS
+  // modify GR0 register to set attributes for global bypassing
+  offset = SMMU_GR0_OFFSET_B;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+
+  // set shareability - default: 0b00, outer shareable: 0b01, inner shareable: 0b10
+  BF_SET(value, 0b00, SMMU_GR0_SHCFG, 2);
+
+  // set MemAttr
+  BF_SET(value, 0b1, SMMU_GR0_MTCFG, 1); // use MemAttr
+  BF_SET(value, 0b1111, SMMU_GR0_MEMATTR, 4); // outer + inner write-back cacheable
+
+  // set NSCFG
+  BF_SET(value, 0b11, SMMU_GR0_NSCFG, 2); // non-secure
+
+  // set RA/WA - default (take over from AxCACHE): 0b00, allocate: 0b10, no allocate: 0b01
+  BF_SET(value, 0b00, SMMU_GR0_RACFG, 2);
+  BF_SET(value, 0b00, SMMU_GR0_WACFG, 2);
+
+  // set transient hint
+  BF_SET(value, 0b10, SMMU_GR0_TRANSIENTCFG, 2); // non-transient
+
+  iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[0]);
+#endif
+
   return 0;
 }
 
@@ -181,6 +208,18 @@ static int pulp_smmu_bypass(PulpDev * pulp_ptr)
   iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
   if (DEBUG_LEVEL_SMMU > 2)
     printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[1]);
+
+#ifdef PULP_SMMU_GLOBAL_BYPASS
+  // modify GR0 register to disable the SMMU for global bypassing
+  offset = SMMU_GR0_OFFSET_B;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+
+  BF_SET(value, 0b1, SMMU_GR0_CLIENTPD, 1); // global bypass/client port disable
+
+  iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to GR0\n", value);
+#endif
 
   return 0;
 }
@@ -289,6 +328,18 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   int data = 0; // arm_smmu_domain_set_attr requires 0 to set ARM_SMMU_DOMAIN_S1
   unsigned offset, value;
   RabSliceReq rab_slice_req;
+
+#ifdef PULP_SMMU_GLOBAL_BYPASS
+  // modify GR0 register to disable global SMMU bypassing
+  offset = SMMU_GR0_OFFSET_B;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+
+  BF_SET(value, 0b0, SMMU_GR0_CLIENTPD, 1); // global bypass/client port enable
+
+  iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to GR0\n", value);
+#endif
 
   /*
    * init smmu_page structure
