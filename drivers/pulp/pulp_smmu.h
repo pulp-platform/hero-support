@@ -65,6 +65,9 @@
 
 #define SMMU_N_BITS_STREAM_ID   14
 
+#define SMMU_FLAGS_CC           0b00000001
+#define SMMU_FLAGS_SHPT_EMU     0b00000010
+
 // type definitions
 typedef enum {
   READY = 0,

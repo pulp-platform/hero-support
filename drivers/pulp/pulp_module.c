@@ -1234,7 +1234,7 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
   case PULP_IOCTL_SMMU_ENA:
     #if PLATFORM == TE0808
-      retval = pulp_smmu_ena(&my_dev, arg & 1);
+      retval = pulp_smmu_ena(&my_dev, BIT_GET(arg, (SMMU_FLAGS_CC | SMMU_FLAGS_SHPT_EMU)));
     #endif
     break;
 

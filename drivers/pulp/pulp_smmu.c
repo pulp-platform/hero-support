@@ -56,6 +56,7 @@ static unsigned long iova_faulty;
 
 // fault handler config
 static unsigned coherent;
+static unsigned emulate;
 
 // managment structures
 static unsigned int      smmu_page_count;
@@ -327,6 +328,7 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   int ret, i ,j;
   int data = 0; // arm_smmu_domain_set_attr requires 0 to set ARM_SMMU_DOMAIN_S1
   unsigned offset, value;
+  unsigned long vaddr;
   RabSliceReq rab_slice_req;
 
 #ifdef PULP_SMMU_GLOBAL_BYPASS
@@ -359,7 +361,8 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   }
 
   // store flags
-  coherent = flags;
+  coherent = BIT_GET(flags,SMMU_FLAGS_CC);
+  emulate  = BIT_GET(flags,SMMU_FLAGS_SHPT_EMU);
 
   /*
    * set up smmu_domain
@@ -401,10 +404,23 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   }
 
   // map contiguous L3 memory for bypassing
-  ret = iommu_map(smmu_domain_ptr, L3_MEM_H_BASE_ADDR, L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B, IOMMU_READ | IOMMU_WRITE);
-  if (ret) {
-    printk(KERN_WARNING "PULP - SMMU: Could not map contiguous L3 memory to SMMU, ERROR = %i.\n", ret);
-    return ret;
+  if (emulate) {
+    vaddr = L3_MEM_H_BASE_ADDR;
+    while (vaddr < (L3_MEM_H_BASE_ADDR+L3_MEM_SIZE_B) ) {
+      ret = iommu_map(smmu_domain_ptr, vaddr, (phys_addr_t)vaddr, PAGE_SIZE, IOMMU_READ | IOMMU_WRITE);
+      if (ret) {
+        printk(KERN_WARNING "PULP - SMMU: Could not map contiguous L3 memory to SMMU, ERROR = %i.\n", ret);
+        return ret;
+      }
+      vaddr += PAGE_SIZE;
+    }
+  }
+  else {
+    ret = iommu_map(smmu_domain_ptr, L3_MEM_H_BASE_ADDR, L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B, IOMMU_READ | IOMMU_WRITE);
+    if (ret) {
+      printk(KERN_WARNING "PULP - SMMU: Could not map contiguous L3 memory to SMMU, ERROR = %i.\n", ret);
+      return ret;
+    }
   }
   if (DEBUG_LEVEL_SMMU > 2) {
     printk(KERN_INFO "PULP - SMMU: Mapped contiguous L3 memory to SMMU: iova = %#lx, size = %#x.\n",
