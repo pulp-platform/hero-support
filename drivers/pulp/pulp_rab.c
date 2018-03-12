@@ -1227,6 +1227,9 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
 
     default: // L3_MEM_BASE_ADDR - port 1
       rab_slice_req->addr_offset = L3_MEM_H_BASE_ADDR;
+
+      // also route accesses to the contiguous L3 through the coherent port
+      //BIT_SET(rab_slice_req->flags_hw, RAB_FLAGS_HW_CC);
     }
 
     len = 1;
