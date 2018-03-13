@@ -462,13 +462,14 @@ typedef struct {
 } StripingDesc;
 
 typedef enum {
-  copy        = 0x0, // no SVM, copy-based sharing using contiguous L3 memory
-  svm_static  = 0x1, // SVM, set up static mapping at offload time, might fail - use with caution
-  svm_stripe  = 0x2, // SVM, use striping (L1 only), might fail - use with caution
-  svm_mh      = 0x3, // SVM, use miss handling
-  copy_tryx   = 0x4, // no SVM, copy-based sharing using contiguous L3 memory, but let PULP do the tryx()
-  svm_smmu    = 0x5, // SVM, use SMMU instead of RAB
-  custom      = 0xF, // do not touch (custom marshalling)
+  copy          = 0x0, // no SVM, copy-based sharing using contiguous L3 memory
+  svm_static    = 0x1, // SVM, set up static mapping at offload time, might fail - use with caution
+  svm_stripe    = 0x2, // SVM, use striping (L1 only), might fail - use with caution
+  svm_mh        = 0x3, // SVM, use miss handling
+  copy_tryx     = 0x4, // no SVM, copy-based sharing using contiguous L3 memory, but let PULP do the tryx()
+  svm_smmu      = 0x5, // SVM, use SMMU instead of RAB
+  svm_smmu_shpt = 0x6, // SVM, use SMMU, emulate sharing of user-space page table, no page faults
+  custom        = 0xF, // do not touch (custom marshalling)
 } ShMemType;
 
 typedef enum {
@@ -546,7 +547,7 @@ int pulp_rab_soc_mh_disable(const PulpDev* pulp);
 
 int pulp_rab_ax_log_read(const PulpDev* pulp);
 
-int pulp_smmu_enable(const PulpDev* pulp, const unsigned char coherent);
+int pulp_smmu_enable(const PulpDev* pulp, const unsigned char flags);
 int pulp_smmu_disable(const PulpDev *pulp);
 
 int pulp_dma_xfer(const PulpDev *pulp,

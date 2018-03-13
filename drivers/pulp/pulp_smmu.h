@@ -25,7 +25,10 @@
 
 #include "pulp_module.h"
 
+#define PULP_SMMU_GLOBAL_BYPASS // enable global SMMU bypassing for maximum bypass performance
+
 // constants
+#define SMMU_GR0_OFFSET_B       0x0
 #define SMMU_SMR_OFFSET_B       0x800
 #define SMMU_S2CR_OFFSET_B      0xC00
 #define SMMU_CBAR_OFFSET_B      0x1000
@@ -35,6 +38,15 @@
 #define SMMU_CB_MAIR0_OFFSET_B  0x38
 #define SMMU_CB_MAIR1_OFFSET_B  0x3C
 #define SMMU_CB_FSR_OFFSET_B    0x58
+
+#define SMMU_GR0_CLIENTPD       0
+#define SMMU_GR0_TRANSIENTCFG   6
+#define SMMU_GR0_MEMATTR        16
+#define SMMU_GR0_MTCFG          20
+#define SMMU_GR0_SHCFG          22
+#define SMMU_GR0_RACFG          24
+#define SMMU_GR0_WACFG          26
+#define SMMU_GR0_NSCFG          28
 
 #define SMMU_S2CR_SHCFG         8
 #define SMMU_S2CR_MTCFG         11
@@ -52,6 +64,9 @@
 #define SMMU_SCTLR_CFIE        (1 << 6)
 
 #define SMMU_N_BITS_STREAM_ID   14
+
+#define SMMU_FLAGS_CC           0b00000001
+#define SMMU_FLAGS_SHPT_EMU     0b00000010
 
 // type definitions
 typedef enum {

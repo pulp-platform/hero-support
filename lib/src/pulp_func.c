@@ -1199,10 +1199,10 @@ int pulp_rab_ax_log_read(const PulpDev* const pulp)
   return err;
 }
 
-int pulp_smmu_enable(const PulpDev* pulp, const unsigned char coherent)
+int pulp_smmu_enable(const PulpDev* pulp, const unsigned char flags)
 {
   // make the request
-  return ioctl(pulp->fd, PULP_IOCTL_SMMU_ENA, (unsigned) coherent);
+  return ioctl(pulp->fd, PULP_IOCTL_SMMU_ENA, (unsigned) flags);
 }
 
 int pulp_smmu_disable(const PulpDev *pulp)
@@ -1709,6 +1709,10 @@ int pulp_offload_get_pass_type(const TaskDesc *task, ElemPassType **pass_type) {
 
         case svm_smmu:
           (*pass_type)[i] = ref_svm_mh; // the miss handling is performed by the SMMU
+          break;
+
+        case svm_smmu_shpt:
+          (*pass_type)[i] = ref_copy; // the runtime maps ref_svm_smmu_shpt to ref_copy
           break;
 
         case custom:

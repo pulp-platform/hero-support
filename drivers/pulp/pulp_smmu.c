@@ -56,6 +56,7 @@ static unsigned long iova_faulty;
 
 // fault handler config
 static unsigned coherent;
+static unsigned emulate;
 
 // managment structures
 static unsigned int      smmu_page_count;
@@ -139,6 +140,33 @@ static int pulp_smmu_set_attr(PulpDev * pulp_ptr)
   if (DEBUG_LEVEL_SMMU > 2)
     printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[1]);
 
+#ifdef PULP_SMMU_GLOBAL_BYPASS
+  // modify GR0 register to set attributes for global bypassing
+  offset = SMMU_GR0_OFFSET_B;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+
+  // set shareability - default: 0b00, outer shareable: 0b01, inner shareable: 0b10
+  BF_SET(value, 0b00, SMMU_GR0_SHCFG, 2);
+
+  // set MemAttr
+  BF_SET(value, 0b1, SMMU_GR0_MTCFG, 1); // use MemAttr
+  BF_SET(value, 0b1111, SMMU_GR0_MEMATTR, 4); // outer + inner write-back cacheable
+
+  // set NSCFG
+  BF_SET(value, 0b11, SMMU_GR0_NSCFG, 2); // non-secure
+
+  // set RA/WA - default (take over from AxCACHE): 0b00, allocate: 0b10, no allocate: 0b01
+  BF_SET(value, 0b00, SMMU_GR0_RACFG, 2);
+  BF_SET(value, 0b00, SMMU_GR0_WACFG, 2);
+
+  // set transient hint
+  BF_SET(value, 0b10, SMMU_GR0_TRANSIENTCFG, 2); // non-transient
+
+  iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[0]);
+#endif
+
   return 0;
 }
 
@@ -181,6 +209,18 @@ static int pulp_smmu_bypass(PulpDev * pulp_ptr)
   iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
   if (DEBUG_LEVEL_SMMU > 2)
     printk(KERN_INFO "PULP - SMMU: Writing %#x to S2CR%i\n", value, smr_ids[1]);
+
+#ifdef PULP_SMMU_GLOBAL_BYPASS
+  // modify GR0 register to disable the SMMU for global bypassing
+  offset = SMMU_GR0_OFFSET_B;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+
+  BF_SET(value, 0b1, SMMU_GR0_CLIENTPD, 1); // global bypass/client port disable
+
+  iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to GR0\n", value);
+#endif
 
   return 0;
 }
@@ -288,7 +328,20 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   int ret, i ,j;
   int data = 0; // arm_smmu_domain_set_attr requires 0 to set ARM_SMMU_DOMAIN_S1
   unsigned offset, value;
+  unsigned long vaddr;
   RabSliceReq rab_slice_req;
+
+#ifdef PULP_SMMU_GLOBAL_BYPASS
+  // modify GR0 register to disable global SMMU bypassing
+  offset = SMMU_GR0_OFFSET_B;
+  value  = ioread32((void *)((unsigned long)pulp_ptr->smmu + offset));
+
+  BF_SET(value, 0b0, SMMU_GR0_CLIENTPD, 1); // global bypass/client port enable
+
+  iowrite32(value, (void *)((unsigned long)pulp_ptr->smmu + offset));
+  if (DEBUG_LEVEL_SMMU > 2)
+    printk(KERN_INFO "PULP - SMMU: Writing %#x to GR0\n", value);
+#endif
 
   /*
    * init smmu_page structure
@@ -308,7 +361,8 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   }
 
   // store flags
-  coherent = flags;
+  coherent = BIT_GET(flags,SMMU_FLAGS_CC);
+  emulate  = BIT_GET(flags,SMMU_FLAGS_SHPT_EMU);
 
   /*
    * set up smmu_domain
@@ -350,10 +404,23 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   }
 
   // map contiguous L3 memory for bypassing
-  ret = iommu_map(smmu_domain_ptr, L3_MEM_H_BASE_ADDR, L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B, IOMMU_READ | IOMMU_WRITE);
-  if (ret) {
-    printk(KERN_WARNING "PULP - SMMU: Could not map contiguous L3 memory to SMMU, ERROR = %i.\n", ret);
-    return ret;
+  if (emulate) {
+    vaddr = L3_MEM_H_BASE_ADDR;
+    while (vaddr < (L3_MEM_H_BASE_ADDR+L3_MEM_SIZE_B) ) {
+      ret = iommu_map(smmu_domain_ptr, vaddr, (phys_addr_t)vaddr, PAGE_SIZE, IOMMU_READ | IOMMU_WRITE);
+      if (ret) {
+        printk(KERN_WARNING "PULP - SMMU: Could not map contiguous L3 memory to SMMU, ERROR = %i.\n", ret);
+        return ret;
+      }
+      vaddr += PAGE_SIZE;
+    }
+  }
+  else {
+    ret = iommu_map(smmu_domain_ptr, L3_MEM_H_BASE_ADDR, L3_MEM_H_BASE_ADDR, L3_MEM_SIZE_B, IOMMU_READ | IOMMU_WRITE);
+    if (ret) {
+      printk(KERN_WARNING "PULP - SMMU: Could not map contiguous L3 memory to SMMU, ERROR = %i.\n", ret);
+      return ret;
+    }
   }
   if (DEBUG_LEVEL_SMMU > 2) {
     printk(KERN_INFO "PULP - SMMU: Mapped contiguous L3 memory to SMMU: iova = %#lx, size = %#x.\n",
