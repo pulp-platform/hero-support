@@ -49,7 +49,7 @@ if [ ! -d "u-boot-xlnx" ]; then
   git clone git://github.com/Xilinx/u-boot-xlnx.git
 
   # checkout tag
-  cd linux-xlnx
+  cd u-boot-xlnx
   git checkout tags/${XILINX_TAG}
   cd ..
 
