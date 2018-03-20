@@ -39,6 +39,11 @@ else
     # Make sure there are no backup files corrupting `/etc/init.d`.
     rm -f tmp_mnt/etc/init.d/*~
 
+    # Make sure .ssh is accessible by root only - to allow public key authentication
+    chmod 700 tmp_mnt/root/.ssh
+    chmod 600 tmp_mnt/root/.ssh/authorized_keys
+    chmod 600 tmp_mnt/root/.ssh/known_hosts
+
     # Repack the root file system
     sh -c 'cd tmp_mnt/ && find . | cpio -H newc -o' | gzip -9 > custom_rootfs.cpio.gz
 
