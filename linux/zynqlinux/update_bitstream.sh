@@ -4,7 +4,7 @@ if [ $# -gt 0 ]
 then
     BITSTREAM=$1
 else
-    BITSTREAM=bigpulp_z_70xx_top.bit
+    BITSTREAM=bigpulp-z-70xx.bit
 fi
 
 cat $BITSTREAM > /dev/xdevcfg
