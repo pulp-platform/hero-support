@@ -34,12 +34,14 @@ if [ ! -d "linux-xlnx" ]; then
   cd ..
 
   # move helper scripts and files
-  mv compile_kernel.sh  linux-xlnx/.
-  mv compile_modules.sh linux-xlnx/.
-  mv generate_dtb.sh    linux-xlnx/.
-  mv kernel-config      linux-xlnx/.
-  mv system-top.patch   linux-xlnx/.
-  mv pulp.dtsi          linux-xlnx/.
+  mv compile_kernel.sh   linux-xlnx/.
+  mv compile_modules.sh  linux-xlnx/.
+  mv generate_dtb.sh     linux-xlnx/.
+  mv kernel-config       linux-xlnx/.
+  mv system-top.patch    linux-xlnx/.
+  mv pulp.dtsi           linux-xlnx/.
+  mv cpu_opps_zc706.dtsi linux-xlnx/.
+  mv cpu_opps_zed.dtsi   linux-xlnx/.
 fi
 
 # U-Boot sources

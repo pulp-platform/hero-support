@@ -1,5 +1,5 @@
---- system-top.dts	2018-02-02 09:49:14.632782817 +0100
-+++ system-top_patched.dts	2018-02-02 09:50:38.181889536 +0100
+--- system-top.dts	2018-06-27 16:52:28.753424545 +0200
++++ system-top_patched.dts	2018-06-27 16:52:00.703704805 +0200
 @@ -16,8 +16,8 @@
  	};
  	aliases {
@@ -11,8 +11,9 @@
  		spi0 = &qspi;
  	};
  	memory {
-@@ -27,3 +27,4 @@
+@@ -27,3 +27,5 @@
  	cpus {
  	};
  };
 +/include/ "pulp.dtsi"
++/include/ "cpu_opps_zc706.dtsi"
