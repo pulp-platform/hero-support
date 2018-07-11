@@ -85,7 +85,7 @@
 #define RAB_WAKEUP_OFFSET_B       0x0
 
 #define AXI_ID_WIDTH_CORE    4
-#define AXI_ID_WIDTH_CLUSTER 3
+#define AXI_ID_WIDTH_CLUSTER 2
 #if PLATFORM == JUNO
   #define AXI_ID_WIDTH_SOC   3
 #else // !JUNO
