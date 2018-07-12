@@ -4,7 +4,7 @@ if [ $# -gt 0 ]
 then
     BITSTREAM=$1
 else
-    BITSTREAM=bigpulp_zux_top.bit.bin
+    BITSTREAM=bigpulp-zux.bit.bin
 fi
 
 echo 0 > /sys/class/fpga_manager/fpga0/flags

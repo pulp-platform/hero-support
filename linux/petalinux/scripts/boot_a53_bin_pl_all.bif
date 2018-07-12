@@ -1,4 +1,4 @@
 all:
 {
-        bigpulp_zux_top.bit
+        bigpulp-zux.bit
 }
