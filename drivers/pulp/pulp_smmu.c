@@ -79,7 +79,7 @@ static size_t size = PAGE_SIZE;
  *
  * @param   pulp_ptr Pointer to PulpDev structure.
  *
- * @return  0 on success, a nonzero errno on errros.
+ * @return  0 on success, a nonzero errno on errors.
  */
 static int pulp_smmu_set_attr(PulpDev * pulp_ptr)
 {
@@ -177,7 +177,7 @@ static int pulp_smmu_set_attr(PulpDev * pulp_ptr)
  *
  * @param   pulp_ptr Pointer to PulpDev structure.
  *
- * @return  0 on success, a nonzero errno on errros.
+ * @return  0 on success, a nonzero errno on errors.
  */
 static int pulp_smmu_bypass(PulpDev * pulp_ptr)
 {
@@ -234,7 +234,7 @@ static int pulp_smmu_bypass(PulpDev * pulp_ptr)
  *
  * @param   pulp_ptr Pointer to PulpDev structure.
  *
- * @return  0 on success, a nonzero errno on errros.
+ * @return  0 on success, a nonzero errno on errors.
  */
 int pulp_smmu_init(PulpDev * pulp_ptr)
 {
@@ -321,7 +321,7 @@ int pulp_smmu_init(PulpDev * pulp_ptr)
  * @param   pulp_ptr Pointer to PulpDev structure.
  * @param   flags    Control flags for the RAB and SMMU.
  *
- * @return  0 on success, a nonzero errno on errros.
+ * @return  0 on success, a nonzero errno on errors.
  */
 int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
 {
@@ -561,12 +561,12 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
 /**
  * Disable SMMU.
  *
- * This function disables for virtual-to-physical address translation for PULP by the SMMU.
+ * This function disables virtual-to-physical address translation for PULP by the SMMU.
  * It disables the RAB bypassing and enables SMMU bypassing.
  *
  * @param   pulp_ptr Pointer to PulpDev structure.
  *
- * @return  0 on success, a nonzero errno on errros.
+ * @return  0 on success, a nonzero errno on errors.
  */
 int pulp_smmu_dis(PulpDev *pulp_ptr)
 {
