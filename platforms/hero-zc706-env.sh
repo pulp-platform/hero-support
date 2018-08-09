@@ -27,7 +27,6 @@ if [[ -z "${HERO_SDK_DIR}" ]]; then
 fi
 
 # PULP Side SDK Configurations
-export PULP_CURRENT_CONFIG="system=bigpulp-z-7045:platform=hsa:nb_cluster=1"
 export PULP_INC_DIR1=`realpath pulp-sdk/pkg/sdk/dev/install/include/archi/chips/bigpulp`
 export PULP_INC_DIR2=`realpath pulp-sdk/pkg/sdk/dev/install/include`
 
