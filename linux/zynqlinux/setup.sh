@@ -42,6 +42,10 @@ if [ ! -d "linux-xlnx" ]; then
   mv pulp.dtsi           linux-xlnx/.
   mv cpu_opps_zc706.dtsi linux-xlnx/.
   mv cpu_opps_zed.dtsi   linux-xlnx/.
+
+  # prepare config
+  cp linux-xlnx/kernel-config linux-xlnx/.config
+
 fi
 
 # U-Boot sources
@@ -76,6 +80,9 @@ if [ ! -d "buildroot" ]; then
   mv buildroot-config buildroot/.
   mv busybox-config   buildroot/.
 
+  # prepare configs
+  cp buildroot/buildroot-config .config
+
 fi
 
 # Root Filesystem stuff
@@ -98,7 +105,7 @@ if [ ! -d "sd_image" ]; then
   mkdir sd_image
 
   # move helper scripts and files
-  cp copy_to_sd_card.sh sd_image/.
+  mv copy_to_sd_card.sh sd_image/.
 
 fi
 
