@@ -2,6 +2,14 @@
 
 # Compile script for the Linux kernel
 
+# Default variables
+if [[ -z "KERNEL_ARCH" ]]; then
+  export KERNEL_ARCH="arm"
+fi
+if [[ -z "KERNEL_CROSS_COMPILE" ]]; then
+  export KERNEL_CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
+fi
+
 # Info
 echo "-----------------------------------------"
 echo "- Executing Linux kernel compile script -"
@@ -23,7 +31,7 @@ fi
 
 # Compile the Linux kernel
 echo "Comiling the Linux kernel"
-make ARCH=arm CROSS_COMPILE=arm-xilinx-linux-gnueabi- $1 UIMAGE_LOADADDR=0x8000 uImage
+make ARCH=${KERNEL_ARCH} CROSS_COMPILE=${KERNEL_CROSS_COMPILE} $1 UIMAGE_LOADADDR=0x8000 uImage
 
 # Copy
 echo "Copying uImage to ../sd_image/uImage"
