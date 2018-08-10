@@ -9,7 +9,6 @@ fi
 if [[ -z "KERNEL_CROSS_COMPILE" ]]; then
   export KERNEL_CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
 fi
-# Call using vivado-2014.1 ./generate_fs.sh
 
 # Info
 echo "-----------------------------------------"
