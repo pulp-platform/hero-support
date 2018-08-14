@@ -79,6 +79,7 @@ if [ ! -d "buildroot" ]; then
   mv generate_fs.sh   buildroot/.
   mv buildroot-config buildroot/.
   mv busybox-config   buildroot/.
+  mv setup_busybox.sh buildroot/.
 
   # prepare configs
   cp buildroot/buildroot-config .config
