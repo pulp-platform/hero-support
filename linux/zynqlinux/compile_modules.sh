@@ -16,7 +16,7 @@ echo "-    Executing modules compile script   -"
 echo "-----------------------------------------"
 
 # Compile the Linux kernel modules
-echo "Comiling the Linux kernel"
+echo "Comiling kernel modules"
 make ARCH=${KERNEL_ARCH} CROSS_COMPILE=${KERNEL_CROSS_COMPILE} modules
 make ARCH=${KERNEL_ARCH} CROSS_COMPILE=${KERNEL_CROSS_COMPILE} modules_install INSTALL_MOD_PATH=lib_modules
 
