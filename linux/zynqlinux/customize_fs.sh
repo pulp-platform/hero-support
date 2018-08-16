@@ -44,6 +44,8 @@ else
     chmod 600 tmp_mnt/root/.ssh/authorized_keys
     chmod 600 tmp_mnt/root/.ssh/known_hosts
 
+    chmod 400 tmp_mnt/etc/ssh/ssh_host*_key
+
     # Repack the root file system
     sh -c 'cd tmp_mnt/ && find . | cpio -H newc -o' | gzip -9 > custom_rootfs.cpio.gz
 
@@ -51,4 +53,8 @@ else
     rm -rf files_to_add/
     rm -rf tmp_mnt
     mv custom_rootfs.cpio.gz rootfs.cpio.gz
+fi
+
+if [ $? -ne 0 ]; then
+    exit 1
 fi
