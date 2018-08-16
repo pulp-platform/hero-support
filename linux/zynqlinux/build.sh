@@ -265,6 +265,21 @@ fi
 # Build root filesystem
 ./generate_fs.sh ${PARBUILD}
 
+# The acl package might require a patch on some host machines (it is needed for the host)
+if [ $? -ne 0 ]; then
+
+  echo "Buildroot build failed as expected. I first need to patch acl.mk."
+
+  # Apply the patch
+  patch package/acl/acl.mk < acl.mk.patch
+
+  # Delete build folder
+  rm -rf output/build/host-acl*
+
+  # Re-try to build
+  ./generate_fs.sh ${PARBUILD}
+fi
+
 if [ $? -ne 0 ]; then
   echo "ERROR: generate_fs.sh failed, aborting now."
   exit 1

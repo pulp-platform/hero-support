@@ -82,6 +82,7 @@ if [ ! -d "buildroot" ]; then
   mv busybox-config_2017.05     buildroot/.
   mv buildroot-config_2017.11.2 buildroot/.
   mv busybox-config_2017.11.2   buildroot/.
+  mv acl.mk.patch               buildroot/.
 
   # prepare default configs
   cp buildroot/buildroot-config_2017.05 .config
