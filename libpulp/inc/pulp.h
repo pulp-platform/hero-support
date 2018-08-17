@@ -559,6 +559,7 @@ void pulp_reset(PulpDev *pulp, unsigned full);
 int  pulp_boot(PulpDev *pulp, const TaskDesc *task);
 
 int  pulp_load_bin(PulpDev *pulp, const char *name);
+int  pulp_load_bin_from_mem(PulpDev *pulp, void *ptr, unsigned size);
 void pulp_exe_start(PulpDev *pulp);
 void pulp_exe_stop(PulpDev *pulp);
 int  pulp_exe_wait(const PulpDev *pulp, int timeout_s);

@@ -1539,6 +1539,25 @@ int pulp_load_bin(PulpDev *pulp, const char *name)
 }
 
 /**
+ * Load binary to PULP. Not yet uses the Zynq PS DMA engine.
+ *
+ * @pulp : pointer to the PulpDev structure
+ * @ptr  : pointer to mem where the binary is loaded
+ * @size : binary size in bytes
+ */
+int pulp_load_bin_from_mem(PulpDev *pulp, void *ptr, size_t size)
+{
+  unsigned int *intptr = (unsigned int *)ptr;
+  size_t i;
+
+  // write binary to L2
+  for (i=0; i<size/0x4U; i++)
+    pulp->l2_mem.v_addr[i] = intptr[i];
+
+  return 0;
+}
+
+/**
  * Starts programm execution on PULP.
  *
  * @pulp : pointer to the PulpDev structure
