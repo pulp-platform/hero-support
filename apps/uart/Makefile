@@ -11,7 +11,7 @@ OB=$(CROSS_COMPILE)objdump
 
 FLAGS=-Wall -O2 -g
 
-.PHONY: all build deploy dis
+.PHONY: all build clean deploy dis
 
 all: deploy
 
@@ -25,3 +25,6 @@ deploy: build
 
 dis: build
 	$(OB) -dS $(NAME).o > $(NAME).disasm
+
+clean:
+	-rm -f $(NAME)
