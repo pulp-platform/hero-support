@@ -1,15 +1,9 @@
-# Name of the program
-NAME=uart
+MAKEFLAGS=--warn-undefined-variables
 
-# Cross compilation stuff
-PLATFORM      := ${shell echo ${PLATFORM}}
+NAME=uart
 
 ARCH          := ${shell echo ${KERNEL_ARCH}}
 CROSS_COMPILE := ${shell echo ${KERNEL_CROSS_COMPILE}}
-
-# HERO target
-HERO_TARGET_HOST := ${shell echo ${HERO_TARGET_HOST}}
-HERO_TARGET_PATH := ${shell echo ${HERO_TARGET_PATH}}
 
 CC=$(CROSS_COMPILE)gcc
 AR=$(CROSS_COMPILE)ar
