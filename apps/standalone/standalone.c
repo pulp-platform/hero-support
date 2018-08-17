@@ -1,5 +1,5 @@
 /*
- * PULP standalone application launcher
+ * bigPULP standalone application launcher
  *
  * Copyright 2018 ETH Zurich, University of Bologna
  *
@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
 
   int ret;
   
-  printf("PULP Standalone Application Launcher\n");
+  printf("bigPULP Standalone Application Launcher\n");
  
   /*
    * Preparation
