@@ -19,7 +19,7 @@
  */
 #include <stdlib.h>
 
-#include "pulp_func.h"
+#include "pulp.h"
 
 int main(int argc, char *argv[]) {
 

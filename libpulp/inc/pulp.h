@@ -17,8 +17,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef PULP_FUNC_H__
-#define PULP_FUNC_H__
+
+#ifndef PULP_H__
+#define PULP_H__
 
 #include <stdio.h>
 #include <string.h>
@@ -31,8 +32,6 @@
 #include <unistd.h>     // for usleep, access
 
 #include <errno.h>
-
-#include "pulp.h"
 
 // PLATFORM is exported in sourceme.sh and passed by the Makefile
 #define ZEDBOARD 1
@@ -50,6 +49,8 @@
   #error "Define PLATFORM!"
 #endif
 
+#define PULP_CHIP_FAMILY_STR bigpulp
+
 #define PULP_CHIP_FAMILY CHIP_BIGPULP
 #if PLATFORM == ZEDBOARD
   #define PULP_CHIP CHIP_BIGPULP_Z_7020
@@ -58,6 +59,8 @@
 #else // PLATFORM == JUNO
   #define PULP_CHIP CHIP_BIGPULP
 #endif
+
+#include "archi/pulp.h"
 
 /*
  * Debug flags
@@ -587,4 +590,4 @@ int pulp_rab_req_striped_mchan_img(const PulpDev *pulp, unsigned char prot, unsi
                                    unsigned n_channels, unsigned char **channels,
                                    unsigned *s_height);
 
-#endif // PULP_FUNC_H__
+#endif // PULP_H__

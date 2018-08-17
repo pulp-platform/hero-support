@@ -24,7 +24,7 @@
 #include <sys/stat.h>   // fstat()
 #include <errno.h>
 
-#include "pulp_func.h"
+#include "pulp.h"
 
 //printf("%s %d\n",__FILE__,__LINE__);
 
