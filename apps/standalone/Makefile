@@ -1,36 +1,32 @@
-# Name of the program
+MAKEFLAGS=--warn-undefined-variables
+
 NAME=standalone
-
-# Cross compilation stuff
-PLATFORM      := ${shell echo ${PLATFORM}}
-
-ARCH          := ${shell echo ${ARCH}}
-CROSS_COMPILE := ${shell echo ${CROSS_COMPILE}}
-
-# Paths to libraries and header files
-ARM_INC_DIR1  := ${shell echo ${ARM_INC_DIR1}}
-PULP_INC_DIR1 := ${shell echo ${PULP_INC_DIR1}}
-PULP_INC_DIR2 := ${shell echo ${PULP_INC_DIR2}}
-
-LIB_PATH := $(shell echo $(ARM_LIB_DIR1))/lib/
-C_PATH   := $(shell echo $(ARM_LIB_DIR1))/src/
-C_FILES  := $(C_PATH)pulp_func.c $(C_PATH)zynq_pmm_user.c
 
 CC=$(CROSS_COMPILE)gcc
 AR=$(CROSS_COMPILE)ar
 OB=$(CROSS_COMPILE)objdump
 
-#FLAGS=-Wall -O2 -g -DPLATFORM=${PLATFORM}
-FLAGS=-Wall -O0 -g -DPLATFORM=${PLATFORM}	
+FLAGS=-Wall -O2 -g -DPLATFORM=${PLATFORM}
 
-lib:	$(C_FILES)
-	$(foreach l,$(C_FILES),$(CC) -I$(ARM_INC_DIR1) -I$(PULP_INC_DIR1) -I$(PULP_INC_DIR2) -c $(l) $(FLAGS);)
-	$(AR) rvs $(LIB_PATH)libsys_func.a $(addsuffix .o,$(basename $(notdir $(C_FILES))))
-	-rm -rf $(addsuffix .o,$(basename $(notdir $(C_FILES))))
+.PHONY: all build clean deploy dis
 
-all: 	lib
-	$(CC) $(FLAGS) $(NAME).c -static -I$(ARM_INC_DIR1) -I$(PULP_INC_DIR1) -I$(PULP_INC_DIR2) -L$(LIB_PATH) -lsys_func -lm -o $(NAME)
+all: deploy
 
-read:	lib
-	$(CC) $(FLAGS) $(NAME).c -static -I$(ARM_INC_DIR1) -I$(PULP_INC_DIR1) -I$(PULP_INC_DIR2) -L$(LIB_PATH) -lsys_func -lm -c $(NAME)
-	$(OB) -dS $(NAME).o > $(NAME).read
+$(NAME): $(NAME).c $(HERO_LIBPULP_DIR)/lib/libpulp.a
+	$(CC) $(FLAGS) $< -static -I$(HERO_LIBPULP_DIR)/inc -L$(HERO_LIBPULP_DIR)/lib \
+							  -I$(HERO_PULP_INC_DIR) \
+							  -lpulp -lm -o $@
+
+$(HERO_LIBPULP_DIR)/lib/libpulp.a:
+	make -C $(HERO_LIBPULP_DIR) lib/libpulp.a
+
+build: $(NAME)
+
+deploy: build
+	rsync -v $(NAME) $(HERO_TARGET_HOST):$(HERO_TARGET_PATH)/
+
+dis: build
+	$(OB) -dS $(NAME).o > $(NAME).disasm
+
+clean:
+	-rm -f $(NAME)
