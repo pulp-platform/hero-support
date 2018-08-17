@@ -7,6 +7,9 @@ CROSS_COMPILE := ${shell echo ${KERNEL_CROSS_COMPILE}}
 
 KERNEL_DIR    := ${shell echo ${KERNEL_DIR}}
 
+HERO_TARGET_HOST         := ${shell echo ${HERO_TARGET_HOST}}
+HERO_TARGET_PATH_DRIVERS := ${shell echo ${HERO_TARGET_PATH_DRIVERS}}
+
 ccflags-y += -DPLATFORM=${PLATFORM}
 ccflags-y += -O2
 
@@ -22,9 +25,20 @@ ifeq ($(PLATFORM),5)
 	pulp-objs += pulp_smmu.o
 endif
 
-all: modules
-modules:
+.PHONY: all build deploy dis
+
+all: deploy
+
+build: modules
+
+modules: $(patsubst %.o,%.c,$(pulp-objs)) $(patsubst %.o,%.h,$(pulp-objs))
 	$(MAKE) -S ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_DIR) M=$(shell pwd) modules
+
+deploy: build
+	rsync -v pulp.ko $(HERO_TARGET_HOST):$(HERO_TARGET_PATH_DRIVERS)/
+
+dis: build
+	$(CROSS_COMPILE)objdump -DS pulp.ko > pulp.disasm
 
 clean:
 	rm -f modules.order
@@ -34,5 +48,5 @@ clean:
 	rm -f Module.symvers
 	rm -f .*.o.cmd
 	rm -f .*.ko.cmd
-	rm -f *.read
+	rm -f *.disasm
 	rm -f *.o_shipped
