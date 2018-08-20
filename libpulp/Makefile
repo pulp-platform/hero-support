@@ -29,9 +29,11 @@ CFLAGS_SO:= $(CFLAGS) -shared -fPIC
 SO       := $(LIB_DIR)/libpulp.so
 A        := $(LIB_DIR)/libpulp.a
 
-.PHONY: all clean deploy
+.PHONY: all build clean deploy
 
-all: $(SO) $(A) deploy
+all: build deploy
+
+build: $(SO) $(A)
 
 $(SO): $(SOURCES)
 	mkdir -p $(LIB_DIR)
