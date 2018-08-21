@@ -248,12 +248,20 @@ else
 
 fi
 
-# Adjust configuration with exact toolchain paths
+# Adjust configuration with exact toolchain path
 sed -i "/^BR2_TOOLCHAIN_EXTERNAL_PATH=/c\BR2_TOOLCHAIN_EXTERNAL_PATH=\"${EXT_TOOLCHAIN_PATH}\"" .config
 
-sed -i "/^BR2_TOOLCHAIN_EXTERNAL_GCC/c\BR2_TOOLCHAIN_EXTERNAL_GCC_${EXT_TOOLCHAIN_GCC_VERSION}=y" .config
-sed -i "/^BR2_TOOLCHAIN_EXTERNAL_HEADERS/c\BR2_TOOLCHAIN_EXTERNAL_HEADERS_${EXT_TOOLCHAIN_KERNEL_HEADER_SERIES}=y" .config
+# Adjust configuration with GCC version
+sed -i "s/\(BR2_TOOLCHAIN_EXTERNAL_GCC_[0-9]\)=y/# \1 is not set/" .config
+sed -i "s/\(BR2_TOOLCHAIN_EXTERNAL_GCC_[0-9]_[0-9]*\)=y/# \1 is not set/" .config
+sed -i "/^# BR2_TOOLCHAIN_EXTERNAL_GCC_${EXT_TOOLCHAIN_GCC_VERSION}/c\BR2_TOOLCHAIN_EXTERNAL_GCC_${EXT_TOOLCHAIN_GCC_VERSION}=y" .config
 
+# Adjust configuration with headers of the used GCC
+sed -i "s/\(BR2_TOOLCHAIN_EXTERNAL_HEADERS_[0-9]\)=y/# \1 is not set/" .config
+sed -i "s/\(BR2_TOOLCHAIN_EXTERNAL_HEADERS_[0-9]_[0-9]*\)=y/# \1 is not set/" .config
+sed -i "/^# BR2_TOOLCHAIN_EXTERNAL_HEADERS_${EXT_TOOLCHAIN_KERNEL_HEADER_SERIES}/c\BR2_TOOLCHAIN_EXTERNAL_HEADERS_${EXT_TOOLCHAIN_KERNEL_HEADER_SERIES}=y" .config
+
+# Adjust configuration with external toolchain prefix
 sed -i "/^BR2_TOOLCHAIN_EXTERNAL_PREFIX/c\BR2_TOOLCHAIN_EXTERNAL_PREFIX=\"${PREFIX}\"" .config
 sed -i "/^BR2_TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX/c\BR2_TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX=\"${PREFIX}\"" .config
 
