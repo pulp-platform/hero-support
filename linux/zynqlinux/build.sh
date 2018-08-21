@@ -182,7 +182,7 @@ if [[ -z "KERNEL_CROSS_COMPILE" ]]; then
   export KERNEL_CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
 fi
 
-# Shall we the compiler provided by Xilinx Vivado?
+# Shall we use the compiler provided by Xilinx Vivado?
 USE_VIVADO_TOOLCHAIN=`echo "${KERNEL_CROSS_COMPILE}" | grep -c xilinx`
 PREFIX=`echo $KERNEL_CROSS_COMPILE | cut -d- -f-3`
 
@@ -257,6 +257,10 @@ sed -i "/^BR2_TOOLCHAIN_EXTERNAL_HEADERS/c\BR2_TOOLCHAIN_EXTERNAL_HEADERS_${EXT_
 sed -i "/^BR2_TOOLCHAIN_EXTERNAL_PREFIX/c\BR2_TOOLCHAIN_EXTERNAL_PREFIX=\"${PREFIX}\"" .config
 sed -i "/^BR2_TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX/c\BR2_TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX=\"${PREFIX}\"" .config
 
+# Backup and clear LD_LIBRARY_PATH
+LD_LIBRARY_PATH_BKP=${LD_LIBARY_PATH}
+unset LD_LIBRARY_PATH
+
 # Setup Busybox
 if [ ! -d output/build/busybox-*/ ]; then
   ./setup_busybox.sh
@@ -284,6 +288,9 @@ if [ $? -ne 0 ]; then
   echo "ERROR: generate_fs.sh failed, aborting now."
   exit 1
 fi
+
+export LD_LIBRARY_PATH=${LD_LIBARY_PATH_BKP}
+unset OLD_LD_LIBRARY_PATH
 
 cd ..
 
