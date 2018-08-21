@@ -11,7 +11,7 @@ DOWNLOAD_URL="https://iis-people.ee.ethz.ch/~vogelpi/hero/files/images/zc706/"
 DOWNLOAD_ARGS="--no-verbose -N --user=hero --password=weekly*report2018"
 
 # Build configuration
-PARBUILD=-j8
+PARBUILD=-j`nproc`
 
 #################################################
 #
