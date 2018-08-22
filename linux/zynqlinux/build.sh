@@ -20,13 +20,13 @@ PARBUILD=-j8
 #################################################
 
 # Try to build kernel (might fail because of missing U-Boot mkimage)
+cd linux-xlnx
 {
-  cd linux-xlnx
   ./compile_kernel.sh  ${PARBUILD}
-  cd ..
 } || {
-    COMPILE_KERNEL_FAILED=1
+  COMPILE_KERNEL_FAILED=1
 }
+cd ..
 
 if [[ ! -z "${COMPILE_KERNEL_FAILED}" ]]; then
   echo "Linux kernel build failed as expected. I first need to build U-Boot mkimage."
