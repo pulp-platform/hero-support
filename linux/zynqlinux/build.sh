@@ -215,23 +215,23 @@ else
   # Make sure we checkout a version that can be compiled with GCC 7.1
   git checkout tags/2017.11.2
 
-  # Use Linaro GCC toolchain - there is an issue with our own compiler and Buildroot
-  cd ..
-  mkdir linaro_gcc
-  cd linaro_gcc
+  ## Use Linaro GCC toolchain - there is an issue with our own compiler and Buildroot
+  #cd ..
+  #mkdir linaro_gcc
+  #cd linaro_gcc
 
-  # Download and prepare Linaro GCC 7
-  wget https://releases.linaro.org/components/toolchain/binaries/7.1-2017.08/arm-linux-gnueabihf/gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf.tar.xz --no-verbose -N
-  tar xf gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf.tar.xz
-  mv gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf arm-linux-gnueabihf
+  ## Download and prepare Linaro GCC 7
+  #wget https://releases.linaro.org/components/toolchain/binaries/7.1-2017.08/arm-linux-gnueabihf/gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf.tar.xz --no-verbose -N
+  #tar xf gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf.tar.xz
+  #mv gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf arm-linux-gnueabihf
 
-  # Configure PATH
-  PATH=`realpath arm-linux-gnueabihf/bin`:${PATH}
-  cd ../buildroot
+  ## Configure PATH
+  #PATH=`realpath arm-linux-gnueabihf/bin`:${PATH}
+  #cd ../buildroot
 
-  # Set external toolchain variables for Linaro GCC 7.1
+  # Set external toolchain variables for GCC 7.1
   EXT_TOOLCHAIN_GCC_VERSION="7"
-  EXT_TOOLCHAIN_KERNEL_HEADER_SERIES="4_10"
+  EXT_TOOLCHAIN_KERNEL_HEADER_SERIES="4_9"
 
   # Dervie external toolchain path
   EXT_TOOLCHAIN_PATH=`which ${KERNEL_CROSS_COMPILE}gcc`
