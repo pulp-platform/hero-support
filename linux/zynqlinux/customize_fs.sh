@@ -22,7 +22,7 @@ else
     cp rootfs.cpio.gz `date +%F_%H-%M-%S`_rootfs.cpio.gz
 
     # Create a copy of the custom files
-    cp -r custom_files files_to_add
+    cp -r custom_files/ files_to_add
 
     # Change owner of files_to_add to root
     chown -R root:root files_to_add
