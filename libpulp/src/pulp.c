@@ -81,23 +81,13 @@ int pulp_mbox_read(const PulpDev *pulp, unsigned *buffer, unsigned n_words)
 
 int pulp_mbox_write(PulpDev *pulp, unsigned word)
 {
-  unsigned timeout, status;
+  unsigned status = 1;
   unsigned us_delay = 100;
 
-  // check if mbox is full
-  if ( pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b') & 0x2 ) {
-    timeout = 1000;
-    status = 1;
-    // wait for not full or timeout
-    while ( status && (timeout > 0) ) {
-      usleep(us_delay);
-      timeout--;
-      status = (pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b') & 0x2);
-    }
-    if ( status ) {
-      printf("ERROR: mbox timeout.\n");
-      return -ETIME;
-    }
+  // wait for not full
+  while ( status ) {
+    usleep(us_delay);
+    status = pulp_read32(pulp->mbox.v_addr, MBOX_STATUS_OFFSET_B, 'b') & 0x2;
   }
 
   // mbox is ready to receive
@@ -386,7 +376,6 @@ int pulp_munmap(PulpDev *pulp)
 int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
 {
   unsigned status;
-  int timeout;
 
   // set default clk values in pulp struct
   pulp->pulp_clk_freq_mhz = PULP_DEFAULT_FREQ_MHZ;
@@ -427,20 +416,11 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   if (DEBUG_LEVEL > 3)
     printf("CLKING_CONFIG_REG_2/5: %#x\n",value);
 
-  // check status
-  if ( !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1) ) {
-    timeout = 10;
-    status = 1;
-    while ( status && (timeout > 0) ) {
-      usleep(10000);
-      timeout--;
-      status = !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1);
-    }
-    if ( status ) {
-      printf("ERROR: Clock manager not locked, cannot start reconfiguration.\n");
-      pulp->pulp_clk_freq_mhz = PULP_DEFAULT_FREQ_MHZ;
-      return -EBUSY;
-    }
+  // wait for lock
+  status = 1;
+  while ( status ) {
+    usleep(1000);
+    status = !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1);
   }
 
   // start reconfiguration
@@ -448,20 +428,11 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
   usleep(1000);
   pulp_write32(pulp->clking.v_addr,CLKING_CONFIG_REG_23_OFFSET_B,'b',0x2);
 
-  // check status
-  if ( !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1) ) {
-    timeout = 10;
-    status = 1;
-    while ( status && (timeout > 0) ) {
-      usleep(10000);
-      timeout--;
-      status = !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1);
-    }
-    if ( status ) {
-      printf("ERROR: Clock manager not locked, clock reconfiguration failed.\n");
-      pulp->pulp_clk_freq_mhz = PULP_DEFAULT_FREQ_MHZ;
-      return -EBUSY;
-    }
+  // wait for lock
+  status = 1;
+  while ( status ) {
+    usleep(1000);
+    status = !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1);
   }
 
 #if PLATFORM != JUNO

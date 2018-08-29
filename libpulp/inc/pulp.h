@@ -537,7 +537,7 @@ void pulp_write32(unsigned *base_addr, unsigned off, char off_type, unsigned val
  */
 int pulp_mbox_read(const PulpDev *pulp, unsigned *buffer, unsigned n_words);
 
-/** Write one word to the mailbox.
+/** Write one word to the mailbox. Blocks if the mailbox is full.
 
  \param     pulp pointer to the PulpDev structure
  \param     word word to write
@@ -599,12 +599,14 @@ int pulp_munmap(PulpDev *pulp);
  * @{
  */
 
-/** Set the clock frequency of PULP. Only do this at startup of PULP!
+/** Set the clock frequency of PULP. Blocks until the PLL inside PULP locks.
+
+ * NOTE: Only do this at startup of PULP!
 
   \param    pulp         pointer to the PulpDev structure
   \param    des_freq_mhz desired clock frequency in MHz
 
-  \return   0 on success; negative value with an errno on errors.
+  \return   configured frequency in MHz.
  */
 int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
 
