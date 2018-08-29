@@ -136,6 +136,7 @@ int pulp_free_v_addr(const PulpDev *pulp)
   status = munmap(pulp->pulp_res_v_addr.v_addr,pulp->pulp_res_v_addr.size);
   if (status) {
     printf("MUNMAP failed to free reserved virtual addresses overlapping with physical address map of PULP.\n");
+    return -EINVAL;
   }
 
 #if PLATFORM != JUNO
@@ -144,6 +145,7 @@ int pulp_free_v_addr(const PulpDev *pulp)
   status = munmap(pulp->l3_mem_res_v_addr.v_addr,pulp->l3_mem_res_v_addr.size);
   if (status) {
     printf("MUNMAP failed to free reserved virtual addresses overlapping with physically contiguous L3 memory.\n");
+    return -EINVAL;
   }
 #endif
 
@@ -333,31 +335,38 @@ int pulp_munmap(PulpDev *pulp)
   status = munmap(pulp->slcr.v_addr,pulp->slcr.size);
   if (status) {
     printf("MUNMAP failed for SLCR.\n");
+    return -EINVAL;
   }
 #endif
   status = munmap(pulp->gpio.v_addr,pulp->gpio.size);
   if (status) {
     printf("MUNMAP failed for GPIO.\n");
+    return -EINVAL;
   }
   status = munmap(pulp->rab_config.v_addr,pulp->rab_config.size);
   if (status) {
     printf("MUNMAP failed for RAB config.\n");
+    return -EINVAL;
   }
   status = munmap(pulp->l2_mem.v_addr,pulp->l2_mem.size);
   if (status) {
     printf("MUNMAP failed for L2 memory.\n");
+    return -EINVAL;
   }
   status = munmap(pulp->soc_periph.v_addr,pulp->soc_periph.size);
   if (status) {
     printf("MUNMAP failed for SoC peripherals\n.");
+    return -EINVAL;
   }
   status = munmap(pulp->clusters.v_addr,pulp->clusters.size);
   if (status) {
     printf("MUNMAP failed for clusters\n.");
+    return -EINVAL;
   }
   status = munmap(pulp->l3_mem.v_addr,pulp->l3_mem.size);
   if (status) {
     printf("MUNMAP failed for shared L3 memory\n.");
+    return -EINVAL;
   }
 
   // close the file descriptor
@@ -541,17 +550,33 @@ int pulp_clking_measure_freq(PulpDev *pulp)
 
 int pulp_init(PulpDev *pulp)
 {
+  int err;
+
   // set fetch enable to 0, set global clk enable, disable reset
   pulp_write32(pulp->gpio.v_addr,0x8,'b',0xC0000000);
 
   // RAB setup
-  // port 0: Host -> PULP
-  pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);     // L2
-  //pulp_rab_req(pulp,MBOX_H_BASE_ADDR,MBOX_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1); // Mailbox, Interface 0
-  pulp_rab_req(pulp,MBOX_H_BASE_ADDR,MBOX_SIZE_B*2,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1); // Mailbox, Interface 0 and Interface 1
-  pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);     // TCDM + Cluster Peripherals
-  // port 1: PULP -> Host
-  pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);       // contiguous L3 memory
+  // Port 0: Host -> PULP
+  // L2
+  err = pulp_rab_req(pulp,L2_MEM_H_BASE_ADDR,L2_MEM_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);
+  if (err)
+    return err;
+
+  // mailbox, Interface 0 and Interface 1
+  err = pulp_rab_req(pulp,MBOX_H_BASE_ADDR,MBOX_SIZE_B*2,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);
+  if (err)
+    return err;
+
+  // TCDM + Cluster Peripherals
+  err = pulp_rab_req(pulp,PULP_H_BASE_ADDR,CLUSTERS_SIZE_B,0x7,0,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);
+  if (err)
+    return err;
+
+  // Port 1: PULP -> Host
+  // contiguous L3 memory
+  err = pulp_rab_req(pulp,L3_MEM_BASE_ADDR,L3_MEM_SIZE_B,0x7,1,RAB_MAX_DATE,RAB_MAX_DATE, 0, 1);
+  if (err)
+    return err;
 
   // enable mbox interrupts
   pulp_write32(pulp->mbox.v_addr,MBOX_IE_OFFSET_B,'b',0x6);
@@ -581,9 +606,12 @@ int pulp_init(PulpDev *pulp)
   if (pulp->intr_rab_miss_dis == 1)
     gpio_val |= 1 << GPIO_INTR_RAB_MISS_DIS;
 
-  ioctl(pulp->fd,PULP_IOCTL_INFO_PASS,(unsigned *)&gpio_val);
+  err = ioctl(pulp->fd,PULP_IOCTL_INFO_PASS,(unsigned *)&gpio_val);
+  if (err) {
+    printf("ERROR: ioctl for information pass to driver failed. err = %d, errno = %d\n", err, errno);
+  }
 
-  return 0;
+  return err;
 }
 
 void pulp_reset(PulpDev *pulp, unsigned full)

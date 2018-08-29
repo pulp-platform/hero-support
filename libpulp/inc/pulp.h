@@ -566,7 +566,7 @@ int  pulp_reserve_v_addr(PulpDev *pulp);
 
   \param    pulp pointer to the PulpDev structure
 
-  \return   0 on success.
+  \return   0 on success; negative value with an errno on errors.
  */
 int  pulp_free_v_addr(const PulpDev *pulp);
 
@@ -588,7 +588,7 @@ int pulp_mmap(PulpDev *pulp);
 
   \param    pulp pointer to the PulpDev structure
 
-  \return   0 on success.
+  \return   0 on success; negative value with an errno on errors.
  */
 int pulp_munmap(PulpDev *pulp);
 
@@ -627,7 +627,7 @@ int pulp_clking_measure_freq(PulpDev *pulp);
 
   \param    pulp pointer to the PulpDev structure
 
-  \return   0 on success.
+  \return   0 on success; negative value with an errno on errors.
  */
 int pulp_init(PulpDev *pulp);
 
@@ -692,7 +692,7 @@ void pulp_exe_stop(PulpDev *pulp);
  \param    pulp      pointer to the PulpDev structure
  \param    timeout_s maximum number of seconds to wait for end of computation
 
- \return   0 on success. -ETIME in case of an execution timeout.
+ \return   0 on success; -ETIME in case of an execution timeout.
  */
 int pulp_exe_wait(const PulpDev *pulp, int timeout_s);
 
