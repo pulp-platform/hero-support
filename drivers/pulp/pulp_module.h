@@ -24,7 +24,7 @@
 #include <linux/cdev.h>   /* cdev struct */
 #include <linux/device.h> /* device struct */
 
-// PLATFORM is exported in sourceme.sh and passed by the Makefile
+// PLATFORM is exported in sourceme.sh/hero-*.env and passed by the Makefile
 #define ZEDBOARD 1
 #define ZC706    2
 #define MINI_ITX 3
@@ -266,7 +266,7 @@
 #define MBOX_IE_OFFSET_B     0x24
 
 /*
- * Mailbox signaling -- see PULP SDK and pulp_hsa.h
+ * Mailbox signaling -- see PULP SDK
  */
 #define PULP_READY             (0x01U  )
 #define PULP_START             (0x02U  )
@@ -291,7 +291,7 @@
 #define PULP_N_DEV_NUMBERS 1
 
 /*
- * IOCTL setup -- must match user-space side -- see pulp_func.h
+ * IOCTL setup -- must match user-space side -- see libpulp/inc/pulp.h
  *
  * When defining a new IOCTL command, append a macro definition to the list below, using the
  * consecutively following command number, and increase the `PULP_IOC_NR_MAX` macro.

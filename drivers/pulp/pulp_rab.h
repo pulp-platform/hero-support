@@ -98,7 +98,7 @@
 #define RAB_AX_LOG_PRINT_FORMAT 0 // 0 = DEBUG, 1 = MATLAB
 
 /*
- * Constants for profiling -- must match user-space side -- see pulp_func.h
+ * Constants for profiling -- must match user-space side -- see libpulp/inc/pulp.h
  */
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
   #define N_CYC_TOT_RESPONSE_OFFSET_B 0x00
@@ -124,7 +124,7 @@
 #endif
 
 /*
- * Macros -- must match user-space side -- see pulp_func.h
+ * Macros -- must match user-space side -- see libpulp/inc/pulp.h
  */
 #define RAB_CONFIG_N_BITS_PORT 1
 #define RAB_CONFIG_N_BITS_ACP  1
@@ -181,7 +181,7 @@
   ( type = BF_GET(request, RAB_UPDATE_N_BITS_ELEM, RAB_UPDATE_N_BITS_TYPE) )
 
 /*
- * Type Definitions - Part 1 -- must match user-space side -- see pulp_func.h
+ * Type Definitions - Part 1 -- must match user-space side -- see libpulp/inc/pulp.h
  */
 typedef struct {
   unsigned short id;

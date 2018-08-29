@@ -33,7 +33,7 @@
 
 #include <errno.h>
 
-// PLATFORM is exported in sourceme.sh and passed by the Makefile
+// PLATFORM is exported in sourceme.sh/hero-*.env and passed by the Makefile
 #define ZEDBOARD 1
 #define ZC706    2
 #define MINI_ITX 3
@@ -259,7 +259,7 @@
 #define RAB_CONFIG_MAX_GAP_SIZE_B 0x1000 // one page
 
 /*
- * IOCTL setup -- must match kernel-space side -- see pulp_module.h
+ * IOCTL setup -- must match kernel-space side -- see drivers/pulp/pulp_module.h
  *
  * When defining a new IOCTL command, append a macro definition to the list below, using the
  * consecutively following command number, and increase the `PULP_IOC_NR_MAX` macro.
@@ -290,7 +290,7 @@
 #define PULP_IOCTL_RAB_AX_LOG_READ  _IOW(PULP_IOCTL_MAGIC,0xBE,unsigned) // ptr
 
 /*
- * Constants for profiling -- must match user-space side -- see pulp_func.h
+ * Constants for profiling -- must match kernel-space side -- see drivers/pulp/pulp_rab.h
  *
  * used for RAB profiling with profile_rab_striping & profile_rab_miss_handling
  */
@@ -339,7 +339,7 @@
   ( y= ((y) &~ BF_MASK_GEN(start, len)) | BF_PREP(x, start, len) )
 
 /*
- * RAB Macros -- must match kernel-space side -- see pulp_rab.h
+ * RAB Macros -- must match kernel-space side -- see drivers/pulp/pulp_rab.h
  */
 #define RAB_CONFIG_N_BITS_PORT 1
 #define RAB_CONFIG_N_BITS_ACP  1
@@ -397,7 +397,7 @@
 #endif // OLD_APPS
 
 /*
- * Type Definitions - Part 1 -- must match kernel-space side -- see pulp_module.h
+ * Type Definitions - Part 1 -- must match kernel-space side -- see drivers/pulp/pulp_module.h
  */
 typedef struct {
   unsigned short id;
