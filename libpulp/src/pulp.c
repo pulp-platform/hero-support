@@ -435,33 +435,6 @@ int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz)
     status = !(pulp_read32(pulp->clking.v_addr,CLKING_STATUS_REG_OFFSET_B,'b') & 0x1);
   }
 
-#if PLATFORM != JUNO
-  // reconfigure PULP -> host UART
-  int baudrate = 115200;
-  char cmd[40];
-  char baudrate_s[10];
-  float ratio,baudrate_f;
-
-  // compute custom baudrate
-  ratio = (float)freq_mhz/(float)PULP_DEFAULT_FREQ_MHZ;
-  baudrate_f = (float)baudrate * ratio;
-  baudrate = (int)baudrate_f;
-  sprintf(baudrate_s, "%i", baudrate);
-
-  printf("Please configure /dev/ttyPS1 for %i baud.\n",baudrate);
-
-  // prepare command
-  //strcpy(cmd,"stty -F /dev/ttyPS1 ");  // only supports standard baudrates
-  strcpy(cmd,"/media/nfs/apps/uart "); // supports non-standard baudrates
-  strcat(cmd,baudrate_s);
-  strcat(cmd," 0");
-
-  //printf("%s\n",cmd);
-
-  // set the baudrate -- can cause crashes
-  //system(cmd);
-#endif
-
   pulp->pulp_clk_freq_mhz = freq_mhz;
 
   return freq_mhz;
