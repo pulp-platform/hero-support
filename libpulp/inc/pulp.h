@@ -386,17 +386,6 @@
            + RAB_CONFIG_N_BITS_DATE + RAB_CONFIG_N_BITS_ACP + RAB_CONFIG_N_BITS_LVL, RAB_CONFIG_N_BITS_DATE) )
 
 /*
- * App execution - used for some old apps like ROD, CT, JPEG
- */
-//#define OLD_APPS
-#ifdef OLD_APPS
-  #define SYNC_OFFSET_B 0xB000
-  #define PROFILE
-  #define MEM_SHARING   2 // 1, 2 ,3
-  #define ZYNQ_PMM
-#endif // OLD_APPS
-
-/*
  * Type Definitions - Part 1 -- must match kernel-space side -- see drivers/pulp/pulp_module.h
  */
 typedef struct {
@@ -523,7 +512,6 @@ int pulp_init(PulpDev *pulp);
 
 int pulp_mbox_read(const PulpDev *pulp, unsigned *buffer, unsigned n_words);
 int pulp_mbox_write(PulpDev *pulp, unsigned word);
-void pulp_mbox_clear_is(PulpDev *pulp);
 
 int pulp_clking_set_freq(PulpDev *pulp, unsigned des_freq_mhz);
 int pulp_clking_measure_freq(PulpDev *pulp);
@@ -576,19 +564,5 @@ int pulp_offload_get_desc(const PulpDev *pulp, TaskDesc *task, const ElemPassTyp
 
 int pulp_offload_out(PulpDev *pulp, TaskDesc *task);
 int pulp_offload_in(PulpDev *pulp, TaskDesc *task);
-
-#ifdef OLD_APPS
-  int pulp_offload_out_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask);
-  int pulp_offload_in_contiguous(PulpDev *pulp, TaskDesc *task, TaskDesc **ftask);
-
-  int pulp_offload_start(PulpDev *pulp, const TaskDesc *task);
-  int pulp_offload_wait(const PulpDev *pulp, const TaskDesc *task);
-#endif // OLD_APPS
-
-// for random_forest
-int pulp_rab_req_striped_mchan_img(const PulpDev *pulp, unsigned char prot, unsigned char port,
-                                   unsigned p_height, unsigned p_width, unsigned i_step,
-                                   unsigned n_channels, unsigned char **channels,
-                                   unsigned *s_height);
 
 #endif // PULP_H__
