@@ -8,7 +8,7 @@ CROSS_COMPILE := ${shell echo ${KERNEL_CROSS_COMPILE}}
 KERNEL_DIR    := ${shell echo ${KERNEL_DIR}}
 
 HERO_TARGET_HOST         := ${shell echo ${HERO_TARGET_HOST}}
-HERO_TARGET_PATH_DRIVERS := ${shell echo ${HERO_TARGET_PATH_DRIVERS}}
+HERO_TARGET_PATH_DRIVERS := ${shell echo ${HERO_TARGET_PATH_DRIVER}}
 
 ccflags-y += -DPLATFORM=${PLATFORM}
 ccflags-y += -O2
