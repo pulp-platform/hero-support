@@ -2,12 +2,10 @@
 
 # Setup script for BusyBox
 
-# Default variables
-if [[ -z "KERNEL_ARCH" ]]; then
-  export KERNEL_ARCH="arm"
-fi
-if [[ -z "KERNEL_CROSS_COMPILE" ]]; then
-  export KERNEL_CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
+# Make sure required variables are set
+if [ -z "${KERNEL_ARCH}" ] || [ -z "${KERNEL_CROSS_COMPILE}" ] ; then
+  echo "ERROR: Missing required environment variables KERNEL_ARCH and/or KERNEL_CROSS_COMPILE, aborting now."
+  exit 1;
 fi
 
 # Info

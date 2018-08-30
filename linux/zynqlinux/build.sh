@@ -7,6 +7,12 @@ echo "-----------------------------------------"
 echo "-    Executing project build script     -"
 echo "-----------------------------------------"
 
+# Make sure required variables are set
+if [ -z "${KERNEL_ARCH}" ] || [ -z "${KERNEL_CROSS_COMPILE}" ] ; then
+  echo "ERROR: Missing required environment variables KERNEL_ARCH and/or KERNEL_CROSS_COMPILE, aborting now."
+  exit 1;
+fi
+
 DOWNLOAD_URL="https://iis-people.ee.ethz.ch/~vogelpi/hero/files/images/zc706/"
 DOWNLOAD_ARGS="--no-verbose -N --user=hero --password=weekly*report2018"
 
@@ -177,10 +183,6 @@ fi
 
 cd buildroot
 
-# Make sure KERNEL_CROSS_COMPILE is set
-if [[ -z "KERNEL_CROSS_COMPILE" ]]; then
-  export KERNEL_CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
-fi
 
 # Shall we use the compiler provided by Xilinx Vivado?
 USE_VIVADO_TOOLCHAIN=`echo "${KERNEL_CROSS_COMPILE}" | grep -c xilinx`

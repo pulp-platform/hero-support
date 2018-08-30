@@ -2,9 +2,10 @@
 
 # Compile script for U-Boot
 
-# Default variables
-if [[ -z "KERNEL_CROSS_COMPILE" ]]; then
-  export KERNEL_CROSS_COMPILE="arm-xilinx-linux-gnueabi-"
+# Make sure required variables are set
+if [ -z "${KERNEL_CROSS_COMPILE}" ] ; then
+  echo "ERROR: Missing required environment variable KERNEL_CROSS_COMPILE, aborting now."
+  exit 1;
 fi
 
 # Info
