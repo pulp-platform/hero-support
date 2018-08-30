@@ -78,6 +78,7 @@ if [ ! -d "buildroot" ]; then
   # move helper scripts and files
   mv generate_fs.sh             buildroot/.
   mv setup_busybox.sh           buildroot/.
+  mv sync_busybox.sh            buildroot/.
   mv buildroot-config_2017.05   buildroot/.
   mv busybox-config_2017.05     buildroot/.
   mv buildroot-config_2017.11.2 buildroot/.

@@ -2,6 +2,39 @@
 
 # Project build script for Zynq Linux HOWTO
 
+# Function to replace and backup config files
+take_newer() {
+
+  # Two arguments are required
+  if [ $# -ne 2 ]; then
+    echo "ERROR: Require exactly 2 arguments."
+    exit 1
+  fi
+
+  # Does File $2 already exist
+  if [ -f $2 ]; then
+    if test $2 -nt $1; then
+      # Nothing needs to be done
+      echo "Continuing with current, newer $2."
+    else
+      # Backup current file, take newer input file
+      echo "Backing up current $2, replacing by $1."
+
+      BKP_NAME_1=`echo $2 | sed "s/.//"`
+      BKP_NAME_2=`stat --printf='%.19y\n' $2`
+      BKP_NAME_2=`echo ${BKP_NAME_2} | sed "s/ /_/"`
+      BKP_NAME_2=`echo ${BKP_NAME_2} | sed "s/:/-/g"`
+      BKP_NAME="${BKP_NAME_1}_${BKP_NAME_2}"
+
+      mv $2 ${BKP_NAME}
+      cp $1 $2
+    fi
+  else
+    echo "Installing $2 from $1."
+    cp $1 $2
+  fi
+}
+
 # Info
 echo "-----------------------------------------"
 echo "-    Executing project build script     -"
@@ -207,8 +240,8 @@ if [ "${USE_VIVADO_TOOLCHAIN}" -eq 1 ]; then
   fi
 
   # Prepare the configs for Buildroot and Busybox
-  cp buildroot-config_2017.05 .config
-  cp busybox-config_2017.05   busybox-config
+  take_newer buildroot-config_2017.05 .config
+  take_newer busybox-config_2017.05   busybox-config
 
 else
 
@@ -245,8 +278,8 @@ else
   fi
 
   # Prepare the configs for Buildroot and Busybox
-  cp buildroot-config_2017.11.2 .config
-  cp busybox-config_2017.11.2   busybox-config
+  take_newer buildroot-config_2017.11.2 .config
+  take_newer busybox-config_2017.11.2   busybox-config
 
 fi
 
