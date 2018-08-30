@@ -29,21 +29,40 @@
 
 #include "pulp_module.h"
 
-/*
- * Macros
- */
 #define MBOX_GET_REQ_TYPE(type, request) \
   ( type = BF_GET(request, 32-MBOX_N_BITS_REQ_TYPE, \
          MBOX_N_BITS_REQ_TYPE) << (32-MBOX_N_BITS_REQ_TYPE) )
 #define MBOX_GET_N_WORDS(n_words, request) \
   ( n_words = BF_GET(request, 0, 32-MBOX_N_BITS_REQ_TYPE) )
 
-/*
- * Method declarations
+/** @name mailbox functions
+ * @{
+ */
+
+/** Initialize the mailbox.
+
+  \param    mbox kernel virtual address of the mailbox PULP-2-Host interface (Interface 1)
  */
 void pulp_mbox_init(void *mbox);
+
+/** Empty mbox_fifo buffer
+ */
 void pulp_mbox_clear(void);
+
+/** Read from PULP-2-Host mailbox interface to software FIFO
+
+ *  NOTE: This is the bottom-half, it should actually go into a tasklet.
+
+  \param    mbox kernel virtual address of the mailbox PULP-2-Host interface (Interface 1)
+ */
 void pulp_mbox_intr(void *mbox);
+
+/** Provide read data from mbox_fifo to user-space application.
+
+ *  Standard Linux kernel read interface
+ */
 ssize_t pulp_mbox_read(struct file *filp, char __user *buf, size_t count, loff_t *offp);
 
-#endif // _PULP_MBOX_H_ 
+//!@}
+
+#endif // _PULP_MBOX_H_

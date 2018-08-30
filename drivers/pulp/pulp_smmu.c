@@ -225,17 +225,6 @@ static int pulp_smmu_bypass(PulpDev * pulp_ptr)
   return 0;
 }
 
-/**
- * Initialize SMMU.
- *
- * This function initializes the SMMU. In particular, it extracts the stream matching registers
- * and entries assigned at startup based on the known stream IDs, and then enables bypassing for
- * these stream matching entries.
- *
- * @param   pulp_ptr Pointer to PulpDev structure.
- *
- * @return  0 on success, a nonzero errno on errors.
- */
 int pulp_smmu_init(PulpDev * pulp_ptr)
 {
   unsigned int offset, value, i, stream_id, valid, ret;
@@ -311,18 +300,7 @@ int pulp_smmu_init(PulpDev * pulp_ptr)
  * ╚══════╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝    ╚═════╝ ╚═╝╚══════╝
  *
  ***********************************************************************************/
-/**
- * Enable SMMU.
- *
- * This function enables and sets up the SMMU for virtual-to-physical address translation for PULP.
- * To this end, it disables all user-space mappings in the RAB, sets up the RAB for bypassing and
- * sets up the SMMU through the Linux IOMMU API.
- *
- * @param   pulp_ptr Pointer to PulpDev structure.
- * @param   flags    Control flags for the RAB and SMMU.
- *
- * @return  0 on success, a nonzero errno on errors.
- */
+
 int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
 {
   int ret, i ,j;
@@ -558,16 +536,6 @@ int pulp_smmu_ena(PulpDev *pulp_ptr, unsigned flags)
   return 0;
 }
 
-/**
- * Disable SMMU.
- *
- * This function disables virtual-to-physical address translation for PULP by the SMMU.
- * It disables the RAB bypassing and enables SMMU bypassing.
- *
- * @param   pulp_ptr Pointer to PulpDev structure.
- *
- * @return  0 on success, a nonzero errno on errors.
- */
 int pulp_smmu_dis(PulpDev *pulp_ptr)
 {
   int ret;
@@ -661,15 +629,6 @@ int pulp_smmu_dis(PulpDev *pulp_ptr)
  *
  ***********************************************************************************/
 
-/**
- * Schedule the SMMU bottom-half fault handler.
- *
- * This function is the top-half SMMU fault handler registered to the Linux IOMMU API.
- * On a translation fault, it is called in interrupt context and then schedules the
- * bottom half in process context.
- *
- * @return  0 on success.
- */
 int pulp_smmu_fh_sched(struct iommu_domain *smmu_domain_ptr, struct device *pulp_dev_ptr,
                        unsigned long iova, int flags, void * smmu_token_ptr)
 {
@@ -708,15 +667,6 @@ int pulp_smmu_fh_sched(struct iommu_domain *smmu_domain_ptr, struct device *pulp
   return ret;
 }
 
-/**
- * Handle SMMU translation faults.
- *
- * This function is the bottom-half SMMU fault handler scheduled in process context by the top
- * half. It handles translation faults by pinning the requested user-space pages an mapping them
- * to the IOMMU context or I/O virtual address space.
- *
- * @return  0 on success.
- */
 void pulp_smmu_handle_fault(void)
 {
   int ret = 0;

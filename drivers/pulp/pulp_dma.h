@@ -30,7 +30,6 @@
 
 #include "pulp_module.h"
 
-// type definitions
 typedef struct {
   struct dma_async_tx_descriptor ** descs;
   struct page ** pages;
@@ -43,16 +42,66 @@ typedef struct {
   int         debug_print;
 } dmafilter_param_t;
 
-// methods declarations
+/** @name DMA channel management functions
+ *
+ * @{
+ */
+
+/** Request a channel of the PL330 DMA inside the Zynq PS.
+
+  \param    chan    pointer to the dma_chan struct to use.
+  \param    chan_id ID of the channel to request. 0: Host -> PULP, 1: PULP -> Host.
+
+  \return   0 on success; negative value with an errno on errors.
+ */
 int pulp_dma_chan_req(struct dma_chan ** chan, int chan_id);
+
+
+/** Clean up a DMA channel through the Linux DMA API.
+
+  \param    chan pointer to the dma_chan struct.
+ */
 void pulp_dma_chan_clean(struct dma_chan * chan);
 
-int pulp_dma_xfer_prep(struct dma_async_tx_descriptor ** desc, struct dma_chan ** chan,
-		       unsigned addr_dst, unsigned addr_src, unsigned size_b, bool last);
+//!@}
 
+/** @name DMA transfer management functions
+ *
+ * @{
+ */
+
+/** Enqueue a new DMA transfer.
+
+ \param     desc     pointer to the dma_async_tx_descriptor struct to fill.
+ \param     chan     pointer to the dma_chan struct to use.
+ \param     addr_dst physical destination address.
+ \param     addr_src physical source address.
+ \param     size_b   number of bytes to transfer.
+ \param     last     indicates the last transfer of series, set interrupt flag.
+
+ \return    0 on success; negative value with an errno on errors.
+ */
+int pulp_dma_xfer_prep(struct dma_async_tx_descriptor ** desc, struct dma_chan ** chan,
+                       unsigned addr_dst, unsigned addr_src, unsigned size_b, bool last);
+
+/** Clean up after a DMA transfer has finished, the callback function. Unlocks user pages and
+ *  frees memory.
+
+  \param    pulp_dma_cleanup pointer to the DmaCleanup struct.
+ */
 void pulp_dma_xfer_cleanup(DmaCleanup * pulp_dma_cleanup);
 
+/** Obtain a specific channel exclusively. Used by the Linux DMA API.
+
+ \param    chan  pointer to the dma_chan struct to use.
+ \param    param pointer to the filter parameters.
+
+ \return   true if requested channel is found; false otherwise.
+ */
 bool dmafilter_fn(struct dma_chan *chan, void *param);
+
 void callback_test(void);
+
+//!@}
 
 #endif/*_PULP_DMA_H_*/

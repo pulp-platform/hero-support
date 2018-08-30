@@ -21,7 +21,6 @@
 #include "pulp_mbox.h"
 #include "pulp_rab.h"  /* for pulp_rab_update() */
 
-// global variables
 static void * pulp_mbox;
 static unsigned mbox_fifo[MBOX_FIFO_DEPTH*2];
 static unsigned mbox_fifo_full;
@@ -32,14 +31,6 @@ static unsigned n_words_written, n_words_to_write;
 DEFINE_SPINLOCK(mbox_fifo_lock);
 DECLARE_WAIT_QUEUE_HEAD(mbox_wq);
 
-// functions
-
-/**
- * Initialize the mailbox.
- *
- * @mbox: kernel virtual address of the mailbox PULP-2-Host interface
- * (Interface 1) 
- */
 void pulp_mbox_init(void *mbox)
 {
   // initialize the pointer for pulp_mbox_read
@@ -53,9 +44,6 @@ void pulp_mbox_init(void *mbox)
   return;
 }
 
-/**
- * Empty mbox_fifo buffer
- */
 void pulp_mbox_clear(void)
 {
   int i;
@@ -83,14 +71,6 @@ void pulp_mbox_clear(void)
   return;
 }
 
-/**
- * Read from PULP-2-Host mailbox interface to software FIFO
- * 
- * Bottom-half -> should actually go into a tasklet
- *
- * @mbox: kernel virtual address of the mailbox PULP-2-Host interface
- * (Interface 1) 
- */
 void pulp_mbox_intr(void *mbox)
 {
   int i;
@@ -207,11 +187,6 @@ void pulp_mbox_intr(void *mbox)
   return;
 }
 
-/**
- * User-space applications wants to read data from mbox_fifo
- *
- * Standard Linux kernel read interface
- */
 ssize_t pulp_mbox_read(struct file *filp, char __user *buf, size_t count, loff_t *offp)
 {
   int i;

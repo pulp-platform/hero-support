@@ -20,16 +20,6 @@
  */
 #include "pulp_dma.h"
 
-// global variables
-
-// functions
-
-/**
- * Request a channel of the PL330 DMA inside the Zynq PS.
- *
- * @chan: pointer to the dma_chan struct to use.
- * @chan_id: ID of the channel to request. 0: Host -> PULP, 1: PULP -> Host.
- */
 int pulp_dma_chan_req(struct dma_chan ** chan, int chan_id)
 {
   dma_cap_mask_t    mask;
@@ -57,11 +47,6 @@ int pulp_dma_chan_req(struct dma_chan ** chan, int chan_id)
   return 0;
 }
 
-/**
- * Clean up a DMA channel through the Linux DMA API.
- *
- * @chan: pointer to the dma_chan struct.
- */
 void pulp_dma_chan_clean(struct dma_chan * chan)
 {
   dmaengine_terminate_all(chan);
@@ -69,16 +54,6 @@ void pulp_dma_chan_clean(struct dma_chan * chan)
   dma_release_channel(chan);
 }
 
-/**
- * Enqueue a new DMA transfer.
- *
- * @desc: pointer to the dma_async_tx_descriptor struct to fill.
- * @chan: pointer to the dma_chan struct to use.
- * @addr_dst: physical destination address.
- * @addr_src: physical source address.
- * @size_b: number of bytes to transfer.
- * @last: indicates the last transfer of series, set interrupt flag.
- */
 int pulp_dma_xfer_prep(struct dma_async_tx_descriptor ** desc, struct dma_chan ** chan,
 		       unsigned addr_dst, unsigned addr_src, unsigned size_b, bool last)
 {
@@ -107,12 +82,6 @@ int pulp_dma_xfer_prep(struct dma_async_tx_descriptor ** desc, struct dma_chan *
   return 0;
 }
 
-/**
- * Clean up after a DMA transfer has finished, the callback
- * function. Unlocks user pages and frees memory.
- *
- * @pulp_dma_cleanup: pointer to the DmaCleanup struct.
- */
 void pulp_dma_xfer_cleanup(DmaCleanup * pulp_dma_cleanup){
 
 #ifndef PROFILE_DMA
@@ -149,12 +118,6 @@ void pulp_dma_xfer_cleanup(DmaCleanup * pulp_dma_cleanup){
   // signal to user-space runtime?
 }
 
-/**
- * Obtain a specific channel exclusively.  Used by the Linux DMA API.
- *
- * @chan: pointer to the dma_chan struct to use.
- * @param: pointer to the filter parameters.
- */
 bool dmafilter_fn(struct dma_chan *chan, void *param)
 {
   struct dma_device    *device  = chan->device;

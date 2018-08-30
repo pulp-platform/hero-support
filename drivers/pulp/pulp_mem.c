@@ -22,14 +22,6 @@
 
 #include "pulp_mem.h"
 
-/**
- * Flush user-space memory pages. Required when PULP reads from
- * user-space memory.
- *
- * @page: pointer to the page struct of user-space memory page to flush.
- * @offset_start: address offset to start flushing from.
- * @offset_end: address offset to end flushing at.
- */
 void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned offset_end) 
 {
 
@@ -71,14 +63,6 @@ void pulp_mem_cache_flush(struct page *page, unsigned offset_start, unsigned off
   kunmap(page);
 }
 
-/**
- * Invalidate user-space memory pages. Required when PULP writes to
- * user-space memory.
- *
- * @page: pointer to the page struct of user-space memory page to flush.
- * @offset_start: address offset to start flushing from.
- * @offset_end: address offset to end flushing at.
- */
 void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offset_end) 
 {
 
@@ -120,10 +104,6 @@ void pulp_mem_cache_inv(struct page *page, unsigned offset_start, unsigned offse
   kunmap(page);
 }
 
-
-/**
- * Get the number of pages to remap.
- */
 unsigned pulp_mem_get_num_pages(unsigned addr_start, unsigned size_b) 
 {
   unsigned n_pages;
@@ -138,15 +118,6 @@ unsigned pulp_mem_get_num_pages(unsigned addr_start, unsigned size_b)
   return n_pages;
 }
 
-/**
- * Get pointers to user-space pages' page structs of the calling
- * process and lock the corresponding pages in memory.
- *
- * @pages: pointer to the pages' page structs.
- * @addr_start: virtual user-space address to start remapping from.
- * @n_pages: number of pages to remap.
- * @write: if non-zero, remap pages in write mode.
- */
 int pulp_mem_get_user_pages(struct page *** pages, unsigned addr_start, unsigned n_pages, unsigned write)
 {
   int result;
@@ -173,22 +144,6 @@ int pulp_mem_get_user_pages(struct page *** pages, unsigned addr_start, unsigned
   return 0;
 }
 
-/**
- * Translates user-space pages' virtual addresses into physical
- * addresses and groups them into segments of physically contiguous
- * addresses. Returns the number of segments in case of success,
- * -ENOMEM otherwise.
- *
- * @addr_start_vec: pointer to array containing virtual start addresses of the segments.
- * @addr_end_vec: pointer to array containing virtual end addresses of the segments.
- * @addr_offset_vec: pointer to array containing address offsets (physical) of the segments.
- * @page_start_idxs: pointer to array containing start indexes of the segments in pages.
- * @page_end_idxs: pointer to array containing end indexes of the segments in pages.
- * @pages: pointer to the pages' page structs
- * @n_pages: number of pages to map.
- * @addr_start: virtual start address of the mapping.
- * @addr_end: virtual end address of the mapping.
- */
 int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsigned long ** addr_offset_vec,
                     unsigned ** page_start_idxs, unsigned ** page_end_idxs, 
                     struct page *** pages, unsigned n_pages, 
@@ -299,15 +254,6 @@ int pulp_mem_map_sg(unsigned ** addr_start_vec, unsigned ** addr_end_vec, unsign
   return n_segments;
 }
 
-/**
- * Translates user-space pages' virtual addresses into physical
- * addresses and groups them into segments of physically contiguous
- * addresses. Returns the number of segments in case of success,
- * -ENOMEM otherwise.
- *
- * @pages: pointer to the pages' page structs
- * @n_pages: number of pages to map.
- */
 int pulp_mem_check_num_sg(struct page *** pages, unsigned n_pages)
 {
   int i;
@@ -357,15 +303,6 @@ int pulp_mem_check_num_sg(struct page *** pages, unsigned n_pages)
   return n_segments;
 }
 
-/**
- * Get the physical pageframe numbers for every virtual page.
- *
- * @pfn_v_vec: pointer to array containing virtual pageframe numbers.
- * @pfn_p_vec: pointer to array containing physical pageframe numbers.
- * @pages: pointer to the pages' page structs.
- * @n_pages: Number of pages to translate.
- * @addr_start: virtual start address of the mapping.
- */
 int pulp_mem_l2_get_entries(unsigned ** pfn_v_vec, unsigned ** pfn_p_vec,
                            struct page *** pages, unsigned n_pages, unsigned addr_start)
 {

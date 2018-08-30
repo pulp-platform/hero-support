@@ -130,11 +130,6 @@ static unsigned rab_n_slices_reserved_for_host;
 // functions
 
 // init {{{
-/**
- * Initialize the RAB.
- *
- * @pulp: ptr to PulpDev structure, used to initalize local copy.
- */
 int pulp_rab_init(PulpDev * pulp_ptr)
 {
   int err = 0;
@@ -183,15 +178,6 @@ int pulp_rab_init(PulpDev * pulp_ptr)
 // }}}
 
 // release {{{
-/**
- * Release control of the RAB.
- *
- * Makes sure PULP has no more access to any user-space memory, and that the miss
- * handlers are switched off. Moreover, any user-space pages previsouly pinned by
- * the driver are unpinned.
- *
- * @return  0 on success; negative value with errno on errors.
- */
 int pulp_rab_release(void)
 {
   unsigned i, offset;
@@ -264,9 +250,6 @@ int pulp_rab_release(void)
  ***********************************************************************************/
 
 // l1_init {{{
-/**
- * Initialize the arrays the driver uses to manage the RAB.
- */
 void pulp_rab_l1_init(void)
 {
   int i,j;
@@ -305,12 +288,6 @@ void pulp_rab_l1_init(void)
 // }}}
 
 // page_ptrs_get_field {{{
-/**
- * Get a free field from the page_ptrs array.
- *
- * @rab_slice_req: the obtained field is stored in
- * rab_slice_req->page_ptr_idx.
- */
 int pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req)
 {
   int err,i;
@@ -334,13 +311,6 @@ int pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req)
 // }}}
 
 // slice_check {{{
-/**
- * Check whether a particular slice has expired. Returns 1 if slice
- * has expired, 0 otherwise.
- *
- * @rab_slice_req: specifies the slice to check as well as the current
- *                 date.
- */
 int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
 {
   int expired;
@@ -369,7 +339,6 @@ int pulp_rab_slice_check(RabSliceReq *rab_slice_req)
 // }}}
 
 // slice_get {{{
-
 static inline unsigned pulp_rab_slice_is_managed_by_host(const RabSliceReq* const req)
 {
   // All slices on port 0 are managed by the host.
@@ -387,11 +356,6 @@ static inline unsigned pulp_rab_slice_is_managed_by_host(const RabSliceReq* cons
   return 0;
 }
 
-/**
- * Get a free RAB slice. Returns 0 on success, 1 otherwise.
- *
- * @rab_slice_req: specifies the current date.
- */
 int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
 {
   int err, i;
@@ -423,12 +387,6 @@ int pulp_rab_slice_get(RabSliceReq *rab_slice_req)
 // }}}
 
 // slice_free {{{
-/**
- * Free a RAB slice and unlock any corresponding memory pages.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @rab_slice_req: specifies the slice to free.
- */
 void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 {
   int i;
@@ -543,15 +501,6 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
 // }}}
 
 // slice_setup {{{
-/**
- * Setup a RAB slice: 1) setup the drivers' managment arrays, 2)
- * configure the hardware using iowrite32(). Returns 0 on success,
- * -EIO otherwise.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @rab_slice_req: specifies the slice to setup.
- * @pages: pointer to the page structs of the remapped user-space memory pages.
- */
 int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct page **pages)
 {
   unsigned offset, port, mapping, slice;
@@ -636,11 +585,6 @@ int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct pa
 // }}}
 
 // num_free_slices {{{
-/**
- * Get the number of free RAB slices.
- *
- * @rab_slice_req: specifies the current date.
- */
 int pulp_rab_num_free_slices(RabSliceReq *rab_slice_req)
 {
   int num_free_slice, i;
@@ -665,9 +609,6 @@ int pulp_rab_num_free_slices(RabSliceReq *rab_slice_req)
 // }}}
 
 // mapping_get_active {{{
-/**
- * Get the index of the currently active RAB mapping on Port 1.
- */
 int pulp_rab_mapping_get_active()
 {
   return (int)l1.port_1.mapping_active;
@@ -675,13 +616,6 @@ int pulp_rab_mapping_get_active()
 // }}}
 
 // mappping_switch {{{
-/**
- * Switch the current RAB setup with another mapping. In case a mapping
- * contains a striped config, Stripe 0 will be set up.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @rab_mapping: specifies the mapping to set up the RAB with.
- */
 void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
 {
   int i;
@@ -736,13 +670,6 @@ void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping)
 // }}}
 
 // mapping_print {{{
-/**
- * Print RAB mappings.
- *
- * @rab_config:  kernel virtual address of the RAB configuration port.
- * @rab_mapping: specifies the mapping to to print, 0xAAAA for actual
- *               RAB configuration, 0xFFFF for all mappings.
- */
 void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
 {
   int mapping_min, mapping_max;
@@ -823,6 +750,186 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
 
 // }}}
 
+// Mailbox Requests {{{
+/***********************************************************************************
+ *
+ * ███╗   ███╗██████╗  ██████╗ ██╗  ██╗    ██████╗ ███████╗ ██████╗
+ * ████╗ ████║██╔══██╗██╔═══██╗╚██╗██╔╝    ██╔══██╗██╔════╝██╔═══██╗
+ * ██╔████╔██║██████╔╝██║   ██║ ╚███╔╝     ██████╔╝█████╗  ██║   ██║
+ * ██║╚██╔╝██║██╔══██╗██║   ██║ ██╔██╗     ██╔══██╗██╔══╝  ██║▄▄ ██║
+ * ██║ ╚═╝ ██║██████╔╝╚██████╔╝██╔╝ ██╗    ██║  ██║███████╗╚██████╔╝
+ * ╚═╝     ╚═╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝
+ *
+ ***********************************************************************************/
+
+// update {{{
+void pulp_rab_update(unsigned update_req)
+{
+  int i, j;
+  unsigned elem_mask, type;
+  unsigned rab_mapping;
+  unsigned stripe_idx, idx_mask, set_sel, n_slices, offset;
+  RabStripeElem * elem;
+
+  elem_mask = 0;
+  RAB_UPDATE_GET_ELEM(elem_mask, update_req);
+  type = 0;
+  RAB_UPDATE_GET_TYPE(type, update_req);
+
+  if (DEBUG_LEVEL_RAB_STR > 0) {
+    printk(KERN_INFO "PULP - RAB: update requested, elem_mask = %#x, type = %d\n", elem_mask, type);
+  }
+
+  #ifdef PROFILE_RAB_STR
+    // stop the PULP timer
+    iowrite32(0x1,(void *)((unsigned long)(pulp->clusters)+TIMER_STOP_OFFSET_B));
+
+    // read the PULP timer
+    n_cyc_response = ioread32((void *)((unsigned long)(pulp->clusters)
+      +TIMER_GET_TIME_LO_OFFSET_B));
+    n_cyc_tot_response += n_cyc_response;
+
+    // reset the ARM clock counter
+    asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
+  #endif
+
+  rab_mapping = (unsigned)pulp_rab_mapping_get_active();
+
+  // process every data element independently
+  for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
+
+    if ( !(elem_mask & (0x1 << i)) )
+      continue;
+
+    elem = &rab_stripe_req[rab_mapping].elements[i];
+
+    n_slices   = elem->n_slices_per_stripe;
+    stripe_idx = elem->stripe_idx;
+    if ( elem->type == inout ) // inout -> Stripe 0, 4, 8 to Set 0, Stripe 1, 5, 9 to Set 1, etc.
+      idx_mask = 0x3;
+    else // in, out -> Alternate even and odd stripes to Set 0 and 1, respectively.
+      idx_mask = 0x1;
+
+    // select set of pre-allocated slices, set_offset may change on wrap around
+    set_sel = (stripe_idx + elem->set_offset) & idx_mask;
+
+    // process every slice independently
+    for (j=0; j<n_slices; j++) {
+      offset = RAB_SLICE_BASE_OFFSET_B + RAB_SLICE_SIZE_B*(1*RAB_L1_N_SLICES_PORT_0+elem->slice_idxs[set_sel*n_slices+j]);
+
+      if (DEBUG_LEVEL_RAB_STR > 3) {
+        printk("stripe_idx = %d, n_slices = %d, j = %d, offset = %#x\n",
+          stripe_idx, elem->stripes[stripe_idx].n_slices, j, offset);
+      }
+
+      // deactivate slice
+      iowrite32(0x0,(void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_FLAGS_OFFSET_B));
+
+      // set up new translations rule
+      if ( j < elem->stripes[stripe_idx].n_slices ) {
+        iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_start,  (void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_ADDR_START_OFFSET_B )); // start_addr
+        iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_end,    (void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_ADDR_END_OFFSET_B   )); // end_addr
+        IOWRITE_L(elem->stripes[stripe_idx].slice_configs[j].addr_offset, (void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_ADDR_OFFSET_OFFSET_B)); // offset
+        iowrite32(elem->flags_hw,                                         (void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_FLAGS_OFFSET_B      ));
+      #ifdef PROFILE_RAB_STR
+        n_slices_updated++;
+      #endif
+      }
+    }
+    // increase stripe idx counter
+    elem->stripe_idx++;
+
+    if (elem->stripe_idx == elem->n_stripes) {
+      elem->stripe_idx = 0;
+      if      ( (elem->type == inout) && (elem->n_stripes & 0x3) ) // inout + number of stripes not divisible by 4 -> shift set mapping
+        elem->set_offset = (elem->set_offset + (elem->n_stripes & 0x3) ) & 0x3;
+      else if ( (elem->type != inout) && (elem->n_stripes & 0x1) ) // in, out + odd number of stripes -> flip set mapping
+        elem->set_offset = (elem->set_offset) ? 0 : 1;
+
+      if (DEBUG_LEVEL_RAB_STR > 0) {
+        printk(KERN_INFO "PULP - RAB: elem %d stripe table wrap around.\n", i);
+      }
+    }
+  }
+
+  // signal ready to PULP
+  iowrite32(HOST_READY | elem_mask,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
+
+  #ifdef PROFILE_RAB_STR
+    // read the ARM clock counter
+    asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
+    n_cyc_update = arm_clk_cntr_value;
+    n_cyc_tot_update += n_cyc_update;
+
+    n_updates++;
+
+    // write the counter values to the buffers
+    n_cyc_buf_response[idx_buf_response] = n_cyc_response;
+    idx_buf_response++;
+    n_cyc_buf_update[idx_buf_update] = n_cyc_update;
+    idx_buf_update++;
+
+    // check for buffer overflow
+    if ( idx_buf_response > PROFILE_RAB_N_UPDATES ) {
+      idx_buf_response = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_response overflow!\n");
+    }
+    if ( idx_buf_update > PROFILE_RAB_N_UPDATES ) {
+      idx_buf_update = 0;
+      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_update overflow!\n");
+    }
+  #endif
+
+  if (DEBUG_LEVEL_RAB_STR > 0) {
+    printk(KERN_INFO "PULP - RAB: update completed.\n");
+  }
+
+  return;
+}
+// }}}
+
+// switch {{{
+void pulp_rab_switch(void)
+{
+  int i;
+  unsigned rab_mapping;
+
+  if (DEBUG_LEVEL_RAB > 0) {
+    printk(KERN_INFO "PULP - RAB: switch requested.\n");
+  }
+
+  // for debugging
+  //pulp_rab_mapping_print(pulp->rab_config, 0xAAAA);
+
+  // switch RAB mapping
+  rab_mapping = (pulp_rab_mapping_get_active()) ? 0 : 1;
+  pulp_rab_mapping_switch(pulp->rab_config,rab_mapping);
+
+  // reset stripe idxs for striped mappings
+  for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
+
+    if ( rab_stripe_req[rab_mapping].elements[i].type == out ) // out
+      rab_stripe_req[rab_mapping].elements[i].stripe_idx = 0;
+    else  // in, inout
+      rab_stripe_req[rab_mapping].elements[i].stripe_idx = 1;
+  }
+
+  if (DEBUG_LEVEL_RAB > 0) {
+    printk(KERN_INFO "PULP - RAB: switch completed.\n");
+  }
+
+  // for debugging
+  //pulp_rab_mapping_print(pulp->rab_config, 0xAAAA);
+
+  // signal ready to PULP
+  iowrite32(HOST_READY,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
+
+  return;
+}
+// }}}
+
+// }}}
+
 // L2 Management {{{
 /***********************************************************************************
  *
@@ -836,11 +943,6 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
  ***********************************************************************************/
 
 // l2_init {{{
-/**
- * Initialise L2 TLB HW and struct to zero.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- */
 void pulp_rab_l2_init(void *rab_config)
 {
   unsigned char i_port;
@@ -854,12 +956,6 @@ void pulp_rab_l2_init(void *rab_config)
 // }}}
 
 // l2_clear_hw {{{
-/**
- * Clear L2 TLB HW and struct of a given RAB port.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @port:       Port number of area to clear
- */
 void pulp_rab_l2_clear_hw(void *rab_config, unsigned char port)
 {
   unsigned int i_set, i_entry, offset;
@@ -882,16 +978,6 @@ void pulp_rab_l2_clear_hw(void *rab_config, unsigned char port)
 
 
 // l2_setup_entry {{{
-/**
- * Setup an L2TLB entry: 1) Check if a free spot is avaialble in L2 TLB,
- * 2) configure the HW using iowrite32(), 3) Configure kernel struct.
- * Return 0 on success.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @tlb_entry: specifies the L2TLB entry to setup.
- * @port: RAB port
- * @enable_replace: an entry can be replaced if set is full.
- */
 int pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, char enable_replace)
 {
   unsigned set_num, entry_num;
@@ -952,12 +1038,6 @@ int pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, cha
 // }}}
 
 // l2_check_availability {{{
-/**
- * Check if a free spot is available in L2 TLB.
- * Return 0 if available. 1 if not available.
- * @tlb_entry: specifies the L2TLB entry to setup.
- * @port: RAB port
- */
 int pulp_rab_l2_check_availability(L2Entry *tlb_entry, char port)
 {
   unsigned set_num;
@@ -979,12 +1059,6 @@ int pulp_rab_l2_check_availability(L2Entry *tlb_entry, char port)
 // }}}
 
 // l2_invalidate_all_entries {{{
-/**
- * Invalidate all valid L2 TLB entries. Keep the virtual and physical pageframe numbers intact.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @port: RAB port
- */
 int pulp_rab_l2_invalidate_all_entries(void *rab_config, char port)
 {
   int set_num, entry_num;
@@ -1004,14 +1078,6 @@ int pulp_rab_l2_invalidate_all_entries(void *rab_config, char port)
 // }}}
 
 // l2_invalidate_entry {{{
-/**
- * Invalidate one L2 TLB entry. Keep the virtual and physical pageframe numbers intact.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @port: RAB port
- * @set_num: Set number
- * @entry_num: Entry number in the set.
- */
 int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int entry_num)
 {
   unsigned data;
@@ -1051,11 +1117,6 @@ int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int e
 // }}}
 
 // l2_print_all_entries {{{
-/**
- * Print all entries.
- *
- * @port: RAB port
- */
 int pulp_rab_l2_print_all_entries(char port)
 {
   int set_num, entry_num;
@@ -1119,12 +1180,6 @@ int pulp_rab_l2_print_valid_entries(char port)
  ***********************************************************************************/
 
 // req {{{
-/**
- * Request new RAB slices.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @arg:        ioctl() argument
- */
 long pulp_rab_req(void *rab_config, unsigned long arg)
 {
   int err = 0, i, j;
@@ -1392,12 +1447,6 @@ long pulp_rab_req(void *rab_config, unsigned long arg)
 // }}}
 
 // req_striped {{{
-/**
- * Request striped RAB slices.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @arg:        ioctl() argument
- */
 long pulp_rab_req_striped(void *rab_config, unsigned long arg)
 {
   int err = 0, i, j, k;
@@ -1906,12 +1955,6 @@ long pulp_rab_req_striped(void *rab_config, unsigned long arg)
  *
  ***********************************************************************************/
 
-/**
- * Free RAB slices based on time code.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @arg:        ioctl() argument
- */
 void pulp_rab_free(void *rab_config, unsigned long arg)
 {
   int i, j, k;
@@ -1972,12 +2015,6 @@ void pulp_rab_free(void *rab_config, unsigned long arg)
 // }}}
 
 // free_striped {{{
-/**
- * Free striped RAB slices.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @arg:        ioctl() argument
- */
 void pulp_rab_free_striped(void *rab_config, unsigned long arg)
 {
   int i, j;
@@ -2069,196 +2106,6 @@ void pulp_rab_free_striped(void *rab_config, unsigned long arg)
 
 // }}}
 
-// Mailbox Requests {{{
-/***********************************************************************************
- *
- * ███╗   ███╗██████╗  ██████╗ ██╗  ██╗    ██████╗ ███████╗ ██████╗
- * ████╗ ████║██╔══██╗██╔═══██╗╚██╗██╔╝    ██╔══██╗██╔════╝██╔═══██╗
- * ██╔████╔██║██████╔╝██║   ██║ ╚███╔╝     ██████╔╝█████╗  ██║   ██║
- * ██║╚██╔╝██║██╔══██╗██║   ██║ ██╔██╗     ██╔══██╗██╔══╝  ██║▄▄ ██║
- * ██║ ╚═╝ ██║██████╔╝╚██████╔╝██╔╝ ██╗    ██║  ██║███████╗╚██████╔╝
- * ╚═╝     ╚═╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝
- *
- ***********************************************************************************/
-
-// update {{{
-/**
- * Update the RAB configuration of slices configured in a striped mode.
- * -> Actually, this is the bottom handler and it should go into a tasklet.
- *
- * @update_req: update request identifier, specifies which elements to
- *              update in which way (advance to next stripe, wrap)
- */
-void pulp_rab_update(unsigned update_req)
-{
-  int i, j;
-  unsigned elem_mask, type;
-  unsigned rab_mapping;
-  unsigned stripe_idx, idx_mask, set_sel, n_slices, offset;
-  RabStripeElem * elem;
-
-  elem_mask = 0;
-  RAB_UPDATE_GET_ELEM(elem_mask, update_req);
-  type = 0;
-  RAB_UPDATE_GET_TYPE(type, update_req);
-
-  if (DEBUG_LEVEL_RAB_STR > 0) {
-    printk(KERN_INFO "PULP - RAB: update requested, elem_mask = %#x, type = %d\n", elem_mask, type);
-  }
-
-  #ifdef PROFILE_RAB_STR
-    // stop the PULP timer
-    iowrite32(0x1,(void *)((unsigned long)(pulp->clusters)+TIMER_STOP_OFFSET_B));
-
-    // read the PULP timer
-    n_cyc_response = ioread32((void *)((unsigned long)(pulp->clusters)
-      +TIMER_GET_TIME_LO_OFFSET_B));
-    n_cyc_tot_response += n_cyc_response;
-
-    // reset the ARM clock counter
-    asm volatile("mcr p15, 0, %0, c9, c12, 0" :: "r"(0xD));
-  #endif
-
-  rab_mapping = (unsigned)pulp_rab_mapping_get_active();
-
-  // process every data element independently
-  for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
-
-    if ( !(elem_mask & (0x1 << i)) )
-      continue;
-
-    elem = &rab_stripe_req[rab_mapping].elements[i];
-
-    n_slices   = elem->n_slices_per_stripe;
-    stripe_idx = elem->stripe_idx;
-    if ( elem->type == inout ) // inout -> Stripe 0, 4, 8 to Set 0, Stripe 1, 5, 9 to Set 1, etc.
-      idx_mask = 0x3;
-    else // in, out -> Alternate even and odd stripes to Set 0 and 1, respectively.
-      idx_mask = 0x1;
-
-    // select set of pre-allocated slices, set_offset may change on wrap around
-    set_sel = (stripe_idx + elem->set_offset) & idx_mask;
-
-    // process every slice independently
-    for (j=0; j<n_slices; j++) {
-      offset = RAB_SLICE_BASE_OFFSET_B + RAB_SLICE_SIZE_B*(1*RAB_L1_N_SLICES_PORT_0+elem->slice_idxs[set_sel*n_slices+j]);
-
-      if (DEBUG_LEVEL_RAB_STR > 3) {
-        printk("stripe_idx = %d, n_slices = %d, j = %d, offset = %#x\n",
-          stripe_idx, elem->stripes[stripe_idx].n_slices, j, offset);
-      }
-
-      // deactivate slice
-      iowrite32(0x0,(void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_FLAGS_OFFSET_B));
-
-      // set up new translations rule
-      if ( j < elem->stripes[stripe_idx].n_slices ) {
-        iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_start,  (void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_ADDR_START_OFFSET_B )); // start_addr
-        iowrite32(elem->stripes[stripe_idx].slice_configs[j].addr_end,    (void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_ADDR_END_OFFSET_B   )); // end_addr
-        IOWRITE_L(elem->stripes[stripe_idx].slice_configs[j].addr_offset, (void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_ADDR_OFFSET_OFFSET_B)); // offset
-        iowrite32(elem->flags_hw,                                         (void *)((unsigned long)(pulp->rab_config) + offset + RAB_SLICE_FLAGS_OFFSET_B      ));
-      #ifdef PROFILE_RAB_STR
-        n_slices_updated++;
-      #endif
-      }
-    }
-    // increase stripe idx counter
-    elem->stripe_idx++;
-
-    if (elem->stripe_idx == elem->n_stripes) {
-      elem->stripe_idx = 0;
-      if      ( (elem->type == inout) && (elem->n_stripes & 0x3) ) // inout + number of stripes not divisible by 4 -> shift set mapping
-        elem->set_offset = (elem->set_offset + (elem->n_stripes & 0x3) ) & 0x3;
-      else if ( (elem->type != inout) && (elem->n_stripes & 0x1) ) // in, out + odd number of stripes -> flip set mapping
-        elem->set_offset = (elem->set_offset) ? 0 : 1;
-
-      if (DEBUG_LEVEL_RAB_STR > 0) {
-        printk(KERN_INFO "PULP - RAB: elem %d stripe table wrap around.\n", i);
-      }
-    }
-  }
-
-  // signal ready to PULP
-  iowrite32(HOST_READY | elem_mask,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
-
-  #ifdef PROFILE_RAB_STR
-    // read the ARM clock counter
-    asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(arm_clk_cntr_value) : );
-    n_cyc_update = arm_clk_cntr_value;
-    n_cyc_tot_update += n_cyc_update;
-
-    n_updates++;
-
-    // write the counter values to the buffers
-    n_cyc_buf_response[idx_buf_response] = n_cyc_response;
-    idx_buf_response++;
-    n_cyc_buf_update[idx_buf_update] = n_cyc_update;
-    idx_buf_update++;
-
-    // check for buffer overflow
-    if ( idx_buf_response > PROFILE_RAB_N_UPDATES ) {
-      idx_buf_response = 0;
-      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_response overflow!\n");
-    }
-    if ( idx_buf_update > PROFILE_RAB_N_UPDATES ) {
-      idx_buf_update = 0;
-      printk(KERN_WARNING "PULP - RAB: n_cyc_buf_update overflow!\n");
-    }
-  #endif
-
-  if (DEBUG_LEVEL_RAB_STR > 0) {
-    printk(KERN_INFO "PULP - RAB: update completed.\n");
-  }
-
-  return;
-}
-// }}}
-
-// switch {{{
-/**
- * Switch the hardware configuration of the RAB.
- */
-void pulp_rab_switch(void)
-{
-  int i;
-  unsigned rab_mapping;
-
-  if (DEBUG_LEVEL_RAB > 0) {
-    printk(KERN_INFO "PULP - RAB: switch requested.\n");
-  }
-
-  // for debugging
-  //pulp_rab_mapping_print(pulp->rab_config, 0xAAAA);
-
-  // switch RAB mapping
-  rab_mapping = (pulp_rab_mapping_get_active()) ? 0 : 1;
-  pulp_rab_mapping_switch(pulp->rab_config,rab_mapping);
-
-  // reset stripe idxs for striped mappings
-  for (i=0; i<rab_stripe_req[rab_mapping].n_elements; i++) {
-
-    if ( rab_stripe_req[rab_mapping].elements[i].type == out ) // out
-      rab_stripe_req[rab_mapping].elements[i].stripe_idx = 0;
-    else  // in, inout
-      rab_stripe_req[rab_mapping].elements[i].stripe_idx = 1;
-  }
-
-  if (DEBUG_LEVEL_RAB > 0) {
-    printk(KERN_INFO "PULP - RAB: switch completed.\n");
-  }
-
-  // for debugging
-  //pulp_rab_mapping_print(pulp->rab_config, 0xAAAA);
-
-  // signal ready to PULP
-  iowrite32(HOST_READY,(void *)((unsigned long)(pulp->mbox)+MBOX_WRDATA_OFFSET_B));
-
-  return;
-}
-// }}}
-
-// }}}
-
 // SoC Miss Handling {{{
 /***********************************************************************************
  *
@@ -2272,7 +2119,6 @@ void pulp_rab_switch(void)
  ***********************************************************************************/
 
 // soc_mh_ena {{{
-
 static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* const req,
     const unsigned long pgd_pa)
 {
@@ -2410,29 +2256,6 @@ static unsigned rab_is_ready_for_soc_mh(void* const rab_config)
   return 1;
 }
 
-/**
- * Delegate RAB Miss Handling to the PULP SoC.
- *
- * This functions configures RAB so that the page table hierarchy can be accessed from the SoC.  For
- * this, slices either for the first-level page table or for all second-level page tables are
- * configured in RAB (definable, see parameter below).  If RAB has been configured successfully,
- * handling of RAB misses by this Kernel driver is disabled and all RAB slices but the first ones
- * (which contain a mapping to the contiguous L3 memory and to the initial level of the page table)
- * are reserved to be managed by the SoC.  The SoC must at runtime configure the RAB slices for the
- * subsequent levels of the page table.  Thus, the proper VMM software must be running on the SoC;
- * otherwise, RAB misses will not be handled at all.
- *
- * @param   rab_config            Pointer to the RAB configuration port.
- * @param   static_2nd_lvl_slices If 0, the driver sets up a single RAB slice for the first level of
- *                                the page table; if 1, the driver sets up RAB slices for all valid
- *                                second-level page tables.  The latter is not supported by all
- *                                architectures.  If unsupported, the driver will fall back to the
- *                                former behavior and emit a warning.
- *
- * @return  0 on success; a nonzero errno on errors.  In particular,  -EALREADY if misses are
- *          already handled by the SoC, -EBUSY if RAB slices that are now to be managed by the SoC
- *          are already configured.
- */
 int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
 {
   const pgd_t *   pgd;
@@ -2530,17 +2353,6 @@ int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices)
 // }}}
 
 // soc_mh_dis {{{
-/**
- * Disable handling of RAB Misses by the SoC.
- *
- * This function frees and deconfigures all slices used to map the initial level of the page table,
- * and hands the slices that were reserved to be managed by the SoC back to the host.
- *
- * @param rab_config  Pointer to the RAB configuration port.
- *
- * @return  0 on success; a nonzero errno on errors.  In particular, -EALREADY if miss handling on
- *          the SoC is already disabled.
- */
 int pulp_rab_soc_mh_dis(void* const rab_config)
 {
   unsigned i;
@@ -2585,12 +2397,6 @@ int pulp_rab_soc_mh_dis(void* const rab_config)
  ***********************************************************************************/
 
 // mh_ena {{{
-/**
- * Enable the host RAB miss handling routine by allocating the workqueue.
- *
- * @rab_config: kernel virtual address of the RAB configuration port.
- * @arg:        ioctl() argument
- */
 long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
 {
 
@@ -2641,9 +2447,6 @@ long pulp_rab_mh_ena(void *rab_config, unsigned long arg)
 // }}}
 
 // mh_dis {{{
-/**
- * Disable the worker thread and destroy the workqueue.
- */
 void pulp_rab_mh_dis(void)
 {
 
@@ -2664,9 +2467,6 @@ void pulp_rab_mh_dis(void)
 // }}}
 
 // mh_sched {{{
-/**
- * Append work to the worker thread running in process context.
- */
 unsigned pulp_rab_mh_sched(void)
 {
   if (rab_mh) {
@@ -2684,10 +2484,6 @@ unsigned pulp_rab_mh_sched(void)
 // }}}
 
 // handle_miss {{{
-/**
- * Handle RAB misses. This is the actual miss handling routine executed
- * by the worker thread in process context.
- */
 void pulp_rab_handle_miss(unsigned unused)
 {
   int err, i, j, handled, result;
@@ -3071,10 +2867,6 @@ void pulp_rab_handle_miss(unsigned unused)
    ***********************************************************************************/
 
   // ax_log_init {{{
-  /**
-   * Initialize the AX logger, i.e., allocate kernel buffer memory and clear
-   * the hardware buffer.
-   */
   int pulp_rab_ax_log_init(void)
   {
     unsigned gpio, ready, status;
@@ -3129,10 +2921,6 @@ void pulp_rab_handle_miss(unsigned unused)
   // }}}
 
   // ax_log_free {{{
-  /**
-   * Free the kernel buffer memory previously allocated using
-   * pulp_rab_ax_log_init().
-   */
   void pulp_rab_ax_log_free(void)
   {
     vfree(rab_ar_log_buf);
@@ -3144,14 +2932,6 @@ void pulp_rab_handle_miss(unsigned unused)
   // }}}
 
   // ax_log_read {{{
-  /**
-   * Read out the RAB AX Logger to the kernel buffers rab_ax_log_buf.
-   *
-   * @gpio_value: initial gpio value, needed to set e.g. fetch enable
-   *              correctly when manipulating the GPIO register
-   * @clear:      specifies whether the logger should be cleared
-   *              (PULP is clock-gated during this procedure)
-   */
   void pulp_rab_ax_log_read(unsigned gpio_value, unsigned clear)
   {
     unsigned i;
@@ -3266,10 +3046,6 @@ void pulp_rab_handle_miss(unsigned unused)
   // }}}
 
   // ax_log_print {{{
-  /**
-   * Print the content of the rab_ax_log_buf buffers and reset the incdices
-   * rab_ax_log_idx.
-   */
   void pulp_rab_ax_log_print(void)
   {
 
@@ -3337,12 +3113,6 @@ void pulp_rab_handle_miss(unsigned unused)
   // }}}
 
   // ax_log_to_user {{{
-  /**
-   * Writes the kernel-space buffers to user space.
-   * Note:
-   *       - It resets the indices similar to the log_print() function. Subsequent calls to
-   *         log_print() will thus print nothing.
-   */
   void pulp_rab_ax_log_to_user(unsigned long arg)
   {
     unsigned idxs[3];
@@ -3450,9 +3220,6 @@ void pulp_rab_handle_miss(unsigned unused)
    ***********************************************************************************/
 
   // prof_init {{{
-  /**
-   * Dynamically allocate buffers used to store profiling data and initialize index counters.
-   */
   int pulp_rab_prof_init(void)
   {
     // allocate buffer memory
@@ -3523,9 +3290,6 @@ void pulp_rab_handle_miss(unsigned unused)
   // }}}
 
   // prof_free {{{
-  /**
-   * Free dynamically allocated buffers used for profiling.
-   */
   void pulp_rab_prof_free(void)
   {
     vfree(n_cyc_buf_response      );
@@ -3548,9 +3312,6 @@ void pulp_rab_handle_miss(unsigned unused)
   // }}}
 
   // prof_print {{{
-  /**
-   * Print data collected during profiling and reset index counters
-   */
   void pulp_rab_prof_print(void)
   {
     int i;
@@ -3669,5 +3430,3 @@ void pulp_rab_handle_miss(unsigned unused)
 
 #endif
 // }}}
-
-// vim: ts=2 sw=2 sts=2 et foldmethod=marker tw=100

@@ -1280,5 +1280,3 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
   return retval;
 }
 // }}}
-
-// vim: ts=2 sw=2 sts=2 et foldmethod=marker tw=100

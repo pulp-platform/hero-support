@@ -325,60 +325,379 @@ typedef struct {
   L2Set set[RAB_L2_N_SETS];
 } L2Tlb;
 
-/*
- * Method declarations
+/** @name RAB initialization functions
+ *
+ * @{
+ */
+
+/** Initialize the RAB.
+
+  \param    pulp ptr to PulpDev structure, used to initalize local copy.
  */
 int pulp_rab_init(PulpDev * pulp_ptr);
+
+/** Release control of the RAB.
+
+ *  Makes sure PULP has no more access to any user-space memory, and that the miss
+ *  handlers are switched off. Moreover, any user-space pages previsouly pinned by
+ *  the driver are unpinned.
+
+  \return   0 on success; negative value with errno on errors.
+ */
 int pulp_rab_release(void);
 
+//!@}
+
+/** @name L1 TLB management functions
+ *
+ * @{
+ */
+
+/** Initialize the arrays the driver uses to manage the RAB.
+ */
 void pulp_rab_l1_init(void);
-int  pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req);
-int  pulp_rab_slice_check(RabSliceReq *rab_slice_req);
-int  pulp_rab_slice_get(RabSliceReq *rab_slice_req);
+
+/** Get a free field from the page_ptrs array.
+
+  \param    rab_slice_req the obtained field is stored in rab_slice_req->page_ptr_idx.
+
+  \return   0 on success; negative value with errno on errors.
+ */
+int pulp_rab_page_ptrs_get_field(RabSliceReq *rab_slice_req);
+
+/** Check whether a particular slice has expired.
+
+  \param    rab_slice_req specifies the slice to check as well as the current date.
+
+  \return   1 if the slice has expired; 0 otherwise.
+ */
+int pulp_rab_slice_check(RabSliceReq *rab_slice_req);
+
+/** Get a free RAB slice.
+
+  \param    rab_slice_req specifies the current date.
+
+  \return   0 on success; 1 otherwise.
+ */
+int pulp_rab_slice_get(RabSliceReq *rab_slice_req);
+
+/** Free a RAB slice and unlock any corresponding memory pages.
+
+  \param    rab_config    kernel virtual address of the RAB configuration port.
+  \param    rab_slice_req specifies the slice to free.
+ */
 void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req);
-int  pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct page **pages);
-int  pulp_rab_num_free_slices(RabSliceReq *rab_slice_req);
-int  pulp_rab_mapping_get_active(void);
+
+/** Setup a RAB slice: 1) setup the drivers' managment arrays, 2) configure the hardware using
+ *  iowrite32().
+
+  \param    rab_config    kernel virtual address of the RAB configuration port.
+  \param    rab_slice_req specifies the slice to setup.
+  \param    pages         pointer to the page structs of the remapped user-space memory pages.
+
+  \return   0 on success; negative value with errno on errors.
+ */
+int pulp_rab_slice_setup(void *rab_config, RabSliceReq *rab_slice_req, struct page **pages);
+
+/** Get the number of free RAB slices.
+
+  \param    rab_slice_req specifies the current date.
+
+  \return   number of free RAB slices.
+ */
+int pulp_rab_num_free_slices(RabSliceReq *rab_slice_req);
+
+/** Get the index of the currently active RAB mapping on Port 1.
+
+  \return   index of active mapping.
+ */
+int pulp_rab_mapping_get_active(void);
+
+/** Switch the current RAB setup with another mapping. In case a mapping contains a striped config,
+ *  Stripe 0 will be set up.
+
+  \param    rab_config  kernel virtual address of the RAB configuration port.
+  \param    rab_mapping specifies the mapping to set up the RAB with.
+ */
 void pulp_rab_mapping_switch(void *rab_config, unsigned rab_mapping);
+
+/** Print RAB mappings.
+
+  \param    rab_config  kernel virtual address of the RAB configuration port.
+  \param    rab_mapping specifies the mapping to to print, 0xAAAA for actual RAB configuration,
+                        0xFFFF for all mappings.
+ */
 void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping);
 
-void pulp_rab_l2_init(void *rab_config);
-void pulp_rab_l2_clear_hw(void *rab_config, unsigned char port);
-int  pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, char enable_replace);
-int  pulp_rab_l2_check_availability(L2Entry *tlb_entry, char port);
-int  pulp_rab_l2_invalidate_all_entries(void *rab_config, char port);
-int  pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int entry_num);
-int  pulp_rab_l2_print_all_entries(char port);
-int  pulp_rab_l2_print_valid_entries(char port);
+//!@}
 
-long pulp_rab_req(void *rab_config, unsigned long arg);
-long pulp_rab_req_striped(void *rab_config, unsigned long arg);
-void pulp_rab_free(void *rab_config, unsigned long arg);
-void pulp_rab_free_striped(void *rab_config, unsigned long arg);
+/** @name RAB mailbox request functions
+ *
+ * @{
+ */
 
+/** Update the RAB configuration of slices configured in a striped mode.
+ *  -> Actually, this is the bottom handler and it should go into a tasklet.
+
+  \param    update_req update request identifier, specifies which elements to
+                       update in which way (advance to next stripe, wrap)
+ */
 void pulp_rab_update(unsigned update_req);
+
+/** Switch the hardware configuration of the RAB.
+ */
 void pulp_rab_switch(void);
 
+//!@}
+
+/** @name L2 TLB management functions
+ *
+ * @{
+ */
+
+/** Initialise L2 TLB HW and struct to zero.
+
+  \param    rab_config kernel virtual address of the RAB configuration port.
+ */
+void pulp_rab_l2_init(void *rab_config);
+
+/** Clear L2 TLB HW and struct of a given RAB port.
+
+  \param    rab_config kernel virtual address of the RAB configuration port.
+  \param    port       Port number of area to clear
+ */
+void pulp_rab_l2_clear_hw(void *rab_config, unsigned char port);
+
+/** Setup an L2TLB entry: 1) Check if a free spot is avaialble in L2 TLB, 2) configure the HW using
+ *  iowrite32(), 3) Configure kernel struct.
+
+  \param    rab_config     kernel virtual address of the RAB configuration port.
+  \param    tlb_entry      specifies the L2TLB entry to setup.
+  \param    port           RAB port
+  \param    enable_replace an entry can be replaced if set is full.
+
+  \return   0 on success; 1 in case the set is full;
+ */
+int pulp_rab_l2_setup_entry(void *rab_config, L2Entry *tlb_entry, char port, char enable_replace);
+
+/** Check if a free spot is available in L2 TLB.
+
+  \param    tlb_entry specifies the L2TLB entry to setup.
+  \param    port      RAB port
+
+  \return   0 if a free entry is available; 1 otherwise.
+ */
+int pulp_rab_l2_check_availability(L2Entry *tlb_entry, char port);
+
+/** Invalidate all valid L2 TLB entries. Keep the virtual and physical pageframe numbers intact.
+
+  \param    rab_config kernel virtual address of the RAB configuration port.
+  \param    port       RAB port
+
+  \return   0.
+ */
+int pulp_rab_l2_invalidate_all_entries(void *rab_config, char port);
+
+/** Invalidate one L2 TLB entry. Keep the virtual and physical pageframe numbers intact.
+
+  \param    rab_config kernel virtual address of the RAB configuration port.
+  \param    port       RAB port
+  \param    set_num    Set number
+  \param    entry_num  Entry number in the set.
+
+  \return   0.
+ */
+int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int entry_num);
+
+/** Print all L2 entries.
+
+  \param    port RAB port
+
+  \return   0.
+ */
+int pulp_rab_l2_print_all_entries(char port);
+
+/** Print all valid L2 entries.
+
+  \param    port RAB port
+
+  \return   0.
+ */
+int pulp_rab_l2_print_valid_entries(char port);
+
+//!@}
+
+/** @name RAB ioctl request functions
+ *
+ * @{
+ */
+
+/** Request new RAB slices.
+
+  \param    rab_config  kernel virtual address of the RAB configuration port.
+  \param    arg         ioctl() argument
+
+  \return   0 on success; non-zero value on errors.
+ */
+long pulp_rab_req(void *rab_config, unsigned long arg);
+
+/** Request striped RAB slices.
+
+  \param    rab_config kernel virtual address of the RAB configuration port.
+  \param    arg        ioctl() argument
+
+  \return   0 on success; non-zero value on errors.
+ */
+long pulp_rab_req_striped(void *rab_config, unsigned long arg);
+
+/** Free RAB slices based on time code.
+
+  \param    rab_config kernel virtual address of the RAB configuration port.
+  \param    arg        ioctl() argument
+ */
+void pulp_rab_free(void *rab_config, unsigned long arg);
+
+/** Free striped RAB slices.
+
+  \param    rab_config kernel virtual address of the RAB configuration port.
+  \param    arg        ioctl() argument
+ */
+void pulp_rab_free_striped(void *rab_config, unsigned long arg);
+
+//!@}
+
+/** @name TLB miss-handling management functions
+ *
+ * @{
+ */
+
+/** Delegate RAB Miss Handling to the PULP SoC.
+
+ *  This functions configures RAB so that the page table hierarchy can be accessed from the SoC.
+ *  For this, slices either for the first-level page table or for all second-level page tables are
+ *  configured in RAB (definable, see parameter below). If RAB has been configured successfully,
+ *  handling of RAB misses by this Kernel driver is disabled and all RAB slices but the first ones
+ *  (which contain a mapping to the contiguous L3 memory and to the initial level of the page
+ *  table) are reserved to be managed by the SoC. The SoC must at runtime configure the RAB slices
+ *  for the subsequent levels of the page table. Thus, the proper VMM software must be running on
+ *  the SoC; otherwise, RAB misses will not be handled at all.
+
+  \param    rab_config            Pointer to the RAB configuration port.
+  \param    static_2nd_lvl_slices If 0, the driver sets up a single RAB slice for the first level of
+                                  the page table; if 1, the driver sets up RAB slices for all valid
+                                  second-level page tables.  The latter is not supported by all
+                                  architectures.  If unsupported, the driver will fall back to the
+                                  former behavior and emit a warning.
+
+  \return   0 on success; a nonzero errno on errors. In particular, -EALREADY if misses are
+            already handled by the SoC, -EBUSY if RAB slices that are now to be managed by the SoC
+            are already configured.
+ */
 int pulp_rab_soc_mh_ena(void* const rab_config, unsigned static_2nd_lvl_slices);
+
+/** Disable handling of RAB Misses by the SoC.
+
+ *  This function frees and deconfigures all slices used to map the initial level of the page
+ *  table, and hands the slices that were reserved to be managed by the SoC back to the host.
+
+  \param    rab_config  Pointer to the RAB configuration port.
+
+  \return   0 on success; a nonzero errno on errors. In particular, -EALREADY if miss handling on
+            the SoC is already disabled.
+ */
 int pulp_rab_soc_mh_dis(void* const rab_config);
 
+/** Enable the host RAB miss handling routine by allocating the workqueue.
+
+  \param    rab_config kernel virtual address of the RAB configuration port.
+  \param    arg        ioctl() argument
+
+  \return   0 on success; negative value with an errno on errors.
+ */
 long     pulp_rab_mh_ena(void *rab_config, unsigned long arg);
+
+/** Disable the worker thread and destroy the workqueue.
+ */
 void     pulp_rab_mh_dis(void);
+
+/** Append work to the worker thread running in process context.
+ */
 unsigned pulp_rab_mh_sched(void);
+
+/** Handle RAB misses. This is the actual miss handling routine executed by the worker thread in
+ *  process context.
+
+  \param    unused unused argument.
+ */
 void     pulp_rab_handle_miss(unsigned unused);
 
+//!@}
+
+/** @name RAB logger functions
+ *
+ * @{
+ */
+
 #if RAB_AX_LOG_EN == 1
-  int  pulp_rab_ax_log_init(void);
+
+  /** Initialize the AX logger, i.e., allocate kernel buffer memory and clear the hardware buffer.
+
+    \return   0 on success; negative value with an errno on errors.
+
+  */
+  int pulp_rab_ax_log_init(void);
+
+  /** Free the kernel buffer memory previously allocated using pulp_rab_ax_log_init().
+   */
   void pulp_rab_ax_log_free(void);
+
+  /** Read out the RAB AX Logger to the kernel buffers rab_ax_log_buf.
+
+    \param    gpio_value initial gpio value, needed to set e.g. fetch enable correctly when
+                         manipulating the GPIO register
+    \param    clear      specifies whether the logger should be cleared (PULP is clock-gated
+                         during this procedure)
+   */
   void pulp_rab_ax_log_read(unsigned gpio_value, unsigned clear);
+
+  /** Print the content of the rab_ax_log_buf buffers and reset the incdices rab_ax_log_idx.
+   */
   void pulp_rab_ax_log_print(void);
+
+  /** Writes the kernel-space buffers to user space.
+
+   *  NOTE: It resets the indices similar to the log_print() function. Subsequent calls to
+            log_print() will thus print nothing.
+
+    \param    arg        ioctl() argument
+   */
   void pulp_rab_ax_log_to_user(unsigned long arg);
 #endif
 
+//!@}
+
+/** @name RAB profiling functions
+ *
+ * @{
+ */
+
 #if defined(PROFILE_RAB_STR) || defined(PROFILE_RAB_MH)
+
+  /** Dynamically allocate buffers used to store profiling data and initialize index counters.
+
+    \return   0 on success; negative value with an errno on errors.
+   */
   int  pulp_rab_prof_init(void);
+
+  /** Free dynamically allocated buffers used for profiling.
+   */
   void pulp_rab_prof_free(void);
+
+  /** Print data collected during profiling and reset index counters
+   */
   void pulp_rab_prof_print(void);
 #endif
+
+//!@}
 
 #endif/*_PULP_RAB_H_*/
