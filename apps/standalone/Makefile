@@ -23,7 +23,7 @@ $(HERO_LIBPULP_DIR)/lib/libpulp.a:
 build: $(NAME)
 
 deploy: build
-	rsync -v $(NAME) $(HERO_TARGET_HOST):$(HERO_TARGET_PATH)/
+	rsync -v $(NAME) $(HERO_TARGET_HOST):$(HERO_TARGET_PATH_APPS)/
 
 dis: build
 	$(OB) -dS $(NAME).o > $(NAME).disasm
