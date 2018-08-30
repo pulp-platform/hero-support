@@ -28,4 +28,3 @@ mkimage -A arm -T ramdisk -C gzip -d rootfs.cpio.gz uramdisk.image.gz
 # Copy the created image to sd_image
 echo "Copying uramdisk.image.gz to ../sd_image"
 cp uramdisk.image.gz ../sd_image/uramdisk.image.gz
-

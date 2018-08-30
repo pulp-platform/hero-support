@@ -216,6 +216,9 @@ fi
 
 cd buildroot
 
+echo "-----------------------------------------"
+echo "-   Preparing Buildroot configuration   -"
+echo "-----------------------------------------"
 
 # Shall we use the compiler provided by Xilinx Vivado?
 USE_VIVADO_TOOLCHAIN=`echo "${KERNEL_CROSS_COMPILE}" | grep -c xilinx`
@@ -254,12 +257,12 @@ else
   #cd ..
   #mkdir linaro_gcc
   #cd linaro_gcc
-
+  #
   ## Download and prepare Linaro GCC 7
   #wget https://releases.linaro.org/components/toolchain/binaries/7.1-2017.08/arm-linux-gnueabihf/gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf.tar.xz --no-verbose -N
   #tar xf gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf.tar.xz
   #mv gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabihf arm-linux-gnueabihf
-
+  #
   ## Configure PATH
   #PATH=`realpath arm-linux-gnueabihf/bin`:${PATH}
   #cd ../buildroot

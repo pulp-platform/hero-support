@@ -86,8 +86,8 @@ if [ ! -d "buildroot" ]; then
   mv acl.mk.patch               buildroot/.
 
   # prepare default configs
-  cp buildroot/buildroot-config_2017.05 .config
-  cp buildroot/busybox-config_2017.05   busybox-config
+  cp buildroot/buildroot-config_2017.05 buildroot/.config
+  cp buildroot/busybox-config_2017.05   buildroot/busybox-config
 fi
 
 # Root Filesystem stuff
