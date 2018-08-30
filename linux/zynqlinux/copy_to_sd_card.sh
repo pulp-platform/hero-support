@@ -2,7 +2,9 @@
 
 # Copy boot files image to SD card.
 
-SD_BOOT_PARTITION="/run/media/${USER}/ZYNQ_BOOT"
+if [[ -z "${SD_BOOT_PARTITION}" ]]; then
+  SD_BOOT_PARTITION="/run/media/${USER}/ZYNQ_BOOT"
+fi
 
 # Copy to SD card
 cp BOOT.bin          ${SD_BOOT_PARTITION}/.
