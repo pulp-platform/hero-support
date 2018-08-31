@@ -20,9 +20,13 @@ echo "-----------------------------------------"
 echo "Generating the root file system"
 make ARCH=${KERNEL_ARCH} CROSS_COMPILE=${KERNEL_CROSS_COMPILE} $1
 
+BUILD_STATUS=$?
+
 # Copy
 echo "Copying the root file system image to ../root_file_system/rootfs.cpio.gz"
 cp output/images/rootfs.cpio.gz ../root_filesystem/.
 
 # Sync BusyBox .config to busybox-config
 ./sync_busybox.sh 1
+
+exit ${BUILD_STATUS}

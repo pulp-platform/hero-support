@@ -20,7 +20,7 @@ take_newer() {
       # Backup current file, take newer input file
       echo "Backing up current $2, replacing by $1."
 
-      BKP_NAME_1=`echo $2 | sed "s/.//"`
+      BKP_NAME_1=`echo $2 | sed "s/^\.//"`
       BKP_NAME_2=`stat --printf='%.19y\n' $2`
       BKP_NAME_2=`echo ${BKP_NAME_2} | sed "s/ /_/"`
       BKP_NAME_2=`echo ${BKP_NAME_2} | sed "s/:/-/g"`
