@@ -88,6 +88,11 @@ if [ ! -d "buildroot" ]; then
   # prepare default configs
   cp buildroot/buildroot-config_2017.05 buildroot/.config
   cp buildroot/busybox-config_2017.05   buildroot/busybox-config
+
+  # make sure build.sh will use the proper configs
+  touch buildroot/buildroot-config_*
+  touch buildroot/busybox-config_*
+
 fi
 
 # Root Filesystem stuff
