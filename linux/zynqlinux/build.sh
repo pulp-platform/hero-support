@@ -50,7 +50,13 @@ DOWNLOAD_URL="https://iis-people.ee.ethz.ch/~vogelpi/hero/files/images/zc706/"
 DOWNLOAD_ARGS="--no-verbose -N --user=hero --password=weekly*report2018"
 
 # Build configuration
-PARBUILD=-j`nproc`
+HERO_PARALLEL_BUILD=
+if [ -z "${HERO_MAX_PARALLEL_BUILD_JOBS}" ]; then
+  HERO_PARALLEL_BUILD=-j`nproc`
+else
+  HERO_PARALLEL_BUILD=-j${HERO_MAX_PARALLEL_BUILD_JOBS}
+fi
+
 
 #################################################
 #
@@ -61,7 +67,7 @@ PARBUILD=-j`nproc`
 # Try to build kernel (might fail because of missing U-Boot mkimage)
 cd linux-xlnx
 {
-  ./compile_kernel.sh  ${PARBUILD}
+  ./compile_kernel.sh  ${HERO_PARALLEL_BUILD}
 } || {
   COMPILE_KERNEL_FAILED=1
 }
@@ -72,12 +78,12 @@ if [[ ! -z "${COMPILE_KERNEL_FAILED}" ]]; then
 
   # Build U-Boot (needed for kernel build)
   cd u-boot-xlnx
-  ./compile_loader.sh ${PARBUILD}
+  ./compile_loader.sh ${HERO_PARALLEL_BUILD}
   cd ..
 
   # Rebuild kernel
   cd linux-xlnx
-  ./compile_kernel.sh  ${PARBUILD}
+  ./compile_kernel.sh  ${HERO_PARALLEL_BUILD}
 
   if [ $? -ne 0 ]; then
     echo "ERROR: compile_kernel.sh failed, aborting now."
@@ -89,7 +95,7 @@ fi
 
 # Also build modules
 cd linux-xlnx
-./compile_modules.sh ${PARBUILD}
+./compile_modules.sh ${HERO_PARALLEL_BUILD}
 
 if [ $? -ne 0 ]; then
   echo "ERROR: compile_modules.sh failed, aborting now."
@@ -105,7 +111,7 @@ cd ..
 #################################################
 
 cd u-boot-xlnx
-./compile_loader.sh ${PARBUILD}
+./compile_loader.sh ${HERO_PARALLEL_BUILD}
 cd ..
 
 #################################################
@@ -313,7 +319,7 @@ if [ ! -d output/build/busybox-*/ ]; then
 fi
 
 # Build root filesystem
-./generate_fs.sh ${PARBUILD}
+./generate_fs.sh ${HERO_PARALLEL_BUILD}
 
 # The acl package might require a patch on some host machines (it is needed for the host)
 if [ $? -ne 0 ]; then
@@ -327,7 +333,7 @@ if [ $? -ne 0 ]; then
   rm -rf output/build/host-acl*
 
   # Re-try to build
-  ./generate_fs.sh ${PARBUILD}
+  ./generate_fs.sh ${HERO_PARALLEL_BUILD}
 fi
 
 if [ $? -ne 0 ]; then
