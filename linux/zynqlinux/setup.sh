@@ -2,7 +2,7 @@
 
 # Project setup script for Zynq Linux HOWTO
 XILINX_TAG="xilinx-v2017.2"
-BUILDROOT_TAG="2017.05"
+BUILDROOT_TAG="2017.11.2"
 
 # Info
 echo "-----------------------------------------"
