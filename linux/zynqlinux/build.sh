@@ -235,6 +235,13 @@ if [ "${USE_VIVADO_TOOLCHAIN}" -eq 1 ]; then
   # Use Xilinx Vivado toolchain - this one has no hard float support
 
   # Make sure we checkout a version that can be compiled with the Vivado toolchain
+  # We first must get the full repo
+  echo "I need to get the full repo. This will take some time."
+  git fetch --unshallow
+  git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+  git fetch origin
+
+  # Do the checkout
   git checkout tags/2017.05
 
   # Set external toolchain variables for Vivado 2017.2 GCC 4.9
