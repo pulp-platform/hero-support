@@ -1,0 +1,3 @@
+[submodule "libhero-target"]
+	path = libhero-target
+	url = https://github.com/pulp-platform/libhero-target.git
