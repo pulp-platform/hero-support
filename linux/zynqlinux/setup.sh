@@ -2,7 +2,7 @@
 
 # Project setup script for Zynq Linux HOWTO
 XILINX_TAG="xilinx-v2017.2"
-BUILDROOT_TAG="2017.05"
+BUILDROOT_TAG="2017.11.2"
 
 # Info
 echo "-----------------------------------------"
@@ -13,12 +13,7 @@ echo "-----------------------------------------"
 if [ ! -d "device-tree-xlnx" ]; then
 
   # clone GIT repository
-  git clone git://github.com/Xilinx/device-tree-xlnx.git
-
-  # checkout tag
-  cd device-tree-xlnx
-  git checkout tags/${XILINX_TAG}
-  cd ..
+  git clone --branch ${XILINX_TAG} --depth 1 git://github.com/Xilinx/device-tree-xlnx.git
 
 fi
 
@@ -26,12 +21,7 @@ fi
 if [ ! -d "linux-xlnx" ]; then
 
   # clone GIT repository
-  git clone git://github.com/Xilinx/linux-xlnx.git
-
-  # checkout tag
-  cd linux-xlnx
-  git checkout tags/${XILINX_TAG}
-  cd ..
+  git clone --branch ${XILINX_TAG} --depth 1 git://github.com/Xilinx/linux-xlnx.git
 
   # move helper scripts and files
   mv compile_kernel.sh   linux-xlnx/.
@@ -52,12 +42,7 @@ fi
 if [ ! -d "u-boot-xlnx" ]; then
 
   # clone GIT repository
-  git clone git://github.com/Xilinx/u-boot-xlnx.git
-
-  # checkout tag
-  cd u-boot-xlnx
-  git checkout tags/${XILINX_TAG}
-  cd ..
+  git clone --branch ${XILINX_TAG} --depth 1 git://github.com/Xilinx/u-boot-xlnx.git
 
   # move helper scripts and files
   mv compile_loader.sh u-boot-xlnx/.
@@ -68,12 +53,7 @@ fi
 if [ ! -d "buildroot" ]; then
 
   # clone GIT repository
-  git clone git://git.buildroot.net/buildroot.git
-
-  # checkout tag
-  cd buildroot
-  git checkout tags/${BUILDROOT_TAG}
-  cd ..
+  git clone --branch ${BUILDROOT_TAG} --depth 1 git://git.buildroot.net/buildroot.git
 
   # move helper scripts and files
   mv generate_fs.sh             buildroot/.
@@ -86,8 +66,8 @@ if [ ! -d "buildroot" ]; then
   mv acl.mk.patch               buildroot/.
 
   # prepare default configs
-  cp buildroot/buildroot-config_2017.05 buildroot/.config
-  cp buildroot/busybox-config_2017.05   buildroot/busybox-config
+  cp buildroot/buildroot-config_2017.11.2 buildroot/.config
+  cp buildroot/busybox-config_2017.11.2   buildroot/busybox-config
 
   # make sure build.sh will use the proper configs
   touch buildroot/buildroot-config_*
