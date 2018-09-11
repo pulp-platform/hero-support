@@ -47,7 +47,7 @@ if [ -z "${KERNEL_ARCH}" ] || [ -z "${KERNEL_CROSS_COMPILE}" ] ; then
 fi
 
 DOWNLOAD_URL="https://iis-people.ee.ethz.ch/~vogelpi/hero/files/images/zc706/"
-DOWNLOAD_ARGS="--no-verbose -N --user=hero --password=weekly*report2018"
+DOWNLOAD_ARGS="--no-verbose -N"
 
 # Build configuration
 HERO_PARALLEL_BUILD=
