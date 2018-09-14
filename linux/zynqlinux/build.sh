@@ -46,8 +46,8 @@ if [ -z "${KERNEL_ARCH}" ] || [ -z "${KERNEL_CROSS_COMPILE}" ] ; then
   exit 1;
 fi
 
-DOWNLOAD_URL="https://iis-people.ee.ethz.ch/~vogelpi/hero/files/images/zc706/"
-DOWNLOAD_ARGS="--no-verbose -N"
+DOWNLOAD_URL="https://pulp-platform.org/hero/doc/files/images/zc706/"
+DOWNLOAD_ARGS="--no-verbose -N -U firefox"
 
 # Build configuration
 HERO_PARALLEL_BUILD=
