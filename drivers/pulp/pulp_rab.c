@@ -704,7 +704,7 @@ void pulp_rab_mapping_print(void *rab_config, unsigned rab_mapping)
     }
   }
 
-  if ( (rab_mapping ==  0xFFFF) || (rab_mapping == 0xAAAA) ) {
+  if ( ( (rab_mapping ==  0xFFFF) || (rab_mapping == 0xAAAA) ) && printk_ratelimit() ) {
     printk(KERN_INFO "PULP - RAB L1: Printing active configuration: \n");
 
     for (j=0; j<2; j++) {

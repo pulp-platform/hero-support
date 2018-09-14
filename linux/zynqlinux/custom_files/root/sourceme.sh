@@ -6,10 +6,10 @@ cd /
 # mount second partition on SD card
 ./mount_storage.sh
 
-# go to mounted NFS share
+# go to mounted partition
 cd /mnt/storage
 
-# execute adaptable startup script
+# source adaptable startup script
 if [ -f startup.sh ]; then
-  ./startup.sh
+  source ./startup.sh
 fi
