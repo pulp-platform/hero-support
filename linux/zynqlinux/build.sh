@@ -46,7 +46,7 @@ if [ -z "${KERNEL_ARCH}" ] || [ -z "${KERNEL_CROSS_COMPILE}" ] ; then
   exit 1;
 fi
 
-DOWNLOAD_URL="https://pulp-platform.org/hero/doc/files/images/zc706/"
+DOWNLOAD_URL="https://pulp-platform.org/hero/files/images/zc706/"
 DOWNLOAD_ARGS="--no-verbose -N -U firefox"
 
 # Build configuration
