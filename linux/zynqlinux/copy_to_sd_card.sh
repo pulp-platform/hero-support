@@ -16,10 +16,7 @@ if [ "$not_mounted" -eq "1" ]; then
 fi
 
 # Copy to SD card
-cp BOOT.bin          ${SD_BOOT_PARTITION}/.
-cp devicetree.dtb    ${SD_BOOT_PARTITION}/.
-cp uImage            ${SD_BOOT_PARTITION}/.
-cp uramdisk.image.gz ${SD_BOOT_PARTITION}/.
+cp BOOT.bin devicetree.dtb uImage uramdisk.image.gz ${SD_BOOT_PARTITION}/.
 
 # Unmount SD card
 sync
