@@ -1,0 +1,25 @@
+--- juno-base.dtsi.orig	2018-10-01 19:57:43.882528437 +0200
++++ juno-base.dtsi	2018-10-01 19:48:35.855544516 +0200
+@@ -3,6 +3,8 @@
+ 	 *  Devices shared by all Juno boards
+ 	 */
+ 
++	#include "pulp.dtsi"
++
+ 	memtimer: timer@2a810000 {
+ 		compatible = "arm,armv7-timer-mem";
+ 		reg = <0x0 0x2a810000 0x0 0x10000>;
+@@ -642,6 +644,13 @@
+ 			reg = <0x00000000 0xfee00000 0 0x00200000>;
+ 			no-map;
+ 		};
++
++        /* contiguous L3 memory for PULP: last 128MiB of second DRAM section */
++        pulp_reserved: pulp_l3_mem@9F8000000 {
++          compatible = "pulp,bigpulp";
++          no-map;
++          reg = <0x00000009 0xF8000000 0x00000000 0x8000000>;
++        };
+ 	};
+ 
+ 	soc_i2s: i2s@7ff90000 {
