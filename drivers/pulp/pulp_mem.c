@@ -18,6 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <linux/version.h>
 #include <asm/cacheflush.h>  /* __cpuc_flush_dcache_area, outer_cache.flush_range */
 
 #include "pulp_mem.h"
@@ -134,7 +135,13 @@ int pulp_mem_get_user_pages(struct page *** pages, unsigned addr_start, unsigned
   start = (unsigned long)(addr_start & BF_MASK_GEN(PAGE_SHIFT,32-PAGE_SHIFT));
 
   // get pointers to user-space buffers and lock them into memory
-  result = get_user_pages_fast(start, (int)n_pages, (int)write, *pages);
+  #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+    down_read(&current->mm->mmap_sem);
+    result = get_user_pages(current, current->mm, start, n_pages, write, 0, *pages, NULL);
+    up_read(&current->mm->mmap_sem);
+  #else
+    result = get_user_pages_fast(start, (int)n_pages, (int)write, *pages);
+  #endif
   if (result != n_pages) {
     printk(KERN_WARNING "PULP - MEM: Could not get requested user-space virtual addresses.\n");
     printk(KERN_WARNING "Requested %d pages starting at v_addr %#x\n",n_pages,addr_start);

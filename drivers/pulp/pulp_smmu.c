@@ -18,6 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <linux/version.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>           /* msleep */
 #include <asm/io.h>                /* ioremap, iounmap, iowrite32 */
@@ -584,7 +585,11 @@ int pulp_smmu_dis(PulpDev *pulp_ptr)
     // unpin user-space memory
     if ( !PageReserved(smmu_page_ptr->page_ptr) )
       SetPageDirty(smmu_page_ptr->page_ptr);
-    put_page(smmu_page_ptr->page_ptr);
+    #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+      page_cache_release(smmu_page_ptr->page_ptr);
+    #else
+      put_page(smmu_page_ptr->page_ptr);
+    #endif
 
     // decrement index
     smmu_page_count--;
@@ -706,7 +711,11 @@ void pulp_smmu_handle_fault(void)
 
   // get pointer to user-space buffer and lock it into memory, get a single page
   down_read(&user_task->mm->mmap_sem);
-  ret = get_user_pages_remote(user_task, user_task->mm, vaddr, 1, write ? FOLL_WRITE : 0, &smmu_page_ptr->page_ptr, NULL);
+  #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+    ret = get_user_pages(user_task, user_task->mm, vaddr, 1, write, 0, &smmu_page_ptr->page_ptr, NULL);
+  #else
+    ret = get_user_pages_remote(user_task, user_task->mm, vaddr, 1, write ? FOLL_WRITE : 0, &smmu_page_ptr->page_ptr, NULL);
+  #endif
   up_read(&user_task->mm->mmap_sem);
   if ( ret != 1 ) {
     printk(KERN_WARNING "PULP - SMMU: Could not get requested user-space virtual address %#lx.\n", iova);
