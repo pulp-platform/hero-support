@@ -2182,12 +2182,12 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
       pmd_va = req->addr_end + 1;
 
       // dereference incremented kva to get pa of pmd
-      pmd.pmd = (pmdval_t)*((unsigned long *)pgd + pgd_index(PGDIR_SIZE * i_pmd));
+      pmd_val(pmd) = (pmdval_t)*((unsigned long *)pgd + pgd_index(PGDIR_SIZE * i_pmd));
 
       if (pmd_none(pmd) || pmd_bad(pmd))
         continue;
 
-      pmd.pmd &= PAGE_MASK;
+      pmd_val(pmd) &= PAGE_MASK;
 
       req->addr_offset = pmd_val(pmd);
 
