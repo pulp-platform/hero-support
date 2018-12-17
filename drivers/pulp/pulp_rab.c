@@ -22,6 +22,8 @@
 #include "pulp_rab.h"
 #include "pulp_mem.h" /* for cache invalidation */
 
+#include <linux/mmu_notifier.h> /* for invalidation notifier */
+
 // global variables {{{
 static L1Tlb l1;
 static L2Tlb l2;
@@ -44,6 +46,12 @@ static unsigned rab_mh_acp;
 static unsigned rab_mh_lvl;
 static unsigned rab_soc_mh_is_ena;
 static unsigned rab_n_slices_reserved_for_host;
+
+// invalidation forwarding
+static struct semaphore pulp_inv_sem;
+atomic_t pulp_inv_count;
+static struct mmu_notifier pulp_mmu_notifier;
+static const struct mmu_notifier_ops pulp_mmu_notifier_ops;
 
 // AX logger
 #if RAB_AX_LOG_EN == 1
@@ -149,6 +157,11 @@ int pulp_rab_init(PulpDev * pulp_ptr)
   rab_mh_acp = 0;
   rab_mh_lvl = 0;
   rab_n_slices_reserved_for_host = RAB_L1_N_SLICES_PORT_1;
+
+  // initialize invalidation forwarding
+  pulp_mmu_notifier.ops = &pulp_mmu_notifier_ops;
+  atomic_set(&pulp_inv_count, 0);
+  sema_init(&pulp_inv_sem, 1);
 
   // By default, the SoC does not handle RAB misses.
   pulp_rab_soc_mh_dis(pulp->rab_config);
@@ -2860,16 +2873,99 @@ void pulp_rab_handle_miss(unsigned unused)
  *
  ***********************************************************************************/
 
+// FIXME: these defines should be placed in the headers
+#define RAB_CONFIG_FLAGS_OFFSET 0x0c
+#define RAB_CONFIG_INV_START_OFFSET 0x10
+#define RAB_CONFIG_INV_END_OFFSET 0x18
+#define RAB_CONFIG_FLAGS_DISABLE_CONFIG (1 << 2);
+
+static void pulp_rab_inv_release(struct mmu_notifier *mn, struct mm_struct *mm) {
+    // FIXME: not implemented yet, should clear things to ensure nothing corrupts
+    return;
+}
+
+static void pulp_rab_inv_range_start(struct mmu_notifier *mn, struct mm_struct *mm,
+                                     unsigned long start, unsigned long end) {
+    int ret;
+    unsigned int flags;
+    /* trace_printk("start invalidating 0x%08lx - 0x%08lx", start, end); */
+
+    // acquire the invalidation mutex
+    ret = down_interruptible(&pulp_inv_sem);
+    if(!ret) {
+        return;
+    }
+
+    // lock the rab if we start the first invalidation
+    if(atomic_read(&pulp_inv_count) == 0) {
+        // NOTE: assuming no one else will change the flags in the mean time
+        flags = ioread32((void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
+        flags |= RAB_CONFIG_FLAGS_DISABLE_CONFIG;
+        iowrite32(flags, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
+    }
+    atomic_inc(&pulp_inv_count);
+
+    // perform the invalidation (NOTE: response of end will hang until invalidation completed)
+    iowrite32(start, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_INV_START_OFFSET));
+    iowrite32(end, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_INV_END_OFFSET));
+
+    // release the invalidation mutex
+    up(&pulp_inv_sem);
+    return;
+}
+
+static void pulp_rab_inv_range_end(struct mmu_notifier *mn, struct mm_struct *mm,
+                                   unsigned long start, unsigned long end) {
+    int ret;
+    unsigned int flags;
+    /* trace_printk("end invalidating 0x%08lx - 0x%08lx", start, end); */
+
+    // acquire the invalidation mutex
+    ret = down_interruptible(&pulp_inv_sem);
+    if(!ret) {
+        return;
+    }
+
+    // release the rab if we finalize the last invalidation in progress
+    atomic_dec(&pulp_inv_count);
+    if(atomic_read(&pulp_inv_count) == 0) {
+        // NOTE: assuming no one else will change the flags in the mean time
+        flags = ioread32((void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
+        flags &= ~RAB_CONFIG_FLAGS_DISABLE_CONFIG;
+        iowrite32(flags, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
+    }
+
+    return;
+}
+
+static const struct mmu_notifier_ops pulp_mmu_notifier_ops = {
+    .release                = pulp_rab_inv_release,
+    .invalidate_range_start = pulp_rab_inv_range_start,
+    .invalidate_range_end   = pulp_rab_inv_range_end,
+};
+
 // inv_ena {{{
 int pulp_rab_inv_ena(void* const rab_config) {
-    printk(KERN_INFO "PULP: RAB invalidion handling routine enabled.\n");
+    int ret;
+
+    // register mmu notifier in current mm
+    ret = mmu_notifier_register(&pulp_mmu_notifier, current->mm);
+    if(unlikely(ret)) {
+        printk(KERN_ERR "PULP: Failed to register invalidation notifier\n");
+        return ret;
+    }
+
+    printk(KERN_INFO "PULP: RAB invalidation forwarding enabled.\n");
     return 0;
 }
 // }}}
 
 // inv_dis {{{
 int pulp_rab_inv_dis(void* const rab_config) {
-    printk(KERN_INFO "PULP: RAB invalidion handling routine disabled.\n");
+    // deregister mmu notifier from current mm
+    mmu_notifier_unregister(&pulp_mmu_notifier, current->mm);
+
+    printk(KERN_INFO "PULP: RAB invalidation invalidation forwarding disabled.\n");
     return 0;
 }
 // }}}
