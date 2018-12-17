@@ -2935,6 +2935,8 @@ static void pulp_rab_inv_range_end(struct mmu_notifier *mn, struct mm_struct *mm
         iowrite32(flags, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
     }
 
+    // release the invalidation mutex
+    up(&pulp_inv_sem);
     return;
 }
 
