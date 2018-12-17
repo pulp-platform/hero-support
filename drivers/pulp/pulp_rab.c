@@ -49,7 +49,7 @@ static unsigned rab_n_slices_reserved_for_host;
 
 // invalidation forwarding
 static struct semaphore pulp_inv_sem;
-atomic_t pulp_inv_count;
+static atomic_t pulp_inv_count;
 static struct mmu_notifier pulp_mmu_notifier;
 static const struct mmu_notifier_ops pulp_mmu_notifier_ops;
 
