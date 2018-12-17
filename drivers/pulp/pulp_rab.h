@@ -631,6 +631,22 @@ unsigned pulp_rab_mh_sched(void);
  */
 void     pulp_rab_handle_miss(unsigned unused);
 
+/** Enable forwarding of TLB invalidations to the RAB
+
+ \param    rab_config  Pointer to the RAB configuration port.
+
+ \return   0 on success; a nonzero errno on errors.
+ */
+int pulp_rab_inv_ena(void* const rab_config);
+
+/** Enable forwarding of TLB invalidations to the RAB
+
+ \param    rab_config  Pointer to the RAB configuration port.
+
+ \return   0 on success; a nonzero errno on errors.
+ */
+int pulp_rab_inv_dis(void* const rab_config);
+
 //!@}
 
 /** @name RAB logger functions

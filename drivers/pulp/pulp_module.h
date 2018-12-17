@@ -298,7 +298,7 @@
  */
 #define PULP_IOCTL_MAGIC 'p'
 #define PULP_IOC_NR_MIN 0xB0
-#define PULP_IOC_NR_MAX 0xBE
+#define PULP_IOC_NR_MAX 0xC0
 
 #define PULP_IOCTL_RAB_REQ          _IOW(PULP_IOCTL_MAGIC,0xB0,unsigned) // ptr
 #define PULP_IOCTL_RAB_FREE         _IOW(PULP_IOCTL_MAGIC,0xB1,unsigned) // value
@@ -312,16 +312,19 @@
 #define PULP_IOCTL_RAB_SOC_MH_ENA   _IOW(PULP_IOCTL_MAGIC,0xB6,unsigned) // value
 #define PULP_IOCTL_RAB_SOC_MH_DIS   _IO(PULP_IOCTL_MAGIC,0xB7)
 
-#define PULP_IOCTL_SMMU_ENA         _IOW(PULP_IOCTL_MAGIC,0xB8,unsigned) // value
-#define PULP_IOCTL_SMMU_DIS         _IO(PULP_IOCTL_MAGIC,0xB9)
+#define PULP_IOCTL_RAB_INV_ENA      _IO(PULP_IOCTL_MAGIC,0xB8)
+#define PULP_IOCTL_RAB_INV_DIS      _IO(PULP_IOCTL_MAGIC,0xB9)
 
-#define PULP_IOCTL_DMA_XFER_SYNC    _IOW(PULP_IOCTL_MAGIC,0xBA,unsigned) // ptr
-#define PULP_IOCTL_DMA_XFER_ASYNC   _IOW(PULP_IOCTL_MAGIC,0xBB,unsigned) // ptr
-#define PULP_IOCTL_DMA_XFER_WAIT    _IOW(PULP_IOCTL_MAGIC,0xBC,unsigned) // ptr
+#define PULP_IOCTL_SMMU_ENA         _IOW(PULP_IOCTL_MAGIC,0xBA,unsigned) // value
+#define PULP_IOCTL_SMMU_DIS         _IO(PULP_IOCTL_MAGIC,0xBB)
 
-#define PULP_IOCTL_INFO_PASS        _IOW(PULP_IOCTL_MAGIC,0xBD,unsigned) // ptr
+#define PULP_IOCTL_DMA_XFER_SYNC    _IOW(PULP_IOCTL_MAGIC,0xBC,unsigned) // ptr
+#define PULP_IOCTL_DMA_XFER_ASYNC   _IOW(PULP_IOCTL_MAGIC,0xBD,unsigned) // ptr
+#define PULP_IOCTL_DMA_XFER_WAIT    _IOW(PULP_IOCTL_MAGIC,0xBE,unsigned) // ptr
 
-#define PULP_IOCTL_RAB_AX_LOG_READ  _IOW(PULP_IOCTL_MAGIC,0xBE,unsigned) // ptr
+#define PULP_IOCTL_INFO_PASS        _IOW(PULP_IOCTL_MAGIC,0xBF,unsigned) // ptr
+
+#define PULP_IOCTL_RAB_AX_LOG_READ  _IOW(PULP_IOCTL_MAGIC,0xC0,unsigned) // ptr
 
 /*
  * Macros

@@ -2853,6 +2853,29 @@ void pulp_rab_handle_miss(unsigned unused)
 
 // }}}
 
+// Invalidation Handling {{{
+/***********************************************************************************
+ *
+ * INVALIDATION
+ *
+ ***********************************************************************************/
+
+// inv_ena {{{
+int pulp_rab_inv_ena(void* const rab_config) {
+    printk(KERN_INFO "PULP: RAB invalidion handling routine enabled.\n");
+    return 0;
+}
+// }}}
+
+// inv_dis {{{
+int pulp_rab_inv_dis(void* const rab_config) {
+    printk(KERN_INFO "PULP: RAB invalidion handling routine disabled.\n");
+    return 0;
+}
+// }}}
+
+// }}}
+
 // AX Logger {{{
 #if RAB_AX_LOG_EN == 1
   /***********************************************************************************

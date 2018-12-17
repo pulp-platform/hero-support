@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
   // set desired clock frequency
   ret = pulp_clking_set_freq(pulp,pulp_clk_freq_mhz);
   if (ret > 0)
-    printf("PULP confgiured to run @ %d MHz.\n",ret);
+    printf("PULP configured to run @ %d MHz.\n",ret);
   else
     printf("ERROR: setting clock frequency failed");
   
@@ -97,8 +97,10 @@ int main(int argc, char *argv[]) {
   // measure the actual clock frequency
   printf("PULP actually running @ %d MHz.\n",pulp_clking_measure_freq(pulp));
 
-  // clear memories?
-  
+  // enable forwarding TLB invalidations
+  printf("PULP enable invalidation forwarding\n");
+  pulp_rab_inv_enable(pulp);
+
   /*
    * Body
    */
@@ -119,6 +121,7 @@ int main(int argc, char *argv[]) {
    * Cleanup
    */
   printf("PULP Cleanup\n");
+  pulp_rab_inv_disable(pulp);
   pulp_rab_free(pulp,0);
   pulp_free_v_addr(pulp);
   sleep(1);

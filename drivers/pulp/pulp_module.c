@@ -1232,6 +1232,14 @@ long pulp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     retval = pulp_rab_soc_mh_dis(my_dev.rab_config);
     break;
 
+  case PULP_IOCTL_RAB_INV_ENA:
+    retval = pulp_rab_inv_ena(my_dev.rab_config);
+    break;
+
+  case PULP_IOCTL_RAB_INV_DIS:
+    retval = pulp_rab_inv_dis(my_dev.rab_config);
+    break;
+
   case PULP_IOCTL_SMMU_ENA:
     #if PLATFORM == TE0808
       retval = pulp_smmu_ena(&my_dev, BIT_GET(arg, (SMMU_FLAGS_CC | SMMU_FLAGS_SHPT_EMU)));
