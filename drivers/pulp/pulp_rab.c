@@ -2646,10 +2646,10 @@ void pulp_rab_handle_miss(unsigned unused)
       // try read/write mode first - fall back to read only
       write = 1;
       down_read(&user_task->mm->mmap_sem);
-      result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
+      result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL, NULL);
       if ( result == -EFAULT ) {
         write = 0;
-        result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
+        result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL, NULL);
       }
       up_read(&user_task->mm->mmap_sem);
       //current->mm = user_task->mm;
@@ -2887,12 +2887,11 @@ static void pulp_rab_inv_release(struct mmu_notifier *mn, struct mm_struct *mm) 
 static void pulp_rab_inv_range_start(struct mmu_notifier *mn, struct mm_struct *mm,
                                      unsigned long start, unsigned long end) {
     int ret;
-    unsigned int flags;
-    /* trace_printk("start invalidating 0x%08lx - 0x%08lx", start, end); */
+    unsigned int flags = 0;
 
     // acquire the invalidation mutex
     ret = down_interruptible(&pulp_inv_sem);
-    if(!ret) {
+    if(ret) {
         return;
     }
 
@@ -2917,12 +2916,11 @@ static void pulp_rab_inv_range_start(struct mmu_notifier *mn, struct mm_struct *
 static void pulp_rab_inv_range_end(struct mmu_notifier *mn, struct mm_struct *mm,
                                    unsigned long start, unsigned long end) {
     int ret;
-    unsigned int flags;
-    /* trace_printk("end invalidating 0x%08lx - 0x%08lx", start, end); */
+    unsigned int flags = 0;
 
     // acquire the invalidation mutex
     ret = down_interruptible(&pulp_inv_sem);
-    if(!ret) {
+    if(ret) {
         return;
     }
 
