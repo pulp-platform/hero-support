@@ -49,7 +49,7 @@ static unsigned rab_n_slices_reserved_for_host;
 
 // invalidation forwarding
 static struct semaphore pulp_inv_sem;
-static atomic_t pulp_inv_count;
+static unsigned pulp_inv_count;
 static struct mmu_notifier pulp_mmu_notifier;
 static const struct mmu_notifier_ops pulp_mmu_notifier_ops;
 
@@ -160,7 +160,7 @@ int pulp_rab_init(PulpDev * pulp_ptr)
 
   // initialize invalidation forwarding
   pulp_mmu_notifier.ops = &pulp_mmu_notifier_ops;
-  atomic_set(&pulp_inv_count, 0);
+  pulp_inv_count = 0;
   sema_init(&pulp_inv_sem, 1);
 
   // By default, the SoC does not handle RAB misses.
@@ -2890,13 +2890,13 @@ static void pulp_rab_inv_range_start(struct mmu_notifier *mn, struct mm_struct *
     }
 
     // lock the rab if we start the first invalidation
-    if(atomic_read(&pulp_inv_count) == 0) {
+    if(pulp_inv_count == 0) {
         // NOTE: assuming no one else will change the flags in the mean time
         flags = ioread32((void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET_B));
         flags |= RAB_CONFIG_FLAGS_DISABLE_CONFIG;
         iowrite32(flags, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET_B));
     }
-    atomic_inc(&pulp_inv_count);
+    ++pulp_inv_count;
 
     // perform the invalidation (NOTE: response of end will hang until invalidation completed)
     iowrite32(start, (void *)((unsigned long)pulp->rab_config+RAB_INV_START_OFFSET_B));
@@ -2920,8 +2920,8 @@ static void pulp_rab_inv_range_end(struct mmu_notifier *mn, struct mm_struct *mm
     }
 
     // release the rab if we finalize the last invalidation in progress
-    atomic_dec(&pulp_inv_count);
-    if(atomic_read(&pulp_inv_count) == 0) {
+    --pulp_inv_count;
+    if(pulp_inv_count == 0) {
         // NOTE: assuming no one else will change the flags in the mean time
         flags = ioread32((void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET_B));
         flags &= ~RAB_CONFIG_FLAGS_DISABLE_CONFIG;
