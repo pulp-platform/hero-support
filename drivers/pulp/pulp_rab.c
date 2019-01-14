@@ -2873,14 +2873,8 @@ void pulp_rab_handle_miss(unsigned unused)
  *
  ***********************************************************************************/
 
-// FIXME: these defines should be placed in the headers
-#define RAB_CONFIG_FLAGS_OFFSET 0x0c
-#define RAB_CONFIG_INV_START_OFFSET 0x10
-#define RAB_CONFIG_INV_END_OFFSET 0x18
-#define RAB_CONFIG_FLAGS_DISABLE_CONFIG (1 << 2);
-
 static void pulp_rab_inv_release(struct mmu_notifier *mn, struct mm_struct *mm) {
-    // FIXME: not implemented yet, should clear things to ensure nothing corrupts
+    // FIXME: not implemented yet, could clear rab to ensure nothing corrupts
     return;
 }
 
@@ -2898,15 +2892,15 @@ static void pulp_rab_inv_range_start(struct mmu_notifier *mn, struct mm_struct *
     // lock the rab if we start the first invalidation
     if(atomic_read(&pulp_inv_count) == 0) {
         // NOTE: assuming no one else will change the flags in the mean time
-        flags = ioread32((void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
+        flags = ioread32((void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET_B));
         flags |= RAB_CONFIG_FLAGS_DISABLE_CONFIG;
-        iowrite32(flags, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
+        iowrite32(flags, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET_B));
     }
     atomic_inc(&pulp_inv_count);
 
     // perform the invalidation (NOTE: response of end will hang until invalidation completed)
-    iowrite32(start, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_INV_START_OFFSET));
-    iowrite32(end, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_INV_END_OFFSET));
+    iowrite32(start, (void *)((unsigned long)pulp->rab_config+RAB_INV_START_OFFSET_B));
+    iowrite32(end, (void *)((unsigned long)pulp->rab_config+RAB_INV_END_OFFSET_B));
 
     // release the invalidation mutex
     up(&pulp_inv_sem);
@@ -2928,9 +2922,9 @@ static void pulp_rab_inv_range_end(struct mmu_notifier *mn, struct mm_struct *mm
     atomic_dec(&pulp_inv_count);
     if(atomic_read(&pulp_inv_count) == 0) {
         // NOTE: assuming no one else will change the flags in the mean time
-        flags = ioread32((void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
+        flags = ioread32((void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET_B));
         flags &= ~RAB_CONFIG_FLAGS_DISABLE_CONFIG;
-        iowrite32(flags, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET));
+        iowrite32(flags, (void *)((unsigned long)pulp->rab_config+RAB_CONFIG_FLAGS_OFFSET_B));
     }
 
     // release the invalidation mutex
