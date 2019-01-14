@@ -2901,6 +2901,7 @@ static void pulp_rab_inv_range_start(struct mmu_notifier *mn, struct mm_struct *
     // perform the invalidation (NOTE: response of end will hang until invalidation completed)
     iowrite32(start, (void *)((unsigned long)pulp->rab_config+RAB_INV_START_OFFSET_B));
     iowrite32(end, (void *)((unsigned long)pulp->rab_config+RAB_INV_END_OFFSET_B));
+    wmb(); // memory barrier to wait for the blocking invalidation to complete
 
     // release the invalidation mutex
     up(&pulp_inv_sem);
