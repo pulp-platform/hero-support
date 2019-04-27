@@ -228,7 +228,7 @@ echo "-----------------------------------------"
 
 # Shall we use the compiler provided by Xilinx Vivado?
 USE_VIVADO_TOOLCHAIN=`echo "${KERNEL_CROSS_COMPILE}" | grep -c xilinx`
-PREFIX=`echo $KERNEL_CROSS_COMPILE | cut -d- -f-3`
+PREFIX=`echo $KERNEL_CROSS_COMPILE | rev | cut -d- -f-1 --complement | rev`
 
 if [ "${USE_VIVADO_TOOLCHAIN}" -eq 1 ]; then
 
