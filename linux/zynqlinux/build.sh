@@ -251,8 +251,7 @@ if [ "${USE_VIVADO_TOOLCHAIN}" -eq 1 ]; then
   # Derive external toolchain path
   EXT_TOOLCHAIN_PATH=`which ${KERNEL_CROSS_COMPILE}gcc`
   if [[ ! -z "${EXT_TOOLCHAIN_PATH}" ]]; then
-    EXT_TOOLCHAIN_PATH=`echo "${EXT_TOOLCHAIN_PATH}" | rev | cut -d/ -f-5 --complement | rev`
-    EXT_TOOLCHAIN_PATH=`echo "${EXT_TOOLCHAIN_PATH}"/arm/lin`
+    EXT_TOOLCHAIN_PATH=`echo "${EXT_TOOLCHAIN_PATH}" | rev | cut -d/ -f-2 --complement | rev`
   else
     echo "ERROR: No cross compile toolchain found, aborting now."
     exit 1
