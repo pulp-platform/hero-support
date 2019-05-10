@@ -8,15 +8,15 @@
 #
 #######################################################
 # Project name
-export BOARD=te0808
+export BOARD=zcu102
 export TARGET_NAME=wimmis02
 
 # To copy bitstream to NFS share
-export SCP_TARGET_MACHINE="vogelpi@bordcomputer"
-export SCP_TARGET_PATH="~/zynqmp/share/"
+export SCP_TARGET_MACHINE="andkurt@bordcomputer"
+export SCP_TARGET_PATH="~/zcu102/share/"
 
 # To copy images to SD card
-export SD_BOOT_PARTITION=/run/media/${USER}/TE0808_BOOT
+export SD_BOOT_PARTITION=/run/media/${USER}/ZCU102_BOOT
 
 #######################################################
 #
