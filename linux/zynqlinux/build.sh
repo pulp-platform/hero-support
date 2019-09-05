@@ -186,6 +186,7 @@ if [ $? -eq 0 ]; then
   
   if [ ! -f BOOT.bif ]; then
     wget ${DOWNLOAD_URL}BOOT.bif ${DOWNLOAD_ARGS}
+    perl -i -pe "s|/.*/sdk|$(pwd)|" BOOT.bif # fix absolute paths inside BOOT.bif
   fi
   
   cd ..
