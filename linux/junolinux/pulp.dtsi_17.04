@@ -1,0 +1,26 @@
+/* new nodes */
+reserved-memory {
+  #address-cells = <2>;
+  #size-cells = <2>;
+  ranges;
+
+  /* contiguous L3 memory for PULP: last 128MiB of second DRAM section */
+  pulp_reserved: pulp_l3_mem@9F8000000 {
+    compatible = "pulp,bigpulp";
+    no-map;
+    reg = <0x00000009 0xF8000000 0x00000000 0x8000000>;
+  };
+};
+
+pulp: pulp@60000000 {
+  compatible = "pulp,bigpulp";
+  /* interrupt */        
+  /* interrupts = <GIC_SPI 168 IRQ_TYPE_LEVEL_HIGH>;*/
+  interrupts = <0 168 4>;
+  /* contiguous L3 memory */
+  memory-region = <&pulp_reserved>;
+
+  /* PL330 DMA channels */
+  dmas = <&dma0 6 &dma0 7>;
+  dma-names = "tx_channel", "rx_channel";
+};

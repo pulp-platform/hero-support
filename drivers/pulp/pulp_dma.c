@@ -18,6 +18,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <linux/version.h>
+
 #include "pulp_dma.h"
 
 int pulp_dma_chan_req(struct dma_chan ** chan, int chan_id)
@@ -103,7 +105,11 @@ void pulp_dma_xfer_cleanup(DmaCleanup * pulp_dma_cleanup){
   for (i=0; i<n_pages; i++) {
     if (!PageReserved(pages[i]))
       SetPageDirty(pages[i]);
-    put_page(pages[i]);
+    #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+      page_cache_release(pages[i]);
+    #else
+      put_page(pages[i]);
+    #endif
   }
   
   // free pages struct pointer array

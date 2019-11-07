@@ -19,6 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <linux/version.h>
+
 #include "pulp_rab.h"
 #include "pulp_mem.h" /* for cache invalidation */
 
@@ -448,7 +450,11 @@ void pulp_rab_slice_free(void *rab_config, RabSliceReq *rab_slice_req)
         // unpin user-space memory
         if ( !PageReserved(pages_old[i]) )
           SetPageDirty(pages_old[i]);
-        put_page(pages_old[i]);
+        #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+          page_cache_release(pages_old[i]);
+        #else
+          put_page(pages_old[i]);
+        #endif
       }
     }
     // lower reference counter
@@ -1106,7 +1112,11 @@ int pulp_rab_l2_invalidate_entry(void *rab_config, char port, int set_num, int e
     // unpin user-space memory
     if ( !PageReserved(page_old) )
       SetPageDirty(page_old);
-    put_page(page_old);
+    #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+      page_cache_release(page_old);
+    #else
+      put_page(page_old);
+    #endif
 
     // reset page_ptr
     l2.set[set_num].entry[entry_num].page_ptr = NULL;
@@ -2182,12 +2192,12 @@ static int soc_mh_ena_static_1st_level(void* const rab_config, RabSliceReq* cons
       pmd_va = req->addr_end + 1;
 
       // dereference incremented kva to get pa of pmd
-      pmd.pmd = (pmdval_t)*((unsigned long *)pgd + pgd_index(PGDIR_SIZE * i_pmd));
+      pmd_val(pmd) = (pmdval_t)*((unsigned long *)pgd + pgd_index(PGDIR_SIZE * i_pmd));
 
       if (pmd_none(pmd) || pmd_bad(pmd))
         continue;
 
-      pmd.pmd &= PAGE_MASK;
+      pmd_val(pmd) &= PAGE_MASK;
 
       req->addr_offset = pmd_val(pmd);
 
@@ -2633,10 +2643,18 @@ void pulp_rab_handle_miss(unsigned unused)
       // try read/write mode first - fall back to read only
       write = 1;
       down_read(&user_task->mm->mmap_sem);
-      result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
+      #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+        result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
+      #else
+        result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
+      #endif
       if ( result == -EFAULT ) {
         write = 0;
-        result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
+        #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+          result = get_user_pages(user_task, user_task->mm, start, 1, write, 0, pages, NULL);
+        #else
+          result = get_user_pages_remote(user_task, user_task->mm, start, 1, write ? FOLL_WRITE : 0, pages, NULL);
+        #endif
       }
       up_read(&user_task->mm->mmap_sem);
       //current->mm = user_task->mm;
