@@ -1152,6 +1152,14 @@ void pulp_rab_mh_disable(const PulpDev *pulp)
   ioctl(pulp->fd,PULP_IOCTL_RAB_MH_DIS);
 }
 
+int pulp_rab_inv_enable(const PulpDev *pulp) {
+  return ioctl(pulp->fd, PULP_IOCTL_RAB_INV_ENA);
+}
+
+int pulp_rab_inv_disable(const PulpDev *pulp) {
+  return ioctl(pulp->fd, PULP_IOCTL_RAB_INV_DIS);
+}
+
 int pulp_smmu_enable(const PulpDev* pulp, const unsigned char flags)
 {
   // make the request

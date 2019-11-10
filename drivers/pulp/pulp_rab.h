@@ -79,8 +79,13 @@
 #define RAB_SLICE_ADDR_OFFSET_OFFSET_B 0x10
 #define RAB_SLICE_FLAGS_OFFSET_B       0x18
 
+#define RAB_CONFIG_FLAGS_DISABLE_CONFIG (1 << 2)
+
 #define RAB_MH_ADDR_FIFO_OFFSET_B 0x0
 #define RAB_MH_META_FIFO_OFFSET_B 0x8
+#define RAB_CONFIG_FLAGS_OFFSET_B 0x0c
+#define RAB_INV_START_OFFSET_B    0x10
+#define RAB_INV_END_OFFSET_B      0x18
 
 #define RAB_WAKEUP_OFFSET_B       0x0
 
@@ -630,6 +635,22 @@ unsigned pulp_rab_mh_sched(void);
   \param    unused unused argument.
  */
 void     pulp_rab_handle_miss(unsigned unused);
+
+/** Enable forwarding of TLB invalidations to the RAB
+
+ \param    rab_config  Pointer to the RAB configuration port.
+
+ \return   0 on success; a nonzero errno on errors.
+ */
+int pulp_rab_inv_ena(void* const rab_config);
+
+/** Enable forwarding of TLB invalidations to the RAB
+
+ \param    rab_config  Pointer to the RAB configuration port.
+
+ \return   0 on success; a nonzero errno on errors.
+ */
+int pulp_rab_inv_dis(void* const rab_config);
 
 //!@}
 
