@@ -1,3 +1,7 @@
+# DEPRECATED
+
+This repository is part of a deprecated version of HERO.  Please refer to the [current HERO repository](https://github.com/pulp-platform/hero) for the current Linux kernel driver, user-space runtime libraries, and support files.
+
 # HERO Support
 
 This repository contains various software support infrastructure for HERO. In particular:
